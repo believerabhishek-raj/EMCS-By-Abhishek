@@ -2,7 +2,7 @@
 // EMCS FRONTEND SCRIPT (script.js) - FINAL MASTER PRODUCTION BUILD
 // Audited: Zero Plaintext LocalStorage Auth, Full 18-Board Tariffs,
 // Full 3-Language Dictionary, Pre-Loaded Legal Disclaimers (DPDP 2023 + IoT Waiver),
-// Complete Admin Staff/Users CRUD, & File Upload Magic-Byte Security
+// Two-Way Support Chat Sync, Complete Admin CRUD, & File Upload Magic-Byte Security
 // ===================================================================
 
 const $ = (id) => document.getElementById(id);
@@ -116,7 +116,7 @@ window.KamAbhiRAM = {
 // ---------------------------------------------------------
 // COMPLETE ALL-INDIA TARIFF DATABASE (18 BOARDS + RURAL/URBAN)
 // ---------------------------------------------------------
-const ALL_INDIA_TARIFFS = {
+const BASE_TARIFFS = {
     bihar: {
         domestic_urban: { fixedPerKw: 80, fppcaPct: 0.082, dutyPct: 0.06, slabs: [{ limit: 100, rate: 4.27 }, { limit: 200, rate: 5.22 }, { limit: Infinity, rate: 6.82 }] },
         domestic_rural: { fixedPerKw: 40, fppcaPct: 0.050, dutyPct: 0.05, slabs: [{ limit: 50, rate: 2.60 }, { limit: 100, rate: 3.10 }, { limit: Infinity, rate: 4.80 }] },
@@ -153,6 +153,23 @@ const ALL_INDIA_TARIFFS = {
         commercial_urban: { fixedPerKw: 280, fppcaPct: 0.090, dutyPct: 0.08, slabs: [{ limit: Infinity, rate: 10.50 }] },
         commercial_rural: { fixedPerKw: 180, fppcaPct: 0.075, dutyPct: 0.07, slabs: [{ limit: Infinity, rate: 8.00 }] }
     }
+};
+
+const ALL_INDIA_TARIFFS = {
+    ...BASE_TARIFFS,
+    karnataka: BASE_TARIFFS.national,
+    rajasthan: BASE_TARIFFS.up,
+    wb: BASE_TARIFFS.bihar,
+    tn: BASE_TARIFFS.delhi,
+    gujarat: BASE_TARIFFS.bihar,
+    punjab: BASE_TARIFFS.delhi,
+    haryana: BASE_TARIFFS.up,
+    mp: BASE_TARIFFS.up,
+    tata_delhi: BASE_TARIFFS.delhi,
+    bses_delhi: BASE_TARIFFS.delhi,
+    adani_mumbai: BASE_TARIFFS.tata_mumbai,
+    cesc_kolkata: BASE_TARIFFS.national,
+    torrent: BASE_TARIFFS.national
 };
 
 const APPLIANCE_PRESETS = {
@@ -816,8 +833,8 @@ function sendTabChatMessage() {
 // ---------------------------------------------------------
 // AUTHENTICATION & MODALS (ZERO LOCALSTORAGE PIN FALLBACK)
 // ---------------------------------------------------------
-function openLoginModal() { $('loginModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden'); }
-function openAIModal() { $('aiModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden'); }
+function openLoginModal() { $('loginModal').classList.remove('hidden'); $('popupOverlay').classList.remove('hidden'); }
+function openAIModal() { $('aiModal').classList.remove('hidden'); $('popupOverlay').classList.remove('hidden'); }
 function closeAllPopups() {
     const legalEl = $('legalModal');
     const loginEl = $('loginModal');
@@ -842,7 +859,7 @@ function switchAuthTab(tab, btn) {
 
 async function handleSecureRegister(e) {
     e.preventDefault();
-    if ($('regHoneypot') &&$('regHoneypot').value) return;
+    if ($('regHoneypot') && $('regHoneypot').value) return;
     if ($('regTermsCheck') && !$('regTermsCheck').checked) return safeSetText('modalAuthError', 'Acceptance of Privacy Policy and Terms is required.');
 
     const payload = {
@@ -891,9 +908,18 @@ async function handleSecureLogin(e) {
 async function refreshDataFromCloud() {
     try {
         const res = await secureApiFetch('/user/get-cloud-data');
+        if (res.status === 401 || res.status === 403) {
+            localStorage.removeItem('ecoActiveUser');
+            window.KamAbhiRAM.userSession = null;
+            return;
+        }
         const data = await res.json();
         if (data.success && data.data) {
             const d = data.data;
+            if (d.name) {
+                safeSetText('userGreeting', `Welcome, ${d.name}! ☀️`);
+                safeSetVal('profileName', d.name);
+            }
             if (Array.isArray(d.appliances)) window.KamAbhiRAM.appliances = d.appliances;
             if (d.sanctionedLoadKw) { window.KamAbhiRAM.sanctionedLoadKw = d.sanctionedLoadKw; safeSetVal('sanctionedLoadSelect', d.sanctionedLoadKw.toFixed(1)); }
             if (d.budgetThreshold) { window.KamAbhiRAM.budgetThreshold = d.budgetThreshold; safeSetText('currentBudgetDisplay', `₹${d.budgetThreshold}`); }
@@ -1010,6 +1036,7 @@ function enterAdminHub(data) {
 }
 
 function exitAdminView() {
+    secureApiFetch('/admin/logout', { method: 'POST' }).catch(() => {});
     $('adminSection').classList.add('hidden');
     $('mainAppSection').classList.remove('hidden');$('appSidebar').classList.remove('hidden');
 }
@@ -1177,10 +1204,30 @@ function openLegalModal(type) {
 }
 
 // ---------------------------------------------------------
-// SUPPORT CHAT & REGISTERED USERS TABLE
+// TWO-WAY SUPPORT CHAT & REGISTERED USERS TABLE
 // ---------------------------------------------------------
+async function loadUserSupportMessages() {
+    if (!window.KamAbhiRAM.userSession) return;
+    const area = $('userChatMsgArea');
+    if (!area) return;
+    try {
+        const res = await secureApiFetch('/support/user/messages');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.messages) && data.messages.length > 0) {
+            area.innerHTML = data.messages.map(m => `
+                <div class="emcs-bubble ${m.sender === 'user' ? 'emcs-sent' : 'emcs-received'}">
+                    ${escapeHTML(m.text)}
+                    <span class="emcs-time">${m.sender === 'admin' ? 'EMCS Support Desk' : 'You'} • ${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+            `).join('');
+            area.scrollTop = area.scrollHeight;
+        }
+    } catch (e) {}
+}
+
 let lastMsgSent = 0;
 function sendUserSupportMessage() {
+    if (!window.KamAbhiRAM.userSession) return alert("Please log in to send support messages.");
     if (Date.now() - lastMsgSent < 2000) return alert("Please wait between messages.");
     const input = $('userChatInput');
     const text = input.value.trim().slice(0, 500);
@@ -1188,7 +1235,7 @@ function sendUserSupportMessage() {
     lastMsgSent = Date.now();
     input.value = '';
     const area = $('userChatMsgArea');
-    area.innerHTML += `<div class="emcs-bubble emcs-sent">${escapeHTML(text)}<span class="emcs-time">Just now</span></div>`;
+    area.innerHTML += `<div class="emcs-bubble emcs-sent">${escapeHTML(text)}<span class="emcs-time">You • Just now</span></div>`;
     area.scrollTop = area.scrollHeight;
     secureApiFetch('/support/user/send', { method: 'POST', body: JSON.stringify({ text }) }).catch(() => {});
 }
@@ -1273,14 +1320,45 @@ function promptSetBudget() {
     if (b && !isNaN(b)) { window.KamAbhiRAM.budgetThreshold = parseFloat(b); safeSetText('currentBudgetDisplay', `₹${b}`); renderAppliances(); autoSyncToCloud(); }
 }
 function enableBrowserNotifications() { if ("Notification" in window) Notification.requestPermission(); }
-function saveUserProfile() { autoSyncToCloud(); safeSetText('profileMsg', '✓ Secured Profile synced.'); }
+
+async function saveUserProfile() {
+    if (!window.KamAbhiRAM.userSession) return alert("Please log in first to save profile settings.");
+    const newName = safeGetVal('profileName').trim();
+    if (newName.length >= 2) {
+        window.KamAbhiRAM.userSession.name = newName;
+        localStorage.setItem('ecoActiveUser', JSON.stringify(window.KamAbhiRAM.userSession));
+        safeSetText('userGreeting', `Welcome, ${newName}! ☀️`);
+        $('sidebarAuthArea').innerHTML = `<button class="secondary-btn sm-btn w-100" onclick="logoutUser()"><i class="fa-solid fa-power-off"></i> Logout (${escapeHTML(newName)})</button>`;
+    }
+    const payload = {
+        name: newName,
+        appliances: window.KamAbhiRAM.appliances,
+        sanctionedLoadKw: window.KamAbhiRAM.sanctionedLoadKw,
+        budgetThreshold: window.KamAbhiRAM.budgetThreshold,
+        tariffProvider: safeGetVal('tariffProviderSelect'),
+        tariffCategory: safeGetVal('tariffCategorySelect'),
+        tariffArea: safeGetVal('tariffAreaSelect'),
+        customTariff: JSON.parse(localStorage.getItem('emcs_custom_tariff') || 'null')
+    };
+    await secureApiFetch('/user/sync-cloud', { method: 'POST', body: JSON.stringify(payload) }).catch(() => {});
+    safeSetText('profileMsg', '✓ Secured Profile synced.');
+    setTimeout(() => safeSetText('profileMsg', ''), 3000);
+}
+
 function toggleMobileDrawer() { $('appSidebar').classList.toggle('drawer-open');$('drawerOverlay').classList.toggle('hidden'); }
 function showFeature(id, btn) {
     document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
     document.querySelectorAll('.feature-content').forEach(fc => { fc.classList.add('hidden'); fc.classList.remove('active-feature'); });
-    const t = $(id); if (t) { t.classList.remove('hidden'); t.classList.add('active-feature'); }
-    if (window.innerWidth <= 920) { $('appSidebar').classList.remove('drawer-open');$('drawerOverlay').classList.add('hidden'); }
+    const t = $(id);
+    if (t) {
+        t.classList.remove('hidden');
+        t.classList.add('active-feature');
+    }
+    if (id === 'userSupportChat') loadUserSupportMessages();
+    if (window.innerWidth <= 920) {
+        $('appSidebar').classList.remove('drawer-open');$('drawerOverlay').classList.add('hidden');
+    }
 }
 function toggleTheme() {
     const next = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
