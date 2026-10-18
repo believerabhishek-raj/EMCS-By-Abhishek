@@ -1,7 +1,7 @@
 // ===================================================================
-// EMCS FRONTEND SCRIPT (script.js) - FINAL MASTER BUILD
-// Audited: Full 18-Board Tariffs, Full 3-Language Dictionary,
-// Pre-Loaded Legal Disclaimers (DPDP 2023 + IoT Waiver),
+// EMCS FRONTEND SCRIPT (script.js) - FINAL MASTER PRODUCTION BUILD
+// Audited: Zero Plaintext LocalStorage Auth, Full 18-Board Tariffs,
+// Full 3-Language Dictionary, Pre-Loaded Legal Disclaimers (DPDP 2023 + IoT Waiver),
 // Complete Admin Staff/Users CRUD, & File Upload Magic-Byte Security
 // ===================================================================
 
@@ -814,7 +814,7 @@ function sendTabChatMessage() {
 }
 
 // ---------------------------------------------------------
-// AUTHENTICATION & MODALS
+// AUTHENTICATION & MODALS (ZERO LOCALSTORAGE PIN FALLBACK)
 // ---------------------------------------------------------
 function openLoginModal() { $('loginModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden'); }
 function openAIModal() { $('aiModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden'); }
@@ -855,11 +855,15 @@ async function handleSecureRegister(e) {
     try {
         const res = await secureApiFetch('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
         const data = await res.json();
-        if (data.success) { alert("Account registered successfully! Please log in."); switchAuthTab('login', $('authTabButtons').children[0]); }
-        else safeSetText('modalAuthError', data.message);
+        if (data.success) {
+            alert("Account registered securely! Please log in.");
+            switchAuthTab('login', $('authTabButtons').children[0]);
+        } else {
+            safeSetText('modalAuthError', data.message);
+        }
     } catch (err) {
         reportSystemError('Auth Register API', err.message, '/api/auth/register');
-        safeSetText('modalAuthError', 'Something went wrong. Please try again later.');
+        safeSetText('modalAuthError', 'Network error or server unreachable. Try again later.');
     }
 }
 
@@ -875,10 +879,12 @@ async function handleSecureLogin(e) {
             setupUserSession(data.user);
             await refreshDataFromCloud();
             closeAllPopups();
-        } else safeSetText('modalAuthError', data.message);
+        } else {
+            safeSetText('modalAuthError', data.message);
+        }
     } catch (err) {
         reportSystemError('Auth Login API', err.message, '/api/auth/login');
-        safeSetText('modalAuthError', 'Something went wrong. Please try again later.');
+        safeSetText('modalAuthError', 'Network error or server unreachable. Try again later.');
     }
 }
 
