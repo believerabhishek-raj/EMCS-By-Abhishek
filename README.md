@@ -47,17 +47,17 @@ Audited and fortified against top-tier OWASP vulnerabilities:
    ```bash
    git clone https://github.com/believerabhishek-raj/EMCS-By-Abhishek
 
-2.Install dependencies:
+**2.Install dependencies:**
 npm install
 
-3.Configure Environment Variables:
+**3.Configure Environment Variables:**
 Create a .env file in the root directory:
 PORT=5000
 MONGO_URI=mongodb+srv://<your-db-url>
 MASTER_OWNER_KEY=YourStrongAdminPassword
 NODE_ENV=production
 
-4.Start the server:
+**4.Start the server:**
 npm start
 
-Powered By KamAbhi Tech Solutions
+**Powered By KamAbhi Tech Solutions**
