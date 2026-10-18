@@ -3,13 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="EMCS - Energy Management Control System. Smart utility billing, appliance load monitoring, and IoT relay control.">
+    <meta name="description" content="EMCS - Energy Management Control System. Smart electricity billing, appliance load monitoring, and IoT relay control.">
     <meta name="theme-color" content="#6366F1">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>EMCS - Energy Management Control System</title>
 
-    <!-- Simple SVG Bolt Icon + PWA Web Manifest -->
+    <!-- Basic Inspect Element / Right-Click Deterrent -->
+    <script>
+        document.addEventListener('contextmenu', event => event.preventDefault());
+        document.onkeydown = function(e) {
+            if (e.keyCode === 123 || (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67)) || (e.ctrlKey && e.keyCode === 85)) {
+                return false;
+            }
+        };
+    </script>
+
+    <!-- SVG Favicon & PWA Web Manifest -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
     <link rel="manifest" href='data:application/manifest+json,{"name":"EMCS Project","short_name":"EMCS","display":"standalone","background_color":"%23F8FAFC","theme_color":"%236366F1","icons":[{"src":"data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>","sizes":"192x192","type":"image/svg+xml"}]}'>
 
@@ -17,14 +27,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <!-- External Libraries for Charts, PDF Receipt & OCR Bill Scanning -->
+    <!-- External Libraries: Chart.js, html2pdf & Tesseract OCR -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
     <style>
         /* =========================================================
-           EMCS Project Stylesheet (Light & Dark Mode Variables)
+           EMCS Project Stylesheet (Light & Dark Theme Support)
            ========================================================= */
         :root {
             --bg-color: #F8FAFC;
@@ -80,7 +90,7 @@
 
         .hidden { display: none !important; }
 
-        /* Quick Utility Classes */
+        /* Spacing & Alignment Utilities */
         .mb-1 { margin-bottom: 0.5rem; }
         .mb-2 { margin-bottom: 1rem; }
         .mb-3 { margin-bottom: 1.5rem; }
@@ -91,7 +101,7 @@
         .p-3 { padding: 1.5rem; }
         .m-0 { margin: 0 !important; }
         .w-100 { width: 100% !important; }
-        
+
         .flex-between {
             display: flex;
             justify-content: space-between;
@@ -120,7 +130,7 @@
         .hover-pop:hover { transform: scale(1.02); }
         .hover-pop:active { transform: scale(0.98); }
 
-        /* Left Sidebar Layout */
+        /* Left Sidebar Navigation */
         .sidebar {
             width: var(--sidebar-width);
             background: var(--card-bg);
@@ -205,7 +215,7 @@
             margin-top: 8px;
         }
 
-        /* Main Dashboard Stage */
+        /* Main Stage */
         .main-content {
             margin-left: var(--sidebar-width);
             flex: 1;
@@ -232,7 +242,7 @@
         .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
         .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; align-items: start; }
 
-        /* Inputs, Selects & Buttons */
+        /* Form Controls & Buttons */
         input, select, textarea {
             padding: 10px 14px;
             border-radius: 10px;
@@ -272,7 +282,7 @@
         .secondary-btn { background: #64748B; }
         .danger-btn { background: var(--danger); }
         .sm-btn { width: auto; padding: 7px 14px; font-size: 0.82rem; border-radius: 8px; }
-        
+
         .icon-btn {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -285,7 +295,7 @@
 
         .borderless { border: none !important; background: transparent !important; box-shadow: none !important; }
 
-        /* Toggle Switch UI */
+        /* Switch Toggle */
         .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--card-border); transition: .3s; border-radius: 24px; }
@@ -318,7 +328,7 @@
         .admin-wa-user-item { padding: 10px 12px; border-bottom: 1px solid var(--card-border); cursor: pointer; display: flex; align-items: center; gap: 10px; }
         .admin-wa-user-item:hover, .admin-wa-user-item.active { background: var(--accent-light); }
 
-        /* Centered Popup Modals */
+        /* Centered Modals */
         .popup-overlay {
             position: fixed;
             top: 0; left: 0;
@@ -355,9 +365,9 @@
         }
 
         .close-btn { background: none; color: #fff; font-size: 1.3rem; width: auto; padding: 4px; }
-        
-        .auth-tabs { display: flex; gap: 6px; background: var(--bg-color); padding: 5px; border-radius: 10px; }
-        .auth-tabs button { flex: 1; padding: 8px; border-radius: 8px; background: transparent; color: var(--text-muted); font-weight: 600; font-size: 0.83rem; }
+
+        .auth-tabs { display: flex; gap: 6px; background: var(--bg-color); padding: 5px; border-radius: 10px; flex-wrap: wrap; }
+        .auth-tabs button { flex: 1; padding: 8px; border-radius: 8px; background: transparent; color: var(--text-muted); font-weight: 600; font-size: 0.83rem; white-space: nowrap; }
         .auth-tabs button.active { background: var(--card-bg); color: var(--primary); box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
         .error-text { color: var(--danger); font-size: 0.85rem; text-align: center; margin-top: 8px; font-weight: 500; }
 
@@ -377,13 +387,13 @@
             justify-content: center;
         }
 
-        .legal-link { color: var(--primary); text-decoration: none; font-weight: 500; cursor: pointer; }
+        .legal-link { color: var(--primary); text-decoration: none; font-weight: 600; cursor: pointer; }
         .legal-link:hover { text-decoration: underline; }
 
-        /* Mobile View Adjustments */
+        /* Responsive Mobile Layout */
         .mobile-top-bar { display: none; }
         .drawer-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 999; }
-        
+
         @media (max-width: 920px) {
             .mobile-top-bar {
                 display: flex;
@@ -420,7 +430,7 @@
     <!-- Mobile Drawer Backdrop -->
     <div id="drawerOverlay" class="drawer-overlay hidden" onclick="toggleMobileDrawer()"></div>
 
-    <!-- Mobile Header Bar -->
+    <!-- Mobile Top Bar -->
     <header class="mobile-top-bar">
         <button class="icon-btn borderless" onclick="toggleMobileDrawer()" style="font-size:1.3rem; color:var(--primary);"><i class="fa-solid fa-bars-staggered"></i></button>
         <div class="logo-main" style="font-size:1.25rem;"><i class="fa-solid fa-bolt text-primary"></i> <span>EMCS</span></div>
@@ -503,11 +513,13 @@
                 </div>
             </div>
 
+            <!-- Admin Navigation Tabs (Includes Automated Error List Tab) -->
             <div class="auth-tabs mb-3" style="border: 1px solid var(--card-border);">
                 <button class="active" onclick="switchAdminSubTab('chatTab', this)"><i class="fa-solid fa-headset text-primary"></i> Support Chat Desk</button>
                 <button id="adminUsersTabBtn" onclick="switchAdminSubTab('usersTab', this)"><i class="fa-solid fa-users-gear text-primary"></i> Consumers</button>
                 <button id="ownerStaffTabBtn" onclick="switchAdminSubTab('staffTab', this)"><i class="fa-solid fa-user-lock text-warning"></i> Staff Permissions</button>
                 <button id="ownerCmsTabBtn" onclick="switchAdminSubTab('cmsTab', this)"><i class="fa-solid fa-pen-to-square text-primary"></i> Website CMS & FAQs</button>
+                <button id="adminErrorTabBtn" onclick="switchAdminSubTab('errorTab', this)"><i class="fa-solid fa-bug danger-text"></i> Error List <span id="adminErrorCountBadge" class="badge light-red-bg">0</span></button>
             </div>
 
             <!-- Admin Sub-Pane 1: Consumer Chat Desk -->
@@ -622,6 +634,38 @@
                     <div>
                         <button class="primary-btn sm-btn" onclick="saveCmsContent()"><i class="fa-solid fa-floppy-disk"></i> Publish All Changes Live</button>
                         <span id="cmsSavedNotice" class="green-text" style="margin-left:12px; font-weight:600;"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Sub-Pane 5: Automated System & Client Error List -->
+            <div id="adminErrorSubPane" class="admin-sub-pane hidden">
+                <div class="clean-card">
+                    <div class="flex-between mb-2">
+                        <div>
+                            <h3><i class="fa-solid fa-triangle-exclamation danger-text"></i> System & Client Error Logs</h3>
+                            <p class="small-text">Automatically captures Website (JS/UI), API, and Backend Server errors in real time.</p>
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <button type="button" class="secondary-btn sm-btn" onclick="loadSystemErrors()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                            <button type="button" class="danger-btn sm-btn" onclick="clearSystemErrors()"><i class="fa-solid fa-trash-can"></i> Clear All Logs</button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Source</th>
+                                    <th>Error Message</th>
+                                    <th>Location / Route</th>
+                                    <th>User / IP</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminErrorListBody">
+                                <tr><td colspan="5" class="text-center small-text">No errors recorded. System is running smoothly!</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -1264,7 +1308,7 @@
                 <button type="submit" class="primary-btn">Verify & Sign In</button>
             </form>
 
-            <!-- Register Form (Includes Hidden Honeypot Input for Anti-Bot Protection) -->
+            <!-- Register Form (Includes Hidden Honeypot + Mandatory Privacy Policy & Terms Checkbox) -->
             <form id="modalRegisterForm" class="hidden" onsubmit="handleSecureRegister(event)">
                 <input type="text" id="regHoneypot" name="_bot_honeypot" style="display:none;" tabindex="-1" autocomplete="off">
                 <div class="form-group"><label>Full Name</label><input type="text" id="regName" placeholder="Your Full Name" required></div>
@@ -1277,6 +1321,17 @@
                     </div>
                 </div>
                 <div class="form-group"><label>Set 4-Digit Security PIN</label><input type="password" id="regPin" maxlength="4" pattern="[0-9]{4}" placeholder="••••" required></div>
+
+                <!-- Mandatory Professional Privacy Policy & Terms Checkbox -->
+                <div class="form-group" style="margin-top: 10px; margin-bottom: 14px; padding: 10px; background: var(--bg-color); border-radius: 8px; border: 1px solid var(--card-border);">
+                    <label style="display: flex; align-items: flex-start; gap: 10px; font-size: 0.82rem; color: var(--text-color); cursor: pointer; line-height: 1.45; margin: 0;">
+                        <input type="checkbox" id="regTermsCheck" required style="width: 17px; height: 17px; margin-top: 2px; accent-color: var(--primary); cursor: pointer; flex-shrink: 0;">
+                        <span>
+                            I have read and agree to the <span class="legal-link" onclick="event.preventDefault(); openLegalModal('privacy')">Privacy Policy</span> and <span class="legal-link" onclick="event.preventDefault(); openLegalModal('terms')">Terms & Conditions</span> of EMCS.
+                        </span>
+                    </label>
+                </div>
+
                 <button type="submit" class="primary-btn">Create Account</button>
             </form>
 
@@ -1344,8 +1399,8 @@
         </div>
     </div>
 
-    <!-- 5. Legal & FAQs Popup Modal -->
-    <div id="legalModal" class="popup-modal hidden" style="max-width:620px;">
+    <!-- 5. Legal & FAQs Popup Modal (Higher z-index so it opens cleanly over Register Modal too) -->
+    <div id="legalModal" class="popup-modal hidden" style="max-width:620px; z-index: 10001;">
         <div class="chat-header">
             <h4 style="margin:0;" id="legalModalTitle">Information</h4>
             <button class="close-btn" onclick="closeAllPopups()"><i class="fa-solid fa-xmark"></i></button>
