@@ -315,46 +315,42 @@ app.delete('/api/admin/errors/clear', authenticateAdmin, async (req, res) => {
 // ===================================================================
 app.post('/api/auth/register', strictRegisterLimiter, async (req, res) => {
     try {
-        // 1. Anti-Bot Honeypot Check
-        if (req.body._bot_honeypot && String(req.body._bot_honeypot).length > 0) {
-            return res.status(403).json({ success: false, message: 'Automated bot registration blocked.' });
-        }
+        // Anti-Bot Honeypot Trap
+        if (req.body._bot_honeypot) return res.status(403).json({ success: false, message: "Bot detected." });
 
-        // 2. Mandatory Privacy Policy & Terms Consent Check
+        // Mandatory Privacy Policy & Terms Consent Check
         if (req.body.termsAccepted !== true) {
             return res.status(400).json({ success: false, message: 'You must accept the Privacy Policy and Terms & Conditions.' });
         }
 
-        const mobile = sanitizeInput(req.body.mobile, 10);
-        const consumerId = sanitizeInput(req.body.consumerId, 12).toUpperCase();
-        const pin = sanitizeInput(req.body.pin, 4);
-        const name = sanitizeInput(req.body.name, 60);
+        const { mobile, consumerId, pin, name } = req.body;
 
-        if (!/^[0-9]{10}$/.test(mobile) \vert{}\vert{} consumerId.length !== 12 \vert{}\vert{} !/^[0-9]{4}$/.test(pin) || !name) {
+        // FIXED LINE (Standard JavaScript logical OR operators ||)
+        if (!/^[0-9]{10}$/.test(mobile) || consumerId.length !== 12 || !/^[0-9]{4}$/.test(pin) || !name) {
             return res.status(400).json({ success: false, message: 'Please enter valid registration details.' });
         }
 
-        const existing = await User.findOne({ $or: [{ mobile }, { consumerId }] });
-        if (existing) {
-            return res.status(400).json({ success: false, message: 'Mobile number or 12-character Consumer ID is already registered.' });
+        if (await User.findOne({ $or: [{ mobile }, { consumerId }] })) {
+            return res.status(400).json({ success: false, message: 'User already exists.' });
         }
-
+        
         const pinHash = await bcrypt.hash(pin, 12);
-        await new User({
-            mobile,
-            consumerId,
-            name,
+        await new User({ 
+            mobile, 
+            consumerId, 
+            name, 
             pinHash,
             termsAccepted: true,
             termsAcceptedAt: new Date()
         }).save();
 
         res.json({ success: true, message: 'Account created successfully.' });
-    } catch (e) {
+    } catch (e) { 
         await logBackendError('Register Route', e, req);
-        res.status(500).json({ success: false, message: 'Server error during registration.' });
+        res.status(500).json({ success: false, message: 'Server error during registration.' }); 
     }
 });
+
 
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
     try {
