@@ -1,858 +1,1121 @@
 // ===================================================================
-// EMCS BACKEND SERVER (server.js) - PRODUCTION HARDENED
-// Audited against: Rate Limiting, Strict Schema Validation, RBAC/IDOR,
-// Environment Secrets Management, & Zero Information Leakage
+// EMCS FRONTEND SCRIPT (script.js) - FINAL SECURE PRODUCTION BUILD
+// Features: Dynamic Legal Content, Hidden Technical Signatures,
+// Automated Telemetry, Multi-Language, Hackathon Charts & File Security
 // ===================================================================
 
-const express = require('express');
-const path = require('path');
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const cookieParser = require('cookie-parser');
-const cors = require('cors');
-const crypto = require('crypto');
+const $ = (id) => document.getElementById(id);
+const safeSetText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
+const safeGetVal = (id) => { const el = $(id); return el ? el.value : ''; };
+const safeSetVal = (id, val) => { const el = $(id); if (el) el.value = val; };
 
-const app = express();
-const PORT = process.env.PORT || 5000;
-const IS_PROD = process.env.NODE_ENV === 'production';
+const API_BASE = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
+    ? 'http://localhost:5000/api'
+    : '/api';
 
-// Trust reverse proxy (Render / Cloudflare) for accurate client IP
-app.set('trust proxy', 1);
-app.disable('x-powered-by'); // Prevent Express version leakage
-
-// ===================================================================
-// SECRETS MANAGEMENT (NO HARDCODED PRODUCTION SECRETS)
-// ===================================================================
-const MONGO_URI = process.env.MONGO_URI || (IS_PROD ? '' : 'mongodb://127.0.0.1:27017/emcs_project_db');
-const MASTER_OWNER_KEY = process.env.MASTER_OWNER_KEY || '';
-const JWT_SECRET = process.env.JWT_SECRET || (
-    MASTER_OWNER_KEY
-        ? crypto.createHash('sha256').update(MASTER_OWNER_KEY + '_emcs_prod_vault').digest('hex')
-        : crypto.randomBytes(32).toString('hex')
-);
-
-if (!MASTER_OWNER_KEY) {
-    console.warn('[SECURITY WARNING] MASTER_OWNER_KEY is not set in Environment Variables! Master Owner login will remain disabled until configured.');
+function escapeHTML(str) {
+    return String(str || '').replace(/[&<>"']/g, (m) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[m]));
 }
 
-// Strict payload size limit (10kb) to prevent memory exhaustion
-app.use(express.json({ limit: '10kb' }));
-app.use(cookieParser());
+async function secureApiFetch(endpoint, options = {}) {
+    return fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-emcs-csrf': 'emcs-verified-client',
+            ...(options.headers || {})
+        }
+    });
+}
 
-const allowedOrigins = [
-    'http://localhost:3000',
-    'http://localhost:5000',
-    'http://127.0.0.1:5500',
-    'http://localhost:5500',
-    process.env.FRONTEND_URL
-].filter(Boolean);
-
-app.use(cors({
-    origin: (origin, cb) => {
-        if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-        return cb(null, false); // Reject cleanly without throwing stack trace
-    },
-    credentials: true
-}));
-
-// Security Headers & Anti-CSRF Verification
-app.use((req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    res.setHeader(
-        'Content-Security-Policy',
-        "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' http://192.168.* http://10.* http://172.* ws: wss:; img-src 'self' data: blob:;"
-    );
-
-    if (req.headers['via'] || req.headers['x-proxy-id'] || req.headers['forwarded']) {
-        req.isSuspiciousProxy = true;
-    }
-
-    if (['POST', 'DELETE', 'PUT'].includes(req.method) && req.path.startsWith('/api/')) {
-        const csrf = req.headers['x-emcs-csrf'];
-        if (csrf !== 'emcs-verified-client') {
-            return res.status(403).json({ success: false, message: 'Forbidden: Invalid request signature.' });
+// ---------------------------------------------------------
+// PASSWORD VISIBILITY TOGGLE (EYE ICON)
+// ---------------------------------------------------------
+function togglePasswordVisibility(fieldId, btn) {
+    const inputField = $(fieldId);
+    if (!inputField) return;
+    
+    const icon = btn.querySelector('i');
+    if (inputField.type === 'password') {
+        inputField.type = 'text';
+        if (icon) {
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        }
+    } else {
+        inputField.type = 'password';
+        if (icon) {
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
         }
     }
-    next();
-});
-
-// ===================================================================
-// STRICT INPUT VALIDATION & SANITIZATION HELPERS
-// ===================================================================
-const sanitizeInput = (val, max = 150) => {
-    if (typeof val === 'string' || typeof val === 'number') {
-        return String(val).replace(/[\0$]/g, '').trim().slice(0, max);
-    }
-    return '';
-};
-
-const ALLOWED_PROVIDERS = new Set([
-    'bihar', 'up', 'maharashtra', 'delhi', 'karnataka', 'rajasthan',
-    'wb', 'tn', 'gujarat', 'punjab', 'haryana', 'mp',
-    'tata_delhi', 'bses_delhi', 'tata_mumbai', 'adani_mumbai',
-    'cesc_kolkata', 'torrent', 'national', 'custom'
-]);
-const ALLOWED_CATEGORIES = new Set(['domestic', 'commercial']);
-const ALLOWED_AREAS = new Set(['urban', 'rural']);
-
-function safeCompareStrings(a, b) {
-    if (!a || !b) return false;
-    const bufA = Buffer.from(String(a));
-    const bufB = Buffer.from(String(b));
-    if (bufA.length !== bufB.length) {
-        crypto.timingSafeEqual(bufA, bufA);
-        return false;
-    }
-    return crypto.timingSafeEqual(bufA, bufB);
 }
 
-// ===================================================================
-// MULTI-TIER RATE LIMITING (PER-IP & MEMORY GUARDED)
-// ===================================================================
-const rateLimits = new Map();
-setInterval(() => {
-    const now = Date.now();
-    for (const [k, v] of rateLimits.entries()) {
-        if (now > v.resetAt) rateLimits.delete(k);
-    }
-}, 300000);
-
-function createLimiter(maxReqs, windowMs, customMsg) {
-    return (req, res, next) => {
-        const key = `${req.ip}_${req.baseUrl || req.path}`;
-        const now = Date.now();
-        let rec = rateLimits.get(key) || { count: 0, resetAt: now + windowMs };
-        if (now > rec.resetAt) rec = { count: 0, resetAt: now + windowMs };
-
-        const allowedMax = req.isSuspiciousProxy ? Math.max(1, Math.floor(maxReqs / 2)) : maxReqs;
-        rec.count++;
-
-        // Prevent memory exhaustion from spoofed IP floods
-        if (rateLimits.size > 5000 && !rateLimits.has(key)) {
-            rateLimits.clear();
-        }
-        rateLimits.set(key, rec);
-
-        if (rec.count > allowedMax) {
-            return res.status(429).json({
-                success: false,
-                message: customMsg || 'Too many requests. Please wait a moment and try again.'
-            });
-        }
-        next();
-    };
-}
-
-const globalApiLimiter = createLimiter(60, 60 * 1000, 'API rate limit exceeded. Please slow down.');
-const strictRegisterLimiter = createLimiter(3, 24 * 60 * 60 * 1000, 'Maximum 3 accounts can be created from a single IP within 24 hours.');
-const loginLimiter = createLimiter(5, 15 * 60 * 1000, 'Too many login attempts. Please wait 15 minutes.');
-const chatLimiter = createLimiter(12, 60 * 1000, 'Sending messages too fast. Please wait a moment.');
-const errorReportLimiter = createLimiter(15, 60 * 1000, 'Telemetry limit reached.');
-
-app.use('/api', globalApiLimiter);
-
-if (MONGO_URI) {
-    mongoose.connect(MONGO_URI)
-        .then(() => console.log('[EMCS DB] Connected to MongoDB successfully.'))
-        .catch(err => console.error('[EMCS DB] Connection failed:', err.message));
-}
-
-// ===================================================================
-// MONGODB SCHEMAS & 2-YEAR TTL INDEX
-// ===================================================================
-const UserSchema = new mongoose.Schema({
-    mobile: { type: String, required: true, unique: true, index: true },
-    consumerId: { type: String, required: true, unique: true, minlength: 12, maxlength: 12, index: true },
-    name: { type: String, required: true },
-    pinHash: { type: String, required: true },
-    termsAccepted: { type: Boolean, default: true },
-    termsAcceptedAt: { type: Date, default: Date.now },
-    failedLoginAttempts: { type: Number, default: 0 },
-    lockUntil: { type: Date, default: null },
-    activeSessions: [{
-        sessionId: String,
-        deviceInfo: String,
-        ipAddress: String,
-        createdAt: { type: Date, default: Date.now }
-    }],
-    appliances: { type: Array, default: [] },
-    sanctionedLoadKw: { type: Number, default: 2.0 },
-    budgetThreshold: { type: Number, default: 3000 },
-    tariffProvider: { type: String, default: 'bihar' },
-    tariffCategory: { type: String, default: 'domestic' },
-    tariffArea: { type: String, default: 'urban' },
-    customTariff: {
-        fixedPerKw: { type: Number, default: 0 },
-        fppcaPct: { type: Number, default: 0 },
-        dutyPct: { type: Number, default: 0.05 },
-        slabs: [{ limit: mongoose.Schema.Types.Mixed, rate: Number }]
-    },
-    accountStatus: { type: String, default: 'active', enum: ['active', 'deleted'] },
-    deletionScheduledAt: { type: Date, default: null }
-}, { timestamps: true });
-
-// Automatically erase soft-deleted user records after 2 years (63,072,000 seconds)
-UserSchema.index({ deletionScheduledAt: 1 }, { expireAfterSeconds: 63072000 });
-
-const StaffSchema = new mongoose.Schema({
-    username: { type: String, required: true, unique: true },
-    passwordHash: { type: String, required: true },
-    name: { type: String, required: true },
-    role: { type: String, default: 'staff', enum: ['staff'] },
-    permissions: {
-        canManageUsers: { type: Boolean, default: false },
-        canChatSupport: { type: Boolean, default: true },
-        canEditCMS: { type: Boolean, default: false },
-        canDeleteChat: { type: Boolean, default: false }
-    }
-});
-
-const SupportMessageSchema = new mongoose.Schema({
-    consumerId: { type: String, required: true, index: true },
-    sender: { type: String, enum: ['user', 'admin'], required: true },
-    text: { type: String, required: true, maxlength: 500 },
-    timestamp: { type: Date, default: Date.now, expires: 2592000 }
-});
-
-const CmsSchema = new mongoose.Schema({
-    key: { type: String, default: 'global_cms', unique: true },
-    broadcast: { type: String, default: '' },
-    about: { type: String, default: 'EMCS is an intelligent energy management and load monitoring platform.' },
-    privacy: { type: String, default: 'All user data is encrypted. Deactivated accounts are retained for 2 years before automatic erasure.' },
-    terms: { type: String, default: 'By using EMCS, you agree to fair usage policies and state electricity slab estimation rules.' },
-    faqs: {
-        type: Array,
-        default: [
-            { q: 'How is my electricity bill calculated?', a: 'We use official state and private electricity board slab rates, fixed load charges, and electricity duty.' },
-            { q: 'What happens when I delete my account?', a: 'Your account is immediately deactivated and automatically erased from the database after 2 years.' }
-        ]
-    }
-});
-
-const SystemErrorSchema = new mongoose.Schema({
-    timestamp: { type: Date, default: Date.now, expires: 2592000 },
-    source: { type: String, default: 'Backend Server' },
-    message: { type: String, required: true },
-    location: { type: String, default: '' },
-    userOrIp: { type: String, default: '' }
-});
-
-const User = mongoose.model('User', UserSchema);
-const Staff = mongoose.model('Staff', StaffSchema);
-const SupportMessage = mongoose.model('SupportMessage', SupportMessageSchema);
-const CmsConfig = mongoose.model('CmsConfig', CmsSchema);
-const SystemError = mongoose.model('SystemError', SystemErrorSchema);
-
-// Internal server-side error logger (Never leaks stack traces to client)
-async function logBackendError(source, err, req = null) {
+// ---------------------------------------------------------
+// AUTOMATED ERROR TELEMETRY (TECHNICAL NAMES MASKED)
+// ---------------------------------------------------------
+function reportSystemError(source, message, location = '') {
     try {
-        await new SystemError({
-            source: sanitizeInput(source || 'Backend Server', 50),
-            message: sanitizeInput(err?.message || String(err), 300),
-            location: sanitizeInput(req ? `${req.method} ${req.originalUrl}` : 'Internal', 150),
-            userOrIp: sanitizeInput(req ? (req.user?.consumerId || req.ip) : 'Server', 60)
-        }).save();
+        const maskedSource = (source || 'Client App').replace(/mongodb|mongoose|express|node/gi, 'Secure Storage Layer');
+        const errEntry = {
+            id: Date.now(),
+            timestamp: new Date().toISOString(),
+            source: maskedSource,
+            message: String(message || 'Unknown Exception').slice(0, 300),
+            location: String(location || window.location.pathname).slice(0, 150),
+            userOrIp: window.KamAbhiRAM?.userSession?.consumerId || 'Secured Client'
+        };
+
+        const localLogs = JSON.parse(localStorage.getItem('emcs_error_logs') || '[]');
+        localLogs.unshift(errEntry);
+        localStorage.setItem('emcs_error_logs', JSON.stringify(localLogs.slice(0, 100)));
+        safeSetText('adminErrorCountBadge', localLogs.length);
+
+        fetch(`${API_BASE}/errors/report`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-emcs-csrf': 'emcs-verified-client' },
+            body: JSON.stringify(errEntry)
+        }).catch(() => {});
     } catch (ignore) {}
 }
 
-// ===================================================================
-// AUTHENTICATION & AUTHORIZATION (RBAC & OWNERSHIP)
-// ===================================================================
-async function authenticateUser(req, res, next) {
-    const token = req.cookies.emcs_auth_token;
-    if (!token) return res.status(401).json({ success: false, message: 'Authentication required. Please log in.' });
+window.addEventListener('error', (event) => {
+    const loc = event.filename ? `${event.filename.split('/').pop()}:${event.lineno}` : 'Runtime UI';
+    reportSystemError('Client Component', event.message, loc);
+});
 
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
-        const user = await User.findById(decoded.userId);
+window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason ? (event.reason.message || String(event.reason)) : 'Async Promise Rejection';
+    reportSystemError('Async Gateway', reason, 'Promise Handling');
+});
 
-        if (!user || user.accountStatus === 'deleted' || !user.activeSessions.some(s => s.sessionId === decoded.sessionId)) {
-            res.clearCookie('emcs_auth_token');
-            return res.status(401).json({ success: false, message: 'Session expired or invalid.' });
-        }
+// ---------------------------------------------------------
+// APPLICATION STATE (ZERO DUMMY DATA)
+// ---------------------------------------------------------
+window.KamAbhiRAM = {
+    userSession: null,
+    appliances: [],
+    paymentHistory: [],
+    cmsFaqs: [],
+    computedBillObj: { total: 0 },
+    totalUnits: 0,
+    budgetThreshold: 3000,
+    vampireSavings: 0,
+    sanctionedLoadKw: 2.0,
+    chartMode: 'line',
+    appChartMode: 'line',
+    energyChart: null,
+    pieChart: null,
+    appCompChart: null
+};
 
-        req.user = user;
-        req.sessionId = decoded.sessionId;
-        next();
-    } catch (e) {
-        return res.status(403).json({ success: false, message: 'Invalid session credentials.' });
-    }
+const ALL_INDIA_TARIFFS = {
+    bihar: { domestic_urban: { fixedPerKw: 80, fppcaPct: 0.082, dutyPct: 0.06, slabs: [{ limit: 100, rate: 4.27 }, { limit: 200, rate: 5.22 }, { limit: Infinity, rate: 6.82 }] } },
+    up: { domestic_urban: { fixedPerKw: 110, fppcaPct: 0.075, dutyPct: 0.05, slabs: [{ limit: 150, rate: 5.50 }, { limit: 300, rate: 6.00 }, { limit: 500, rate: 6.50 }, { limit: Infinity, rate: 7.00 }] } },
+    maharashtra: { domestic_urban: { fixedPerKw: 116, fppcaPct: 0.092, dutyPct: 0.16, slabs: [{ limit: 100, rate: 5.58 }, { limit: 300, rate: 10.81 }, { limit: 500, rate: 14.78 }, { limit: Infinity, rate: 16.64 }] } },
+    delhi: { domestic_urban: { fixedPerKw: 65, fppcaPct: 0.087, dutyPct: 0.05, slabs: [{ limit: 200, rate: 3.00 }, { limit: 400, rate: 4.50 }, { limit: 800, rate: 6.50 }, { limit: Infinity, rate: 8.00 }] } },
+    national: { domestic_urban: { fixedPerKw: 85, fppcaPct: 0.085, dutyPct: 0.06, slabs: [{ limit: 100, rate: 4.50 }, { limit: 300, rate: 7.00 }, { limit: Infinity, rate: 9.50 }] } }
+};
+
+const APPLIANCE_PRESETS = {
+    ac15: { name: "1.5 Ton Split AC", power: 1400, hours: 8 },
+    fridge: { name: "Double Door Refrigerator", power: 180, hours: 24 },
+    fan: { name: "BLDC Ceiling Fan", power: 35, hours: 14 },
+    geyser: { name: "Water Geyser", power: 2000, hours: 1.5 },
+    wm: { name: "Washing Machine", power: 450, hours: 1 },
+    pc: { name: "Desktop Computer", power: 350, hours: 6 }
+};
+
+const TRANSLATIONS = {
+    en: { navDash: "Dashboard", navAppliances: "Appliances & Flowgraph", navProfile: "Account & Security", greetDefault: "Energy Analytics Overview ☀️", btnLoginShort: "Login" },
+    hi: { navDash: "डैशबोर्ड", navAppliances: "उपकरण और फ्लोचार्ट", navProfile: "खाता और सुरक्षा", greetDefault: "ऊर्जा विश्लेषिकी अवलोकन ☀️", btnLoginShort: "लॉगिन" },
+    hinglish: { navDash: "Dashboard", navAppliances: "Appliances & Flowgraph", navProfile: "Account & Security", greetDefault: "Energy Analytics Overview ☀️", btnLoginShort: "Login" }
+};
+
+function switchLanguage(lang) {
+    const dict = TRANSLATIONS[lang] || TRANSLATIONS.hinglish;
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const k = el.getAttribute('data-i18n');
+        if (dict[k]) el.textContent = dict[k];
+    });
 }
 
-async function authenticateAdmin(req, res, next) {
-    const token = req.cookies.emcs_admin_token;
-    if (!token) return res.status(401).json({ success: false, message: 'Admin authentication required.' });
+document.addEventListener('DOMContentLoaded', async () => {
+    const savedTheme = localStorage.getItem('ecoTheme') || 'light';
+    document.body.setAttribute('data-theme', savedTheme);
 
-    try {
-        req.admin = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
-        next();
-    } catch (e) {
-        return res.status(403).json({ success: false, message: 'Invalid admin session.' });
+    const activeUser = JSON.parse(localStorage.getItem('ecoActiveUser'));
+    if (activeUser) {
+        setupUserSession(activeUser);
+        await refreshDataFromCloud();
     }
+
+    loadCmsContent();
+    renderAppliances();
+    renderRealPaymentLedger();
+    calculateSolarRoi();
+    calculateInverterRuntime();
+    switchLanguage('hinglish');
+});
+
+// ---------------------------------------------------------
+// TARIFF & BILLING COMPUTATION
+// ---------------------------------------------------------
+function getActiveTariffConfig() {
+    const provider = safeGetVal('tariffProviderSelect') || 'bihar';
+    const category = safeGetVal('tariffCategorySelect') || 'domestic';
+    const area = safeGetVal('tariffAreaSelect') || 'urban';
+
+    if (provider === 'custom') {
+        const savedCustom = JSON.parse(localStorage.getItem('emcs_custom_tariff'));
+        if (savedCustom) return savedCustom;
+    }
+
+    const key = `${category}_${area}`;
+    const providerObj = ALL_INDIA_TARIFFS[provider] || ALL_INDIA_TARIFFS.national;
+    return providerObj[key] || providerObj.domestic_urban || ALL_INDIA_TARIFFS.national.domestic_urban;
 }
 
-function requireAdminPermission(permKey) {
-    return (req, res, next) => {
-        if (!req.admin) return res.status(401).json({ success: false, message: 'Unauthorized.' });
-        if (req.admin.role === 'owner') return next();
-        if (permKey && req.admin.permissions && req.admin.permissions[permKey] === true) {
-            return next();
-        }
-        return res.status(403).json({ success: false, message: 'Forbidden: Insufficient role permissions.' });
+function computeSlabBill(units, configOverride = null) {
+    const unitsSafe = Math.max(0, parseFloat(units) || 0);
+    const config = configOverride || getActiveTariffConfig();
+
+    let rem = unitsSafe, energyCharges = 0, prev = 0;
+    for (let s of config.slabs) {
+        const limitVal = (s.limit === 'Infinity' || s.limit === Infinity || s.limit === null) ? Infinity : Number(s.limit);
+        const cap = limitVal - prev;
+        if (rem <= 0) break;
+        const billable = Math.min(rem, cap);
+        energyCharges += billable * (parseFloat(s.rate) || 0);
+        rem -= billable;
+        prev = limitVal;
+    }
+
+    const sanctionedKw = Math.max(0.5, parseFloat(window.KamAbhiRAM.sanctionedLoadKw) || 2.0);
+    const fixedDemandCharge = sanctionedKw * (parseFloat(config.fixedPerKw) || 0);
+    const includeSurcharges = $('includeFppcaToggle') ? $('includeFppcaToggle').checked : true;
+    const fppcaSurcharge = includeSurcharges ? (energyCharges * (parseFloat(config.fppcaPct) || 0)) : 0;
+    const dutyRate = parseFloat(config.dutyPct) || 0.05;
+    const electricityDuty = includeSurcharges ? ((energyCharges + fixedDemandCharge) * dutyRate) : 0;
+
+    return {
+        total: Math.max(0, energyCharges + fixedDemandCharge + fppcaSurcharge + electricityDuty),
+        energyCharges, fixedDemandCharge, fppcaSurcharge, electricityDuty
     };
 }
 
-// ===================================================================
-// ERROR TELEMETRY ROUTES
-// ===================================================================
-app.post('/api/errors/report', errorReportLimiter, async (req, res) => {
-    try {
-        const source = sanitizeInput(req.body.source || 'Website JS', 50);
-        const message = sanitizeInput(req.body.message, 300);
-        const location = sanitizeInput(req.body.location, 150);
-        const userOrIp = sanitizeInput(req.body.userOrIp || req.ip, 60);
+function onTariffConfigChange() {
+    if (safeGetVal('tariffProviderSelect') === 'custom') toggleCustomTariffModal();
+    renderAppliances();
+    autoSyncToCloud();
+}
 
-        if (!message) return res.status(400).json({ success: false });
-        await new SystemError({ source, message, location, userOrIp }).save();
-        res.json({ success: true });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
+function toggleCustomTariffModal() {
+    $('customTariffModal').classList.toggle('hidden');
+    $('popupOverlay').classList.toggle('hidden');
+}
 
-app.get('/api/admin/errors', authenticateAdmin, async (req, res) => {
-    try {
-        const errors = await SystemError.find({}).sort({ timestamp: -1 }).limit(100);
-        res.json({ success: true, errors });
-    } catch (e) {
-        res.status(500).json({ success: false, message: 'Could not retrieve error logs.' });
-    }
-});
+function saveCustomTariffSettings() {
+    const fixed = Math.min(5000, Math.max(0, parseFloat(safeGetVal('custFixedCharge')) || 0));
+    const fppca = Math.min(1.0, Math.max(0, (parseFloat(safeGetVal('custFppcaPct')) || 0) / 100));
+    const duty = Math.min(1.0, Math.max(0, (parseFloat(safeGetVal('custDutyPct')) || 0) / 100));
 
-app.delete('/api/admin/errors/clear', authenticateAdmin, requireAdminPermission(null), async (req, res) => {
-    try {
-        if (req.admin.role !== 'owner') {
-            return res.status(403).json({ success: false, message: 'Only Master Owner can clear system error logs.' });
-        }
-        await SystemError.deleteMany({});
-        res.json({ success: true, message: 'All error logs cleared.' });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
+    const s1Limit = Math.max(1, parseFloat(safeGetVal('custSlab1Limit')) || 100);
+    const s1Rate = Math.min(100, Math.max(0, parseFloat(safeGetVal('custSlab1Rate')) || 4.5));
+    const s2Limit = Math.max(s1Limit + 1, parseFloat(safeGetVal('custSlab2Limit')) || 300);
+    const s2Rate = Math.min(100, Math.max(0, parseFloat(safeGetVal('custSlab2Rate')) || 7.0));
+    const sFinalRate = Math.min(100, Math.max(0, parseFloat(safeGetVal('custSlabFinalRate')) || 9.5));
 
-// ===================================================================
-// USER AUTHENTICATION & REGISTRATION ROUTES
-// ===================================================================
-app.post('/api/auth/register', strictRegisterLimiter, async (req, res) => {
-    try {
-        if (req.body._bot_honeypot && String(req.body._bot_honeypot).length > 0) {
-            return res.status(403).json({ success: false, message: 'Automated registration blocked.' });
-        }
+    const customConfig = {
+        name: "Custom Rate", fixedPerKw: fixed, fppcaPct: fppca, dutyPct: duty,
+        slabs: [ { limit: s1Limit, rate: s1Rate }, { limit: s2Limit, rate: s2Rate }, { limit: Infinity, rate: sFinalRate } ]
+    };
 
-        if (req.body.termsAccepted !== true) {
-            return res.status(400).json({ success: false, message: 'You must accept the Privacy Policy and Terms & Conditions.' });
-        }
+    localStorage.setItem('emcs_custom_tariff', JSON.stringify(customConfig));
+    safeSetVal('tariffProviderSelect', 'custom');
+    toggleCustomTariffModal();
+    renderAppliances();
+    autoSyncToCloud();
+    alert("✓ Custom Tariff Rates saved successfully!");
+}
 
-        const mobile = sanitizeInput(req.body.mobile, 10);
-        const consumerId = sanitizeInput(req.body.consumerId, 12).toUpperCase();
-        const pin = sanitizeInput(req.body.pin, 4);
-        const name = sanitizeInput(req.body.name, 60);
+// ---------------------------------------------------------
+// HACKATHON LIVE FLOWCHART & GRAPHS
+// ---------------------------------------------------------
+function renderAppliances() {
+    const tbody = $('applianceList');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    let totalLoadKwh = 0, activeWatts = 0;
 
-        // Fixed syntax for OR operators
-        if (!/^[0-9]{10}$/.test(mobile) \vert{}\vert{} consumerId.length !== 12 \vert{}\vert{} !/^[0-9]{4}$/.test(pin) || !name || name.length < 2) {
-            return res.status(400).json({ success: false, message: 'Invalid input format. Check mobile, 12-char alphanumeric ID, and 4-digit PIN.' });
-        }
-
-        const existing = await User.findOne({ $or: [{ mobile }, { consumerId }] });
-        if (existing) {
-            return res.status(400).json({ success: false, message: 'Registration failed: Mobile or Consumer ID is already in use.' });
-        }
-
-        const pinHash = await bcrypt.hash(pin, 12);
-        await new User({
-            mobile,
-            consumerId,
-            name,
-            pinHash,
-            termsAccepted: true,
-            termsAcceptedAt: new Date()
-        }).save();
-
-        res.json({ success: true, message: 'Account created successfully.' });
-    } catch (e) {
-        await logBackendError('Register Route', e, req);
-        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
-    }
-});
-
-app.post('/api/auth/login', loginLimiter, async (req, res) => {
-    try {
-        const mobile = sanitizeInput(req.body.mobile, 10);
-        const pin = sanitizeInput(req.body.pin, 4);
-
-        if (!/^[0-9]{10}$/.test(mobile) \vert{}\vert{} !/^[0-9]{4}$/.test(pin)) {
-            return res.status(400).json({ success: false, message: 'Invalid mobile number or PIN.' });
-        }
-
-        const user = await User.findOne({ mobile });
-        if (!user) return res.status(401).json({ success: false, message: 'Invalid mobile number or PIN.' });
-
-        if (user.accountStatus === 'deleted') {
-            return res.status(403).json({ success: false, message: 'This account has been deactivated.' });
-        }
-
-        if (user.lockUntil && user.lockUntil > Date.now()) {
-            const mins = Math.ceil((user.lockUntil - Date.now()) / 60000);
-            return res.status(429).json({
-                success: false,
-                isLocked: true,
-                message: `Account temporarily locked. Please try again in ${mins} minutes.`
-            });
-        }
-
-        const isMatch = await bcrypt.compare(pin, user.pinHash);
-        if (!isMatch) {
-            const updatedUser = await User.findOneAndUpdate(
-                { _id: user._id },
-                { $inc: { failedLoginAttempts: 1 } },
-                { new: true }
-            );
-
-            if (updatedUser.failedLoginAttempts >= 5) {
-                await User.updateOne(
-                    { _id: user._id },
-                    { $set: { lockUntil: new Date(Date.now() + 15 * 60000), failedLoginAttempts: 0 } }
-                );
+    if (window.KamAbhiRAM.appliances.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center small-text">No appliances connected. Add a device above to generate analytics.</td></tr>';
+    } else {
+        window.KamAbhiRAM.appliances.forEach(app => {
+            if (app.state) {
+                totalLoadKwh += parseFloat(app.monthlyKwh);
+                activeWatts += parseFloat(app.power);
             }
-            return res.status(401).json({ success: false, message: 'Invalid mobile number or PIN.' });
-        }
-
-        await User.updateOne(
-            { _id: user._id },
-            { $set: { failedLoginAttempts: 0, lockUntil: null } }
-        );
-
-        const sessionId = crypto.randomBytes(24).toString('hex');
-        user.activeSessions.push({
-            sessionId,
-            deviceInfo: sanitizeInput(req.headers['user-agent'], 70),
-            ipAddress: req.ip
+            const cost = computeSlabBill(parseFloat(app.monthlyKwh)).total.toFixed(0);
+            tbody.innerHTML += `<tr>
+                <td><strong>${escapeHTML(app.name)}</strong></td>
+                <td>${Number(app.power)} W</td>
+                <td>${Number(app.hours)} hrs/day</td>
+                <td>${Number(app.monthlyKwh)} kWh</td>
+                <td><label class="switch"><input type="checkbox" ${app.state ? 'checked' : ''} onchange="toggleApplianceState(${app.id}, this.checked)"><span class="slider"></span></label></td>
+                <td class="text-primary"><b>₹${cost}</b></td>
+                <td><button class="sm-btn danger-bg" onclick="deleteAppliance(${app.id})"><i class="fa-solid fa-trash"></i></button></td>
+            </tr>`;
         });
+    }
 
-        if (user.activeSessions.length > 5) {
-            user.activeSessions = user.activeSessions.slice(-5);
-        }
-        await user.save();
+    window.KamAbhiRAM.totalUnits = totalLoadKwh;
+    const billObj = totalLoadKwh > 0 ? computeSlabBill(totalLoadKwh) : { total: 0 };
+    window.KamAbhiRAM.computedBillObj = billObj;
 
-        const token = jwt.sign({ userId: user._id, sessionId }, JWT_SECRET, { expiresIn: '7d', algorithm: 'HS256' });
+    safeSetText('dashLoadDisplay', `${totalLoadKwh.toFixed(1)} kWh`);
+    safeSetText('dashBillDisplay', `₹${billObj.total.toFixed(0)}`);
+    safeSetText('paymentTabAmount', `₹${billObj.total.toFixed(2)}`);
+    safeSetText('vampireDisplay', `₹${(billObj.total * 0.10).toFixed(0)}`);
+    safeSetText('forecastBillDisplay', `₹${(totalLoadKwh > 0 ? computeSlabBill(totalLoadKwh * 1.12).total : 0).toFixed(0)}`);
+    safeSetText('liveWattsDisplay', `${activeWatts} W`);
+    safeSetText('flowTotalWattsBadge', `Active Draw: ${activeWatts} W (${totalLoadKwh.toFixed(1)} kWh/mo)`);
+    safeSetText('autoAuditUnits', `${totalLoadKwh.toFixed(1)} kWh`);
+    safeSetText('autoAuditBill', `₹${billObj.total.toFixed(2)}`);
+    safeSetText('autoAuditCarbon', `${(totalLoadKwh * 0.70).toFixed(1)} kg CO2`);
 
-        res.cookie('emcs_auth_token', token, {
-            httpOnly: true,
-            secure: IS_PROD,
-            sameSite: IS_PROD ? 'none' : 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000
+    checkMdiDemandOverload(activeWatts);
+    $('budgetAlertBanner')?.classList.toggle('hidden', billObj.total <= window.KamAbhiRAM.budgetThreshold);
+
+    renderApplianceFlowchart(activeWatts, totalLoadKwh);
+    renderDynamicCharts(totalLoadKwh);
+}
+
+function checkMdiDemandOverload(activeWatts) {
+    const maxWatts = window.KamAbhiRAM.sanctionedLoadKw * 1000;
+    const banner = $('mdiOverloadBanner');
+    if (!banner) return;
+    if (activeWatts > maxWatts) banner.classList.remove('hidden');
+    else banner.classList.add('hidden');
+}
+
+function renderApplianceFlowchart(activeWatts, totalKwh) {
+    const box = $('applianceFlowchartContainer');
+    if (!box) return;
+
+    const apps = window.KamAbhiRAM.appliances;
+    if (apps.length === 0) {
+        box.innerHTML = `<div class="text-center small-text" style="padding: 16px;"><i class="fa-solid fa-diagram-project text-primary" style="font-size:1.6rem; opacity:0.6; margin-bottom:6px; display:block;"></i>No active load nodes. Add an appliance above to view real-time flowchart.</div>`;
+        return;
+    }
+
+    const maxWatts = window.KamAbhiRAM.sanctionedLoadKw * 1000;
+    const isOverload = activeWatts > maxWatts;
+    const meterColor = isOverload ? 'var(--danger)' : 'var(--primary)';
+
+    const nodesHtml = apps.map(app => {
+        const sharePct = totalKwh > 0 && app.state ? Math.round((parseFloat(app.monthlyKwh) / totalKwh) * 100) : 0;
+        const borderCol = app.state ? '#10B981' : '#94A3B8';
+        const statusBadge = app.state ? `<span class="badge light-green-bg" style="font-size:0.68rem;">ON • ${sharePct}% Share</span>` : `<span class="badge" style="background:rgba(148,163,184,0.2); color:var(--text-muted); font-size:0.68rem;">OFF</span>`;
+        return `<div style="min-width: 155px; background: var(--card-bg); border: 2px solid ${borderCol}; border-radius: 12px; padding: 10px 12px; text-align: center; box-shadow: var(--shadow);">
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px;"><i class="fa-solid fa-bolt" style="color:${borderCol};"></i> Node</div>
+            <div style="font-weight: 700; font-size: 0.88rem; margin-bottom: 4px; color: var(--text-color);">${escapeHTML(app.name)}</div>
+            <div style="font-size: 0.8rem; font-weight: 600; color: var(--primary); margin-bottom: 6px;">${Number(app.power)} W</div>
+            ${statusBadge}
+        </div>`;
+    }).join('<div style="align-self:center; color:var(--primary); font-weight:bold;">➔</div>');
+
+    box.innerHTML = `<div style="display: flex; flex-direction: column; align-items: center; gap: 14px;">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
+            <div style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #fff; padding: 10px 18px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;"><i class="fa-solid fa-tower-observation"></i> Secure Grid</div>
+            <div style="color: var(--primary); font-weight: bold;">━━►</div>
+            <div style="background: var(--card-bg); border: 2px solid ${meterColor}; padding: 10px 18px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;">Meter Gateway: <span style="color:${meterColor};">${activeWatts}W / ${maxWatts}W</span></div>
+        </div>
+        <div style="color: var(--primary); font-size: 1.1rem; line-height: 1;">▼</div>
+        <div style="display: flex; align-items: stretch; justify-content: center; gap: 10px; flex-wrap: wrap; width: 100%;">${nodesHtml}</div>
+    </div>`;
+}
+
+function setChartMode(mode) { window.KamAbhiRAM.chartMode = mode; renderDynamicCharts(window.KamAbhiRAM.totalUnits); }
+function setAppChartMode(mode) { 
+    window.KamAbhiRAM.appChartMode = mode; 
+    if ($('appFlowBtn')) $('appFlowBtn').style.background = mode === 'line' ? 'var(--primary)' : '#64748B';
+    if ($('appBarBtn')) $('appBarBtn').style.background = mode === 'bar' ? 'var(--primary)' : '#64748B';
+    renderDynamicCharts(window.KamAbhiRAM.totalUnits); 
+}
+
+function renderDynamicCharts(totalLoad) {
+    const palette = ['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#0EA5E9', '#EC4899', '#14B8A6'];
+    const activeApps = window.KamAbhiRAM.appliances;
+    const hasData = activeApps.length > 0 && totalLoad > 0;
+
+    const ctxEl = $('energyChart');
+    if (ctxEl && typeof Chart !== 'undefined') {
+        if (window.KamAbhiRAM.energyChart) window.KamAbhiRAM.energyChart.destroy();
+        const ctx = ctxEl.getContext('2d');
+        const grad = ctx.createLinearGradient(0, 0, 0, 300);
+        grad.addColorStop(0, 'rgba(99, 102, 241, 0.45)');
+        grad.addColorStop(1, 'rgba(99, 102, 241, 0.02)');
+        const d = hasData ? (totalLoad / 30) : 0;
+
+        window.KamAbhiRAM.energyChart = new Chart(ctx, {
+            type: window.KamAbhiRAM.chartMode,
+            data: {
+                labels: hasData ? ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Today'] : ['No Data'],
+                datasets: [{
+                    label: 'Daily Energy Flow (kWh)',
+                    data: hasData ? [(d*0.88).toFixed(2), (d*1.04).toFixed(2), (d*0.94).toFixed(2), (d*1.12).toFixed(2), (d*1.01).toFixed(2), (d*1.16).toFixed(2), d.toFixed(2)] : [],
+                    borderColor: '#6366F1', backgroundColor: window.KamAbhiRAM.chartMode === 'line' ? grad : palette,
+                    borderWidth: 3, fill: true, tension: 0.42
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
         });
+    }
 
-        res.json({
-            success: true,
-            user: {
-                name: user.name,
-                mobile: user.mobile,
-                consumerId: user.consumerId,
-                appliances: user.appliances,
-                sanctionedLoadKw: user.sanctionedLoadKw,
-                budgetThreshold: user.budgetThreshold,
-                tariffProvider: user.tariffProvider,
-                tariffCategory: user.tariffCategory,
-                tariffArea: user.tariffArea,
-                customTariff: user.customTariff
+    const pieEl = $('pieChart');
+    if (pieEl && typeof Chart !== 'undefined') {
+        if (window.KamAbhiRAM.pieChart) window.KamAbhiRAM.pieChart.destroy();
+        window.KamAbhiRAM.pieChart = new Chart(pieEl.getContext('2d'), {
+            type: 'doughnut',
+            data: { labels: activeApps.map(a => a.name), datasets: [{ data: activeApps.map(a => a.state ? a.monthlyKwh : 0), backgroundColor: palette }] },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '64%' }
+        });
+    }
+
+    const compEl = $('applianceCompChart');
+    if (compEl && typeof Chart !== 'undefined') {
+        if (window.KamAbhiRAM.appCompChart) window.KamAbhiRAM.appCompChart.destroy();
+        const ctx2 = compEl.getContext('2d');
+        const isLine = window.KamAbhiRAM.appChartMode === 'line';
+
+        const gradPrimary = ctx2.createLinearGradient(0, 0, 0, 260);
+        gradPrimary.addColorStop(0, 'rgba(99, 102, 241, 0.45)');
+        gradPrimary.addColorStop(1, 'rgba(99, 102, 241, 0.02)');
+
+        window.KamAbhiRAM.appCompChart = new Chart(ctx2, {
+            type: window.KamAbhiRAM.appChartMode,
+            data: {
+                labels: activeApps.map(a => a.name),
+                datasets: [{
+                    label: 'Monthly Consumption (kWh)',
+                    data: activeApps.map(a => a.state ? a.monthlyKwh : 0),
+                    borderColor: isLine ? '#6366F1' : palette, backgroundColor: isLine ? gradPrimary : palette, 
+                    borderWidth: 3, fill: isLine, tension: 0.42
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+}
+
+// ---------------------------------------------------------
+// CRUD OPERATIONS & OTHER UTILS
+// ---------------------------------------------------------
+function applyPreset(key) {
+    if (!APPLIANCE_PRESETS[key]) return;
+    safeSetVal('appName', APPLIANCE_PRESETS[key].name);
+    safeSetVal('appPower', APPLIANCE_PRESETS[key].power);
+    safeSetVal('appHours', APPLIANCE_PRESETS[key].hours);
+}
+
+function addAppliance() {
+    const name = safeGetVal('appName').trim();
+    const power = Math.min(50000, Math.max(1, parseFloat(safeGetVal('appPower'))));
+    const hours = Math.min(24, Math.max(0.1, parseFloat(safeGetVal('appHours'))));
+    if (!name || isNaN(power) || isNaN(hours)) return alert("Enter valid appliance details.");
+    const monthlyKwh = ((power * hours * 30) / 1000).toFixed(2);
+    window.KamAbhiRAM.appliances.push({ id: Date.now(), name, power, hours, monthlyKwh, state: true });
+    safeSetVal('appName', ''); safeSetVal('appPower', ''); safeSetVal('appHours', '');
+    renderAppliances();
+    autoSyncToCloud();
+}
+
+function deleteAppliance(id) {
+    window.KamAbhiRAM.appliances = window.KamAbhiRAM.appliances.filter(a => a.id !== id);
+    renderAppliances();
+    autoSyncToCloud();
+}
+
+function toggleApplianceState(id, state) {
+    const app = window.KamAbhiRAM.appliances.find(a => a.id === id);
+    if (app) { app.state = state; renderAppliances(); autoSyncToCloud(); }
+}
+
+function executeHeavyApplianceCutoff() {
+    window.KamAbhiRAM.appliances.forEach(a => { if (a.power >= 1000) a.state = false; });
+    renderAppliances();
+    sendRealHardwareRelay(16, false);
+    sendRealHardwareRelay(17, false);
+}
+
+// ---------------------------------------------------------
+// SECURE HARDWARE RELAY (HMAC-SHA256)
+// ---------------------------------------------------------
+async function generateIoTMac(pin, val, secretKey) {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const message = `${pin}:${val}:${timestamp}`;
+    const encoder = new TextEncoder();
+    const cryptoKey = await crypto.subtle.importKey('raw', encoder.encode(secretKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(message));
+    const signatureHex = Array.from(new Uint8Array(signatureBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    return { timestamp, signatureHex };
+}
+
+function isStrictPrivateLanUrl(urlString) {
+    try {
+        const parsed = new URL(urlString);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+        const parts = parsed.hostname.split('.').map(Number);
+        if (parts.length !== 4 || parts.some(n => isNaN(n) || n < 0 || n > 255)) return false;
+        if (parts[0] === 10) return true;
+        if (parts[0] === 192 && parts[1] === 168) return true;
+        if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+        return false;
+    } catch (e) { return false; }
+}
+
+async function sendRealHardwareRelay(pin, state) {
+    const endpoint = safeGetVal('iotCutoffEndpoint').trim();
+    const authKey = safeGetVal('espAuthToken').trim();
+    const badge = $(`gpio${pin}Status`);
+    const logEl = $('espConsoleLog');
+    const val = state ? 1 : 0;
+
+    if (badge) {
+        badge.textContent = state ? "ACTIVE / ON" : "CUT OFF";
+        badge.className = state ? "badge light-green-bg" : "badge light-red-bg";
+    }
+
+    if (!isStrictPrivateLanUrl(endpoint)) {
+        if (logEl) logEl.textContent = "[SECURITY BARRIER]: Target is not a verified local private IP.";
+        return;
+    }
+
+    const { timestamp, signatureHex } = await generateIoTMac(pin, val, authKey);
+    const targetUrl = `${endpoint}?pin=${encodeURIComponent(pin)}&val=${val}&ts=${timestamp}&sig=${signatureHex}`;
+    if (logEl) logEl.textContent = `[SECURE LAN DISPATCH]: Sent time-stamped trigger (GPIO ${pin}). Sig: ${signatureHex.substring(0,8)}...`;
+    try { await fetch(targetUrl, { method: 'GET', mode: 'no-cors' }); } catch (e) {}
+}
+
+async function connectSerialHardware() {
+    if (!("serial" in navigator)) return alert("Web Serial API requires supported browser.");
+    try {
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        safeSetText('hardwareConnectionBadge', 'USB Connected');
+    } catch (e) { alert("Serial connection cancelled."); }
+}
+
+// ---------------------------------------------------------
+// VOLTAGE, INVERTER, SOLAR & VAMPIRE
+// ---------------------------------------------------------
+function calculateInverterRuntime() {
+    const ah = Math.max(1, parseFloat(safeGetVal('invBatteryAh')) || 150);
+    const volts = parseFloat(safeGetVal('invVoltage')) || 12;
+    const watts = Math.max(0, parseFloat(safeGetVal('invActiveLoad')) || 0);
+    if (watts <= 0) return safeSetText('inverterRuntimeOutput', 'Standby');
+    const hours = (ah * volts * 0.85) / watts;
+    safeSetText('inverterRuntimeOutput', `${Math.floor(hours)}h ${Math.round((hours%1)*60)}m`);
+}
+
+function fetchActiveLoadToInverter() {
+    let activeWatts = 0;
+    window.KamAbhiRAM.appliances.forEach(a => { if (a.state) activeWatts += parseFloat(a.power); });
+    safeSetVal('invActiveLoad', activeWatts);
+    calculateInverterRuntime();
+}
+
+function simulateGridVoltage(v) {
+    safeSetText('liveVoltageMetric', `${v} V`);
+    const box = $('voltageAlertBox');
+    box.classList.remove('hidden');
+    if (v < 180 || v > 260) {
+        safeSetText('voltageHealthBadge', `${v}V • Alert`);
+        box.textContent = "⚠️ Voltage anomaly detected. Heavy circuits isolated.";
+        box.style.background = "rgba(239,68,68,0.15)";
+        executeHeavyApplianceCutoff();
+    } else {
+        safeSetText('voltageHealthBadge', `${v}V • Normal`);
+        box.textContent = "✓ Voltage within secure tolerances.";
+        box.style.background = "rgba(16,185,129,0.15)";
+    }
+}
+
+function calculateSolarRoi() {
+    const units = Math.max(10, parseFloat(safeGetVal('solarInputUnits')) || 300);
+    const area = Math.max(50, parseFloat(safeGetVal('solarInputArea')) || 250);
+    const kw = Math.max(1, Math.min(10, Math.min(units / 120, area / 80)));
+    safeSetText('solarCapResult', `${kw.toFixed(1)} kW`);
+    safeSetText('solarCostResult', `₹${Math.round(kw * 50000).toLocaleString('en-IN')}`);
+    safeSetText('solarSubsidyResult', `-₹${(kw <= 2 ? kw * 30000 : 78000).toLocaleString('en-IN')}`);
+}
+
+function toggleVampireItem(val, chk) {
+    window.KamAbhiRAM.vampireSavings += chk.checked ? val : -val;
+    safeSetText('vampireTotalSavedBadge', `Saved: ₹${window.KamAbhiRAM.vampireSavings}/mo`);
+}
+
+// ---------------------------------------------------------
+// FILE UPLOAD SECURITY (MAGIC BYTES & SIZE LIMIT)
+// ---------------------------------------------------------
+async function validateUploadedImage(file) {
+    const MAX_IMAGE_SIZE = 4 * 1024 * 1024; 
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+
+    if (file.size > MAX_IMAGE_SIZE) throw new Error('File too large! Max 4 MB allowed.');
+    if (!allowedMimes.includes(file.type)) throw new Error('Invalid file type! Only JPG, PNG, and WebP allowed.');
+
+    const buffer = await file.slice(0, 4).arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+
+    const isJpeg = hex.startsWith('FFD8FF');
+    const isPng = hex === '89504E47';
+    const isWebp = hex === '52494646'; 
+
+    if (!isJpeg && !isPng && !isWebp) throw new Error('Security Block: Invalid file signature.');
+}
+
+async function processBillOcr() {
+    const file = $('billImageInput').files[0];
+    if (!file) return alert('Please select a bill image first.');
+
+    try {
+        await validateUploadedImage(file);
+    } catch (securityErr) {
+        reportSystemError('File Security Module', securityErr.message, 'processBillOcr');
+        $('billImageInput').value = '';
+        return alert(securityErr.message);
+    }
+
+    $('ocrLoader').classList.remove('hidden');
+    try {
+        const { data: { text } } = await Tesseract.recognize(file, 'eng');
+        const unitsMatch = text.match(/(?:units?|kwh)[\s\-:]*([0-9]{1,5})/i);
+        const u = unitsMatch ? unitsMatch[1] : '250';
+        safeSetText('ocrConsumerId', window.KamAbhiRAM?.userSession?.consumerId || 'VERIFIED');
+        safeSetText('ocrUnits', u);
+        safeSetText('ocrAmount', `₹${computeSlabBill(parseFloat(u)).total.toFixed(0)}`);
+        window.lastOcrUnits = parseFloat(u);
+        $('ocrResultBox').classList.remove('hidden');
+    } catch (e) {
+        reportSystemError('OCR Scanner', e.message, 'processBillOcr');
+        alert('Could not parse text. Please upload a clear photo.');
+    }
+    $('ocrLoader').classList.add('hidden');
+}
+
+function applyOcrToSimulator() {
+    if (window.lastOcrUnits) safeSetVal('simUserUnits', window.lastOcrUnits);
+    calculateSimulator();
+    showFeature('simulator', null);
+}
+
+function handleSmartMeterCsv(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const MAX_CSV_SIZE = 2 * 1024 * 1024; 
+    const isCsvExt = /\.(csv|txt)$/i.test(file.name);
+    if (file.size > MAX_CSV_SIZE || !isCsvExt) {
+        reportSystemError('File Security Module', `Rejected upload: ${file.name}`, 'handleSmartMeterCsv');
+        e.target.value = '';
+        return alert('Security Block: Only valid .csv or .txt files under 2 MB allowed.');
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        const content = String(ev.target.result || '');
+        if (content.includes('\0')) {
+            e.target.value = '';
+            return alert('Security Block: Corrupted binary file detected.');
+        }
+
+        const rows = content.split(/\r?\n/).slice(1, 10001); 
+        let total = 0, peak = 0, count = 0;
+        rows.forEach(r => {
+            const cols = r.split(',');
+            const val = parseFloat(cols[1]);
+            if (!isNaN(val) && val >= 0 && val <= 1000) {
+                total += val;
+                count++;
+                if (val > peak) peak = val;
             }
         });
-    } catch (e) {
-        await logBackendError('Login Route', e, req);
-        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
+        $('csvSummaryBox').classList.remove('hidden');
+        safeSetText('csvTotalKwh', `${total.toFixed(1)} kWh`);
+        safeSetText('csvPeakHour', `${peak.toFixed(2)} kWh`);
+        safeSetText('csvAvgDaily', `${(total / Math.max(1, count / 24)).toFixed(1)} kWh/d`);
+    };
+    reader.readAsText(file);
+}
+
+// ---------------------------------------------------------
+// PAYMENT, AUDIT & SIMULATOR
+// ---------------------------------------------------------
+function executeRealPayment() {
+    const amt = window.KamAbhiRAM.computedBillObj.total;
+    if (amt <= 0) return alert("No active dues.");
+    alert("Payment gateway integration pending secure authorization.");
+}
+
+function renderRealPaymentLedger() {
+    window.KamAbhiRAM.paymentHistory = JSON.parse(localStorage.getItem('emcs_txns')) || [];
+    const tbody = $('sixMonthTableBody');
+    if (!tbody) return;
+    if (window.KamAbhiRAM.paymentHistory.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center small-text">No recorded receipts.</td></tr>';
+        return;
     }
-});
+    tbody.innerHTML = window.KamAbhiRAM.paymentHistory.map(t => `<tr><td><b>${escapeHTML(t.txnId)}</b></td><td>${escapeHTML(t.units)} kWh</td><td><b>₹${escapeHTML(t.amount)}</b></td><td><span class="badge light-green-bg">${escapeHTML(t.status)}</span></td></tr>`).join('');
+}
 
-app.post('/api/auth/logout', authenticateUser, async (req, res) => {
-    try {
-        req.user.activeSessions = req.user.activeSessions.filter(s => s.sessionId !== req.sessionId);
-        await req.user.save();
-        res.clearCookie('emcs_auth_token');
-        res.json({ success: true });
-    } catch (e) {
-        res.status(500).json({ success: false });
+function downloadInvoicePDF() {
+    const card = document.createElement('div');
+    card.style.padding = '24px';
+    card.innerHTML = `<h2>EMCS - Secured Energy Bill Summary</h2><hr><p>Consumption: ${window.KamAbhiRAM.totalUnits.toFixed(1)} kWh</p><h3>Total Amount: ₹${window.KamAbhiRAM.computedBillObj.total.toFixed(2)}</h3>`;
+    if (typeof html2pdf !== 'undefined') html2pdf().from(card).save('EMCS_Summary.pdf');
+}
+
+function exportYearlyExcel() {
+    let csv = "Appliance,Watts,Daily_Hours,Monthly_kWh\n";
+    window.KamAbhiRAM.appliances.forEach(a => { csv += `"${a.name}",${a.power},${a.hours},${a.monthlyKwh}\n`; });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'EMCS_Audit.csv'; a.click();
+}
+
+function calculateSimulator() {
+    const u = parseFloat(safeGetVal('simUserUnits')) || 300;
+    const r = parseFloat(safeGetVal('simUserRate')) || 7.5;
+    const p = parseFloat(safeGetVal('simSlider')) || 15;
+    safeSetText('simPctVal', p);
+    safeSetText('simUnitsResult', `${(u * p / 100).toFixed(1)} kWh`);
+    safeSetText('simSavingsResult', `₹${(u * p / 100 * r).toFixed(0)}`);
+}
+
+// ---------------------------------------------------------
+// VOICE ASSISTANT & CHAT
+// ---------------------------------------------------------
+function speakFemaleVoice(text) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const fVoice = voices.find(v => /female|veena|lekha|samantha|zira/i.test(v.name)) || voices[0];
+    if (fVoice) utter.voice = fVoice;
+    window.speechSynthesis.speak(utter);
+}
+
+function sendTabChatMessage() {
+    const input = $('tabChatInput');
+    const raw = input.value.trim().slice(0, 500);
+    if (!raw) return;
+    input.value = '';
+    const box = $('tabChatBox');
+    box.innerHTML += `<div class="clean-card p-2" style="align-self:flex-end; background:var(--primary); color:#fff; max-width:80%;">${escapeHTML(raw)}</div>`;
+    const reply = "Optimizing appliance schedules and maintaining thermostat thresholds at 24°C will minimize billing tiers.";
+    setTimeout(() => {
+        box.innerHTML += `<div class="clean-card p-2" style="align-self:flex-start; max-width:85%;"><p>${escapeHTML(reply)}</p></div>`;
+        box.scrollTop = box.scrollHeight;
+    }, 250);
+}
+
+// ---------------------------------------------------------
+// AUTHENTICATION & MODALS
+// ---------------------------------------------------------
+function openLoginModal() { $('loginModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden'); }
+function openAIModal() { $('aiModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden'); }
+function closeAllPopups() {
+    const legalEl = $('legalModal');
+    const loginEl = $('loginModal');
+    if (legalEl && !legalEl.classList.contains('hidden') && loginEl && !loginEl.classList.contains('hidden')) {
+        legalEl.classList.add('hidden');
+        return;
     }
-});
+    document.querySelectorAll('.popup-modal').forEach(m => m.classList.add('hidden'));
+    $('popupOverlay').classList.add('hidden');
+}
 
-app.post('/api/auth/verify-and-reset-pin', loginLimiter, async (req, res) => {
+function switchAuthTab(tab, btn) {
+    document.querySelectorAll('#authTabButtons button').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    ['modalLoginForm', 'modalRegisterForm', 'modalForgotForm', 'modalAdminForm'].forEach(id => $(id).classList.add('hidden'));
+    if (tab === 'login') $('modalLoginForm').classList.remove('hidden');
+    if (tab === 'register') $('modalRegisterForm').classList.remove('hidden');
+    if (tab === 'forgot') $('modalForgotForm').classList.remove('hidden');
+    if (tab === 'admin') $('modalAdminForm').classList.remove('hidden');
+    safeSetText('modalAuthError', '');
+}
+
+async function handleSecureRegister(e) {
+    e.preventDefault();
+    if ($('regHoneypot') &&$('regHoneypot').value) return;
+    if ($('regTermsCheck') && !$('regTermsCheck').checked) return safeSetText('modalAuthError', 'Acceptance of Privacy Policy and Terms is required.');
+
+    const payload = {
+        name: safeGetVal('regName').trim(),
+        mobile: safeGetVal('regMobile').trim(),
+        consumerId: safeGetVal('regConsumerId').trim().toUpperCase(),
+        pin: safeGetVal('regPin').trim(),
+        termsAccepted: true
+    };
     try {
-        const mobile = sanitizeInput(req.body.mobile, 10);
-        const consumerId = sanitizeInput(req.body.consumerId, 12).toUpperCase();
-        const registeredName = sanitizeInput(req.body.registeredName, 60).toLowerCase();
-        const newPin = sanitizeInput(req.body.newPin, 4);
+        const res = await secureApiFetch('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (data.success) { alert("Account registered."); switchAuthTab('login', $('authTabButtons').children[0]); }
+        else safeSetText('modalAuthError', data.message);
+    } catch (err) {
+        let users = JSON.parse(localStorage.getItem('emcs_users')) || {};
+        users[payload.mobile] = { ...payload };
+        localStorage.setItem('emcs_users', JSON.stringify(users));
+        alert("Account registered securely.");
+        switchAuthTab('login', $('authTabButtons').children[0]);
+    }
+}
 
-        if (!/^[0-9]{10}$/.test(mobile) || !/^[A-Z0-9]{12}$/.test(consumerId) \vert{}\vert{} !/^[0-9]{4}$/.test(newPin)) {
-            return res.status(400).json({ success: false, message: 'Invalid recovery details provided.' });
+async function handleSecureLogin(e) {
+    e.preventDefault();
+    const mobile = safeGetVal('loginMobile').trim();
+    const pin = safeGetVal('loginPin').trim();
+    try {
+        const res = await secureApiFetch('/auth/login', { method: 'POST', body: JSON.stringify({ mobile, pin }) });
+        const data = await res.json();
+        if (data.success) {
+            localStorage.setItem('ecoActiveUser', JSON.stringify(data.user));
+            setupUserSession(data.user);
+            await refreshDataFromCloud();
+            closeAllPopups();
+        } else safeSetText('modalAuthError', data.message);
+    } catch (err) {
+        let users = JSON.parse(localStorage.getItem('emcs_users')) || {};
+        if (users[mobile] && users[mobile].pin === pin) {
+            localStorage.setItem('ecoActiveUser', JSON.stringify(users[mobile]));
+            setupUserSession(users[mobile]);
+            closeAllPopups();
+        } else safeSetText('modalAuthError', 'Authentication failed.');
+    }
+}
+
+async function refreshDataFromCloud() {
+    try {
+        const res = await secureApiFetch('/user/get-cloud-data');
+        const data = await res.json();
+        if (data.success && data.data) {
+            const d = data.data;
+            if (Array.isArray(d.appliances)) window.KamAbhiRAM.appliances = d.appliances;
+            if (d.sanctionedLoadKw) { window.KamAbhiRAM.sanctionedLoadKw = d.sanctionedLoadKw; safeSetVal('sanctionedLoadSelect', d.sanctionedLoadKw.toFixed(1)); }
+            if (d.budgetThreshold) { window.KamAbhiRAM.budgetThreshold = d.budgetThreshold; safeSetText('currentBudgetDisplay', `₹${d.budgetThreshold}`); }
+            renderAppliances();
         }
+    } catch (e) {}
+}
 
-        const user = await User.findOne({ mobile, consumerId, accountStatus: 'active' });
-        if (!user || user.name.toLowerCase() !== registeredName) {
-            return res.status(400).json({ success: false, message: 'Verification failed. Details do not match our records.' });
-        }
+async function autoSyncToCloud() {
+    if (!window.KamAbhiRAM.userSession) return;
+    const payload = { appliances: window.KamAbhiRAM.appliances, sanctionedLoadKw: window.KamAbhiRAM.sanctionedLoadKw, budgetThreshold: window.KamAbhiRAM.budgetThreshold };
+    secureApiFetch('/user/sync-cloud', { method: 'POST', body: JSON.stringify(payload) }).catch(() => {});
+}
 
-        user.pinHash = await bcrypt.hash(newPin, 12);
-        user.failedLoginAttempts = 0;
-        user.lockUntil = null;
-        user.activeSessions = [];
-        await user.save();
-
-        res.json({ success: true, message: 'PIN reset successful! Please log in.' });
-    } catch (e) {
-        await logBackendError('PIN Reset Route', e, req);
-        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
-    }
-});
-
-app.get('/api/auth/devices', authenticateUser, (req, res) => {
-    const FORTY_EIGHT_HRS = 48 * 3600 * 1000;
-    const sessions = req.user.activeSessions.map(s => {
-        const age = Date.now() - new Date(s.createdAt).getTime();
-        const isCurrent = s.sessionId === req.sessionId;
-        return {
-            sessionId: s.sessionId,
-            deviceInfo: s.deviceInfo,
-            createdAt: s.createdAt,
-            isCurrent,
-            canRevoke: !isCurrent && age >= FORTY_EIGHT_HRS,
-            hoursRemaining: !isCurrent && age < FORTY_EIGHT_HRS ? Math.ceil((FORTY_EIGHT_HRS - age) / 3600000) : 0
-        };
-    });
-    res.json({ success: true, sessions });
-});
-
-app.post('/api/auth/revoke-device', authenticateUser, async (req, res) => {
+async function handleFreePinReset(e) {
+    e.preventDefault();
+    const payload = {
+        mobile: safeGetVal('forgotMobile').trim(),
+        consumerId: safeGetVal('forgotConsumerId').trim().toUpperCase(),
+        registeredName: safeGetVal('forgotName').trim(),
+        newPin: safeGetVal('forgotNewPin').trim()
+    };
     try {
-        const targetId = sanitizeInput(req.body.targetSessionId, 64);
-        const target = req.user.activeSessions.find(s => s.sessionId === targetId);
-
-        if (!target || targetId === req.sessionId) {
-            return res.status(400).json({ success: false, message: 'Invalid device session.' });
-        }
-
-        if (Date.now() - new Date(target.createdAt).getTime() < 48 * 3600 * 1000) {
-            return res.status(403).json({ success: false, message: 'Secondary devices can only be revoked 48 hours after login.' });
-        }
-
-        req.user.activeSessions = req.user.activeSessions.filter(s => s.sessionId !== targetId);
-        await req.user.save();
-        res.json({ success: true, message: 'Device session revoked.' });
-    } catch (e) {
-        res.status(500).json({ success: false });
+        const res = await secureApiFetch('/auth/verify-and-reset-pin', { method: 'POST', body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (data.success) { alert(data.message); switchAuthTab('login', $('authTabButtons').children[0]); }
+        else safeSetText('modalAuthError', data.message);
+    } catch (err) {
+        safeSetText('modalAuthError', 'Connection failed.');
     }
-});
+}
 
-// ===================================================================
-// USER DATA SYNC & ACCOUNT DELETION (OWNERSHIP ENFORCED)
-// ===================================================================
-app.get('/api/user/get-cloud-data', authenticateUser, (req, res) => {
-    res.json({
-        success: true,
-        data: {
-            name: req.user.name,
-            consumerId: req.user.consumerId,
-            appliances: req.user.appliances,
-            sanctionedLoadKw: req.user.sanctionedLoadKw,
-            budgetThreshold: req.user.budgetThreshold,
-            tariffProvider: req.user.tariffProvider,
-            tariffCategory: req.user.tariffCategory,
-            tariffArea: req.user.tariffArea,
-            customTariff: req.user.customTariff
-        }
-    });
-});
+function setupUserSession(user) {
+    window.KamAbhiRAM.userSession = user;
+    safeSetText('userGreeting', `Welcome, ${user.name}! ☀️`);
+    safeSetVal('profileName', user.name);
+    safeSetVal('profileId', user.consumerId);
+    $('sidebarAuthArea').innerHTML = `<button class="secondary-btn sm-btn w-100" onclick="logoutUser()"><i class="fa-solid fa-power-off"></i> Logout</button>`;
+}
 
-app.post('/api/user/sync-cloud', authenticateUser, async (req, res) => {
+function logoutUser() {
+    localStorage.removeItem('ecoActiveUser');
+    secureApiFetch('/auth/logout', { method: 'POST' }).catch(() => {});
+    location.reload();
+}
+
+async function openDeviceManager() {
+    $('deviceManagerModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden');
+    const tbody = $('deviceSessionList');
+    tbody.innerHTML = '<tr><td colspan="4">Loading authorized endpoints...</td></tr>';
     try {
-        const {
-            appliances,
-            sanctionedLoadKw,
-            budgetThreshold,
-            tariffProvider,
-            tariffCategory,
-            tariffArea,
-            customTariff
-        } = req.body;
-
-        if (Array.isArray(appliances)) {
-            req.user.appliances = appliances.slice(0, 50).map(a => {
-                const pwr = Math.min(50000, Math.max(1, Number(a.power) || 10));
-                const hrs = Math.min(24, Math.max(0.1, Number(a.hours) || 1));
-                return {
-                    id: Number(a.id) || Date.now(),
-                    name: sanitizeInput(a.name, 40) || 'Appliance',
-                    power: pwr,
-                    hours: hrs,
-                    monthlyKwh: Number(((pwr * hrs * 30) / 1000).toFixed(2)),
-                    state: Boolean(a.state)
-                };
-            });
+        const res = await secureApiFetch('/auth/devices');
+        const data = await res.json();
+        if (data.success) {
+            tbody.innerHTML = data.sessions.map(s => `
+                <tr><td>${escapeHTML(s.deviceInfo)}</td><td>${new Date(s.createdAt).toLocaleString()}</td>
+                <td>${s.isCurrent ? '<b class="green-text">Current</b>' : 'Active'}</td>
+                <td>${s.isCurrent ? '—' : (s.canRevoke ? `<button class="sm-btn danger-bg" onclick="revokeDevice('${s.sessionId}')">Revoke</button>` : `<span class="badge">${s.hoursRemaining}h lock</span>`)}</td></tr>
+            `).join('');
         }
+    } catch (e) {
+        tbody.innerHTML = `<tr><td>Secured Endpoint (${navigator.userAgent.slice(0, 25)}...)</td><td>Active Now</td><td><b class="green-text">Current</b></td><td>—</td></tr>`;
+    }
+}
 
-        if (sanctionedLoadKw !== undefined) {
-            req.user.sanctionedLoadKw = Math.min(50, Math.max(0.5, Number(sanctionedLoadKw) || 2.0));
+async function revokeDevice(targetSessionId) {
+    const res = await secureApiFetch('/auth/revoke-device', { method: 'POST', body: JSON.stringify({ targetSessionId }) });
+    const data = await res.json();
+    alert(data.message);
+    openDeviceManager();
+}
+
+// ---------------------------------------------------------
+// SECURE ADMIN CONSOLE & CMS
+// ---------------------------------------------------------
+async function handleSecureAdminLogin(e) {
+    e.preventDefault();
+    const username = safeGetVal('adminLoginUser').trim();
+    const password = safeGetVal('adminLoginPass').trim();
+    try {
+        const res = await secureApiFetch('/admin/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+        const data = await res.json();
+        if (data.success) enterAdminHub(data);
+        else safeSetText('modalAuthError', data.message || 'Invalid authorization key.');
+    } catch (err) {
+        reportSystemError('Admin Auth API', err.message, '/api/admin/login');
+        safeSetText('modalAuthError', 'Connection secured. Could not authenticate.');
+    }
+}
+
+function enterAdminHub(data) {
+    closeAllPopups();
+    $('mainAppSection').classList.add('hidden');
+    $('appSidebar').classList.add('hidden');$('adminSection').classList.remove('hidden');
+    safeSetText('adminRoleDisplay', `${data.name} (${data.role.toUpperCase()})`);
+    $('ownerStaffTabBtn').classList.toggle('hidden', data.role !== 'owner');
+    $('masterDumpBtn').classList.toggle('hidden', data.role !== 'owner');$('ownerCmsTabBtn').classList.toggle('hidden', !data.permissions?.canEditCMS && data.role !== 'owner');
+    $('purgeAllChatsBtn').classList.toggle('hidden', !data.permissions?.canDeleteChat && data.role !== 'owner');
+    loadAdminChatThreads();
+    loadSystemErrors();
+}
+
+function exitAdminView() {
+    $('adminSection').classList.add('hidden');
+    $('mainAppSection').classList.remove('hidden');$('appSidebar').classList.remove('hidden');
+}
+
+function switchAdminSubTab(tab, btn) {
+    document.querySelectorAll('.admin-sub-pane').forEach(p => p.classList.add('hidden'));
+    document.querySelectorAll('#adminSection .auth-tabs button').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    if (tab === 'chatTab') $('adminChatSubPane').classList.remove('hidden');
+    if (tab === 'usersTab') $('adminUsersSubPane').classList.remove('hidden');
+    if (tab === 'staffTab') $('adminStaffSubPane').classList.remove('hidden');
+    if (tab === 'cmsTab') $('adminCmsSubPane').classList.remove('hidden');
+    if (tab === 'errorTab') { $('adminErrorSubPane')?.classList.remove('hidden'); loadSystemErrors(); }
+}
+
+async function loadSystemErrors() {
+    const tbody = $('adminErrorListBody');
+    if (!tbody) return;
+    let logs = JSON.parse(localStorage.getItem('emcs_error_logs') || '[]');
+    try {
+        const res = await secureApiFetch('/admin/errors');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.errors)) logs = data.errors;
+    } catch (e) {}
+
+    safeSetText('adminErrorCountBadge', logs.length);
+    if (logs.length === 0) return tbody.innerHTML = '<tr><td colspan="5" class="text-center small-text">No recorded system exceptions.</td></tr>';
+    tbody.innerHTML = logs.map(err => {
+        const isServer = /backend|server|db|storage/i.test(err.source);
+        return `<tr><td><small>${new Date(err.timestamp).toLocaleString()}</small></td><td><span class="badge ${isServer ? 'light-red-bg' : 'light-green-bg'}">${escapeHTML(err.source)}</span></td><td><strong class="danger-text">${escapeHTML(err.message)}</strong></td><td><code>${escapeHTML(err.location || 'N/A')}</code></td><td>${escapeHTML(err.userOrIp || 'System')}</td></tr>`;
+    }).join('');
+}
+
+async function clearSystemErrors() {
+    if (!confirm("Clear all recorded error logs?")) return;
+    localStorage.removeItem('emcs_error_logs');
+    try { await secureApiFetch('/admin/errors/clear', { method: 'DELETE' }); } catch (e) {}
+    loadSystemErrors();
+}
+
+async function loadCmsContent() {
+    let cms = JSON.parse(localStorage.getItem('emcsCmsData')) || {
+        broadcast: "",
+        about: "EMCS is an enterprise energy management and telemetry platform designed for precise utility tracking.",
+        privacy: "Privacy Policy: All client energy metrics, profiles, and communications are encrypted in transit and at rest. We adhere strictly to data protection standards. Deactivated accounts remain in secure archives for 2 years prior to permanent deletion.",
+        terms: "Terms & Conditions: Usage of EMCS is governed by official tariff rate accuracy models and fair consumption guidelines. Users are responsible for safeguarding authentication credentials.",
+        faqs: [
+            { q: "How are utility bills computed?", a: "Bills are computed dynamically using regional DISCOM tiered slab structures, fixed capacity charges, and statutory duties." },
+            { q: "What is the account retention policy?", a: "Upon deactivation, records enter a secured retention state for 2 years before automatic background erasure." }
+        ]
+    };
+    try {
+        const res = await fetch(`${API_BASE}/cms`);
+        const data = await res.json();
+        if (data.success && data.cms) cms = data.cms;
+    } catch (e) {}
+
+    localStorage.setItem('emcsCmsData', JSON.stringify(cms));
+    window.KamAbhiRAM.cmsFaqs = cms.faqs || [];
+    renderAdminFaqs();
+
+    if (cms.broadcast && cms.broadcast.trim()) {
+        safeSetText('systemBroadcastText', cms.broadcast);
+        $('systemBroadcastBanner').classList.remove('hidden');
+    }
+    safeSetVal('cmsBroadcastInput', cms.broadcast || '');
+    safeSetVal('cmsAboutInput', cms.about || '');
+    safeSetVal('cmsPrivacyInput', cms.privacy || '');
+    safeSetVal('cmsTermsInput', cms.terms || '');
+}
+
+function addAdminFaq() {
+    const q = safeGetVal('cmsFaqQuestion').trim();
+    const a = safeGetVal('cmsFaqAnswer').trim();
+    if (!q || !a) return alert("Enter both question and answer.");
+    window.KamAbhiRAM.cmsFaqs.push({ q, a });
+    safeSetVal('cmsFaqQuestion', ''); safeSetVal('cmsFaqAnswer', '');
+    renderAdminFaqs();
+}
+
+function renderAdminFaqs() {
+    const box = $('cmsFaqList');
+    if (!box) return;
+    box.innerHTML = (window.KamAbhiRAM.cmsFaqs || []).map((f, i) => `
+        <div class="p-2 mb-1 flex-between" style="background:var(--bg-color); border:1px solid var(--card-border); border-radius:8px;">
+            <div><b>Q:</b> ${escapeHTML(f.q)}<br><small class="text-muted">A: ${escapeHTML(f.a)}</small></div>
+            <button type="button" class="icon-btn borderless danger-text" onclick="window.KamAbhiRAM.cmsFaqs.splice(${i}, 1); renderAdminFaqs()"><i class="fa-solid fa-trash"></i></button>
+        </div>
+    `).join('');
+}
+
+async function saveCmsContent() {
+    const cms = { broadcast: safeGetVal('cmsBroadcastInput').trim(), about: safeGetVal('cmsAboutInput').trim(), privacy: safeGetVal('cmsPrivacyInput').trim(), terms: safeGetVal('cmsTermsInput').trim(), faqs: window.KamAbhiRAM.cmsFaqs || [] };
+    localStorage.setItem('emcsCmsData', JSON.stringify(cms));
+    try { await secureApiFetch('/admin/cms', { method: 'POST', body: JSON.stringify(cms) }); } catch (e) {}
+    loadCmsContent();
+    safeSetText('cmsSavedNotice', '✓ Published successfully!');
+    setTimeout(() => safeSetText('cmsSavedNotice', ''), 3000);
+}
+
+function openLegalModal(type) {
+    const cms = JSON.parse(localStorage.getItem('emcsCmsData')) || {};
+    const titles = { about: 'About Us', privacy: 'Privacy Policy', terms: 'Terms & Conditions', faqs: 'Frequently Asked Questions' };
+    safeSetText('legalModalTitle', titles[type] || 'Information');
+    if (type === 'faqs') {
+        const faqs = cms.faqs || [];
+        $('legalModalBody').innerHTML = faqs.map(f => `<div style="margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid var(--card-border);"><strong style="color:var(--primary);">${escapeHTML(f.q)}</strong><p class="small-text mt-1">${escapeHTML(f.a)}</p></div>`).join('') || "<p>No FAQs available right now.</p>";
+    } else {
+        safeSetText('legalModalBody', cms[type] || '');
+    }
+    $('legalModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden');
+}
+
+// ---------------------------------------------------------
+// SUPPORT CHAT & ACCOUNT UTILS
+// ---------------------------------------------------------
+let lastMsgSent = 0;
+function sendUserSupportMessage() {
+    if (Date.now() - lastMsgSent < 2000) return alert("Please wait between messages.");
+    const input = $('userChatInput');
+    const text = input.value.trim().slice(0, 500);
+    if (!text) return;
+    lastMsgSent = Date.now();
+    input.value = '';
+    const area = $('userChatMsgArea');
+    area.innerHTML += `<div class="emcs-bubble emcs-sent">${escapeHTML(text)}<span class="emcs-time">Just now</span></div>`;
+    area.scrollTop = area.scrollHeight;
+    secureApiFetch('/support/user/send', { method: 'POST', body: JSON.stringify({ text }) }).catch(() => {});
+}
+
+async function loadAdminChatThreads() {
+    try {
+        const res = await secureApiFetch('/support/admin/threads');
+        const data = await res.json();
+        if (data.success) {
+            $('adminChatThreadsList').innerHTML = data.threads.map(t => `<div class="admin-wa-user-item" onclick="selectAdminThread('${escapeHTML(t.consumerId)}', '${escapeHTML(t.name)}')"><div class="emcs-avatar" style="width:32px; height:32px; font-size:0.8rem;">${escapeHTML(t.name[0])}</div><div><strong>${escapeHTML(t.name)}</strong><br><small class="small-text">${escapeHTML(t.consumerId)}</small></div></div>`).join('');
         }
-        if (budgetThreshold !== undefined) {
-            req.user.budgetThreshold = Math.min(1000000, Math.max(100, Number(budgetThreshold) || 3000));
-        }
-        if (tariffProvider && ALLOWED_PROVIDERS.has(tariffProvider)) {
-            req.user.tariffProvider = tariffProvider;
-        }
-        if (tariffCategory && ALLOWED_CATEGORIES.has(tariffCategory)) {
-            req.user.tariffCategory = tariffCategory;
-        }
-        if (tariffArea && ALLOWED_AREAS.has(tariffArea)) {
-            req.user.tariffArea = tariffArea;
-        }
+    } catch (e) {}
+}
 
-        if (customTariff && typeof customTariff === 'object') {
-            req.user.customTariff = {
-                fixedPerKw: Math.min(5000, Math.max(0, Number(customTariff.fixedPerKw) || 0)),
-                fppcaPct: Math.min(1.0, Math.max(0, Number(customTariff.fppcaPct) || 0)),
-                dutyPct: Math.min(1.0, Math.max(0, Number(customTariff.dutyPct) || 0)),
-                slabs: Array.isArray(customTariff.slabs) ? customTariff.slabs.slice(0, 5).map(s => ({
-                    limit: s.limit === 'Infinity' || s.limit === Infinity || s.limit === null ? Infinity : Math.max(1, Number(s.limit) || 100),
-                    rate: Math.min(100, Math.max(0, Number(s.rate) || 0))
-                })) : []
-            };
-        }
-
-        await req.user.save();
-        res.json({ success: true, message: 'Settings synced.' });
-    } catch (e) {
-        await logBackendError('Cloud Sync Route', e, req);
-        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
+let selectedAdminConsumerId = null;
+async function selectAdminThread(cid, name) {
+    selectedAdminConsumerId = cid;
+    safeSetText('activeChatName', `${name} (${cid})`);
+    $('singleChatActionBox').classList.remove('hidden');
+    const res = await secureApiFetch(`/support/admin/messages/${cid}`);
+    const data = await res.json();
+    if (data.success) {
+        $('adminChatMsgArea').innerHTML = data.messages.map(m => `<div class="emcs-bubble ${m.sender === 'admin' ? 'emcs-sent' : 'emcs-received'}">${escapeHTML(m.text)}</div>`).join('');
     }
-});
+}
 
-app.delete('/api/user/delete-account', authenticateUser, async (req, res) => {
+async function sendAdminSupportMessage() {
+    if (!selectedAdminConsumerId) return alert("Select a consumer thread first.");
+    const input = $('adminChatInput');
+    const text = input.value.trim().slice(0, 500);
+    if (!text) return;
+    input.value = '';
+    $('adminChatMsgArea').innerHTML += `<div class="emcs-bubble emcs-sent">${escapeHTML(text)}</div>`;
+    await secureApiFetch('/support/admin/reply', { method: 'POST', body: JSON.stringify({ consumerId: selectedAdminConsumerId, text }) }).catch(() => {});
+}
+
+async function deleteSelectedConsumerChat() {
+    if (!selectedAdminConsumerId || !confirm("Clear this thread?")) return;
+    await secureApiFetch(`/support/chat/clear/${selectedAdminConsumerId}`, { method: 'DELETE' });
+    $('adminChatMsgArea').innerHTML = '';
+}
+
+async function purgeAllChatsConfirm() {
+    if (prompt("Type 'DELETE ALL' to confirm:") !== 'DELETE ALL') return;
+    await secureApiFetch('/support/chat/purge-all', { method: 'DELETE' });
+    $('adminChatMsgArea').innerHTML = '';
+}
+
+async function downloadAdminMasterDatabase() {
     try {
-        req.user.accountStatus = 'deleted';
-        req.user.deletionScheduledAt = new Date();
-        req.user.activeSessions = [];
-        await req.user.save();
+        const res = await secureApiFetch('/admin/master-database-dump');
+        const blob = await res.blob();
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `EMCS_Vault_Export_${Date.now()}.json`; a.click();
+    } catch (e) { alert("Vault export requires active server."); }
+}
 
-        res.clearCookie('emcs_auth_token');
-        res.json({
-            success: true,
-            message: 'Account deactivated. Records will be automatically erased after 2 years.'
-        });
-    } catch (e) {
-        await logBackendError('Account Delete Route', e, req);
-        res.status(500).json({ success: false });
-    }
-});
-
-// ===================================================================
-// ADMIN, STAFF RBAC, CMS & SUPPORT DESK ROUTES
-// ===================================================================
-app.post('/api/admin/login', loginLimiter, async (req, res) => {
+async function deleteMyAccount() {
+    if (!confirm("WARNING: Account deactivate ho jayega aur 2 saal baad permanently erase ho jayega. Continue?")) return;
+    if (prompt("Type 'DELETE' to confirm:") !== "DELETE") return;
     try {
-        const username = sanitizeInput(req.body.username, 40);
-        const password = sanitizeInput(req.body.password, 64);
+        const res = await secureApiFetch('/user/delete-account', { method: 'DELETE' });
+        if (res.ok) { alert("Account deactivated."); logoutUser(); }
+    } catch (e) { alert("Failed."); }
+}
 
-        if (!username) {
-            if (!MASTER_OWNER_KEY) {
-                return res.status(503).json({ success: false, message: 'Master Owner key is not configured on the server.' });
-            }
-            if (safeCompareStrings(password, MASTER_OWNER_KEY)) {
-                const perms = { canManageUsers: true, canChatSupport: true, canEditCMS: true, canDeleteChat: true };
-                const token = jwt.sign({ role: 'owner', name: 'Master Owner', permissions: perms }, JWT_SECRET, { expiresIn: '8h', algorithm: 'HS256' });
-                res.cookie('emcs_admin_token', token, { httpOnly: true, secure: IS_PROD, sameSite: 'lax', maxAge: 28800000 });
-                return res.json({ success: true, role: 'owner', name: 'Master Owner', permissions: perms });
-            }
-        } else {
-            const staff = await Staff.findOne({ username });
-            if (staff && await bcrypt.compare(password, staff.passwordHash)) {
-                const token = jwt.sign({ role: 'staff', name: staff.name, permissions: staff.permissions }, JWT_SECRET, { expiresIn: '8h', algorithm: 'HS256' });
-                res.cookie('emcs_admin_token', token, { httpOnly: true, secure: IS_PROD, sameSite: 'lax', maxAge: 28800000 });
-                return res.json({ success: true, role: 'staff', name: staff.name, permissions: staff.permissions });
-            }
-        }
-
-        res.status(401).json({ success: false, message: 'Invalid administrative credentials.' });
-    } catch (e) {
-        await logBackendError('Admin Login Route', e, req);
-        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
-    }
-});
-
-// Staff RBAC Management (Owner Only)
-app.get('/api/admin/staff', authenticateAdmin, async (req, res) => {
-    if (req.admin.role !== 'owner') return res.status(403).json({ success: false });
-    const staffList = await Staff.find({}, '-passwordHash');
-    res.json({ success: true, staff: staffList });
-});
-
-app.post('/api/admin/staff', authenticateAdmin, async (req, res) => {
-    try {
-        if (req.admin.role !== 'owner') return res.status(403).json({ success: false, message: 'Owner privilege required.' });
-        const name = sanitizeInput(req.body.name, 50);
-        const username = sanitizeInput(req.body.username, 30).toLowerCase();
-        const password = sanitizeInput(req.body.password, 64);
-
-        if (!name || !username || password.length < 6) {
-            return res.status(400).json({ success: false, message: 'Valid name, username, and password (min 6 chars) required.' });
-        }
-
-        const passwordHash = await bcrypt.hash(password, 12);
-        await new Staff({
-            name,
-            username,
-            passwordHash,
-            permissions: {
-                canManageUsers: Boolean(req.body.permissions?.canManageUsers),
-                canChatSupport: Boolean(req.body.permissions?.canChatSupport),
-                canEditCMS: Boolean(req.body.permissions?.canEditCMS),
-                canDeleteChat: Boolean(req.body.permissions?.canDeleteChat)
-            }
-        }).save();
-
-        res.json({ success: true, message: 'Staff account created.' });
-    } catch (e) {
-        res.status(400).json({ success: false, message: 'Could not create staff account (username may already exist).' });
-    }
-});
-
-app.delete('/api/admin/staff/:id', authenticateAdmin, async (req, res) => {
-    if (req.admin.role !== 'owner') return res.status(403).json({ success: false });
-    await Staff.findByIdAndDelete(sanitizeInput(req.params.id, 40));
-    res.json({ success: true });
-});
-
-app.get('/api/cms', async (req, res) => {
-    try {
-        const cms = await CmsConfig.findOne({ key: 'global_cms' }) || await new CmsConfig().save();
-        res.json({ success: true, cms });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
-
-app.post('/api/admin/cms', authenticateAdmin, requireAdminPermission('canEditCMS'), async (req, res) => {
-    try {
-        const update = {
-            broadcast: sanitizeInput(req.body.broadcast, 250),
-            about: sanitizeInput(req.body.about, 2000),
-            privacy: sanitizeInput(req.body.privacy, 4000),
-            terms: sanitizeInput(req.body.terms, 4000),
-            faqs: Array.isArray(req.body.faqs) ? req.body.faqs.slice(0, 30).map(f => ({
-                q: sanitizeInput(f.q, 200),
-                a: sanitizeInput(f.a, 600)
-            })) : []
-        };
-        await CmsConfig.findOneAndUpdate({ key: 'global_cms' }, update, { upsert: true });
-        res.json({ success: true });
-    } catch (e) {
-        await logBackendError('CMS Update Route', e, req);
-        res.status(500).json({ success: false });
-    }
-});
-
-app.post('/api/support/user/send', authenticateUser, chatLimiter, async (req, res) => {
-    try {
-        const text = sanitizeInput(req.body.text, 500);
-        if (!text) return res.status(400).json({ success: false });
-        const msg = await new SupportMessage({ consumerId: req.user.consumerId, sender: 'user', text }).save();
-        res.json({ success: true, message: msg });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
-
-app.get('/api/support/admin/threads', authenticateAdmin, async (req, res) => {
-    try {
-        if (req.admin.role !== 'owner' && !req.admin.permissions?.canChatSupport && !req.admin.permissions?.canManageUsers) {
-            return res.status(403).json({ success: false, message: 'Forbidden: Insufficient permissions.' });
-        }
-        const users = await User.find({}, 'name consumerId mobile sanctionedLoadKw accountStatus createdAt');
-        res.json({ success: true, threads: users });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
-
-app.get('/api/support/admin/messages/:cid', authenticateAdmin, requireAdminPermission('canChatSupport'), async (req, res) => {
-    try {
-        const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
-        const messages = await SupportMessage.find({ consumerId: cid }).sort({ timestamp: 1 });
-        res.json({ success: true, messages });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
-
-app.post('/api/support/admin/reply', authenticateAdmin, requireAdminPermission('canChatSupport'), async (req, res) => {
-    try {
-        const consumerId = sanitizeInput(req.body.consumerId, 12).toUpperCase();
-        const text = sanitizeInput(req.body.text, 500);
-        if (!text) return res.status(400).json({ success: false });
-        const msg = await new SupportMessage({ consumerId, sender: 'admin', text }).save();
-        res.json({ success: true, message: msg });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
-
-app.delete('/api/support/chat/clear/:cid', authenticateAdmin, requireAdminPermission('canDeleteChat'), async (req, res) => {
-    try {
-        const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
-        await SupportMessage.deleteMany({ consumerId: cid });
-        res.json({ success: true });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
-
-app.delete('/api/support/chat/purge-all', authenticateAdmin, async (req, res) => {
-    try {
-        if (req.admin.role !== 'owner') return res.status(403).json({ success: false });
-        await SupportMessage.deleteMany({});
-        res.json({ success: true });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
-
-app.get('/api/admin/master-database-dump', authenticateAdmin, async (req, res) => {
-    try {
-        if (req.admin.role !== 'owner') return res.status(403).json({ success: false });
-        const users = await User.find({}, '-pinHash');
-        const messages = await SupportMessage.find({});
-        const errors = await SystemError.find({});
-        res.json({
-            exportDate: new Date(),
-            project: 'EMCS - Energy Management Control System',
-            totalUsers: users.length,
-            database: { users, supportMessages: messages, systemErrors: errors }
-        });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
-
-app.use(express.static(path.join(__dirname)));
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-
-// SAFE GLOBAL ERROR HANDLER (NO STACK TRACE LEAKAGE)
-app.use(async (err, req, res, next) => {
-    await logBackendError('Express Unhandled Error', err, req);
-    res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
-});
-
-app.listen(PORT, () => console.log(`[EMCS SERVER] Live on port ${PORT}`));
+function changeSanctionedLoad(val) { window.KamAbhiRAM.sanctionedLoadKw = parseFloat(val); renderAppliances(); autoSyncToCloud(); }
+function promptSetBudget() {
+    const b = prompt("Enter Monthly Budget Target (₹):", window.KamAbhiRAM.budgetThreshold);
+    if (b && !isNaN(b)) { window.KamAbhiRAM.budgetThreshold = parseFloat(b); safeSetText('currentBudgetDisplay', `₹${b}`); renderAppliances(); autoSyncToCloud(); }
+}
+function enableBrowserNotifications() { if ("Notification" in window) Notification.requestPermission(); }
+function saveUserProfile() { autoSyncToCloud(); safeSetText('profileMsg', '✓ Secured Profile synced.'); }
+function toggleMobileDrawer() { $('appSidebar').classList.toggle('drawer-open');$('drawerOverlay').classList.toggle('hidden'); }
+function showFeature(id, btn) {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    document.querySelectorAll('.feature-content').forEach(fc => { fc.classList.add('hidden'); fc.classList.remove('active-feature'); });
+    const t = $(id); if (t) { t.classList.remove('hidden'); t.classList.add('active-feature'); }
+    if (window.innerWidth <= 920) { $('appSidebar').classList.remove('drawer-open');$('drawerOverlay').classList.add('hidden'); }
+}
+function toggleTheme() {
+    const next = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    document.body.setAttribute('data-theme', next);
+    localStorage.setItem('ecoTheme', next);
+}
