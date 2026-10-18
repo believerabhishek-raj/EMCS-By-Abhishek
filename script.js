@@ -1,5 +1,5 @@
 // ===================================================================
-// EMCS FRONTEND SCRIPT (script.js) - FINAL YEAR PROJECT
+// EMCS FRONTEND SCRIPT (script.js) - INDEPENDENT PROJECT
 // Features: Multi-Language (EN/HI/Hinglish), All-India Tariffs,
 // Automated Client/Server Error Telemetry, WebAuthn & HMAC Security
 // ===================================================================
