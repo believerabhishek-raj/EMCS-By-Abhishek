@@ -1,10 +1,3 @@
-// ===================================================================
-// EMCS FRONTEND SCRIPT (script.js) - FINAL MASTER PRODUCTION BUILD
-// Audited: Zero Plaintext LocalStorage Auth, Full 18-Board Tariffs,
-// Full 3-Language Dictionary, Pre-Loaded Legal Disclaimers (DPDP 2023 + IoT Waiver),
-// Two-Way Support Chat Sync, Complete Admin CRUD, & File Upload Magic-Byte Security
-// ===================================================================
-
 const $ = (id) => document.getElementById(id);
 const safeSetText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
 const safeGetVal = (id) => { const el = $(id); return el ? el.value : ''; };
