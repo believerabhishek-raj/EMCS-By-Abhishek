@@ -1,7 +1,7 @@
 // ===================================================================
-// EMCS BACKEND SERVER (server.js) - PRODUCTION HARDENED
+// EMCS BACKEND SERVER (server.js) - FINAL PRODUCTION HARDENED BUILD
 // Audited against: Rate Limiting, Strict Schema Validation, RBAC/IDOR,
-// Environment Secrets Management, & Zero Information Leakage
+// Environment Secrets Management, Source File Leak Block, & Legal Compliance
 // ===================================================================
 
 const express = require('express');
@@ -51,7 +51,7 @@ const allowedOrigins = [
 app.use(cors({
     origin: (origin, cb) => {
         if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-        return cb(null, false); // Reject cleanly without throwing stack trace
+        return cb(null, false);
     },
     credentials: true
 }));
@@ -157,12 +157,12 @@ app.use('/api', globalApiLimiter);
 
 if (MONGO_URI) {
     mongoose.connect(MONGO_URI)
-        .then(() => console.log('[EMCS DB] Connected to MongoDB successfully.'))
-        .catch(err => console.error('[EMCS DB] Connection failed:', err.message));
+        .then(() => console.log('[EMCS VAULT] Connected to database successfully.'))
+        .catch(err => console.error('[EMCS VAULT] Connection failed:', err.message));
 }
 
 // ===================================================================
-// MONGODB SCHEMAS & 2-YEAR TTL INDEX
+// DATABASE SCHEMAS & 2-YEAR TTL INDEX
 // ===================================================================
 const UserSchema = new mongoose.Schema({
     mobile: { type: String, required: true, unique: true, index: true },
@@ -221,21 +221,31 @@ const SupportMessageSchema = new mongoose.Schema({
 const CmsSchema = new mongoose.Schema({
     key: { type: String, default: 'global_cms', unique: true },
     broadcast: { type: String, default: '' },
-    about: { type: String, default: 'EMCS is an intelligent energy management and load monitoring platform.' },
-    privacy: { type: String, default: 'All user data is encrypted. Deactivated accounts are retained for 2 years before automatic erasure.' },
-    terms: { type: String, default: 'By using EMCS, you agree to fair usage policies and state electricity slab estimation rules.' },
+    about: {
+        type: String,
+        default: 'EMCS (Energy Management Control System) is an intelligent energy monitoring, tariff estimation, and load automation platform.'
+    },
+    privacy: {
+        type: String,
+        default: '1. DATA COLLECTION (DPDP Act 2023 Compliance): We collect minimal data (Mobile, Consumer ID, Name) strictly for authentication and load monitoring. We do not sell your data to third parties.\n\n2. OCR & FILE UPLOADS: Bill images uploaded for OCR and CSV files are processed securely in memory. We do not permanently store images of your physical electricity bills.\n\n3. DATA RETENTION & ERASURE: Upon account deactivation, all sessions are revoked, and records enter a secured 2-year retention archive for compliance before automatic permanent erasure.\n\n4. COOKIES: We use HTTP-only cookies strictly for session authorization.'
+    },
+    terms: {
+        type: String,
+        default: '1. ACCEPTANCE OF TERMS: By using EMCS, you agree to these legal terms.\n\n2. NO FINANCIAL LIABILITY: The electricity bills, solar ROI, and tariff calculations provided by EMCS are "Estimates" based on standard utility slabs. EMCS is not an official billing authority. You must pay your actual utility provider based on their official meter readings.\n\n3. HARDWARE & IOT SAFETY WAIVER: The hardware relay control, voltage surge guard, and IoT features are provided "AS IS". EMCS and its developers are NOT liable for any electrical damage, short circuits, hardware failure, fire hazards, or personal injury resulting from automated appliance switching. Use IoT features at your own risk.\n\n4. PAYMENTS: EMCS provides a simulated settlement ledger. No real financial transactions are processed on this platform.'
+    },
     faqs: {
         type: Array,
         default: [
-            { q: 'How is my electricity bill calculated?', a: 'We use official state and private electricity board slab rates, fixed load charges, and electricity duty.' },
-            { q: 'What happens when I delete my account?', a: 'Your account is immediately deactivated and automatically erased from the database after 2 years.' }
+            { q: 'Are the electricity bills shown here official?', a: 'No. All bills and solar ROI figures are estimates calculated using state/private DISCOM tariff slabs for planning and energy-saving purposes.' },
+            { q: 'How does the 2-year account deletion policy work?', a: 'When you deactivate your account, all active devices are logged out immediately and your records are automatically erased after 2 years.' },
+            { q: 'Is it safe to connect my ESP32 / Arduino relay?', a: 'Yes, local hardware triggers use HMAC-SHA256 signatures, but always ensure qualified electrical insulation when dealing with 230V AC loads.' }
         ]
     }
 });
 
 const SystemErrorSchema = new mongoose.Schema({
     timestamp: { type: Date, default: Date.now, expires: 2592000 },
-    source: { type: String, default: 'Backend Server' },
+    source: { type: String, default: 'Secure Storage Layer' },
     message: { type: String, required: true },
     location: { type: String, default: '' },
     userOrIp: { type: String, default: '' }
@@ -251,10 +261,10 @@ const SystemError = mongoose.model('SystemError', SystemErrorSchema);
 async function logBackendError(source, err, req = null) {
     try {
         await new SystemError({
-            source: sanitizeInput(source || 'Backend Server', 50),
+            source: sanitizeInput(source || 'Secure Storage Layer', 50),
             message: sanitizeInput(err?.message || String(err), 300),
             location: sanitizeInput(req ? `${req.method} ${req.originalUrl}` : 'Internal', 150),
-            userOrIp: sanitizeInput(req ? (req.user?.consumerId || req.ip) : 'Server', 60)
+            userOrIp: sanitizeInput(req ? (req.user?.consumerId || req.ip) : 'System', 60)
         }).save();
     } catch (ignore) {}
 }
@@ -307,11 +317,15 @@ function requireAdminPermission(permKey) {
 }
 
 // ===================================================================
-// ERROR TELEMETRY ROUTES
+// HEALTH CHECK & ERROR TELEMETRY ROUTES
 // ===================================================================
+app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok', uptime: Math.floor(process.uptime()) });
+});
+
 app.post('/api/errors/report', errorReportLimiter, async (req, res) => {
     try {
-        const source = sanitizeInput(req.body.source || 'Website JS', 50);
+        const source = sanitizeInput(req.body.source || 'Client Component', 50);
         const message = sanitizeInput(req.body.message, 300);
         const location = sanitizeInput(req.body.location, 150);
         const userOrIp = sanitizeInput(req.body.userOrIp || req.ip, 60);
@@ -363,8 +377,7 @@ app.post('/api/auth/register', strictRegisterLimiter, async (req, res) => {
         const pin = sanitizeInput(req.body.pin, 4);
         const name = sanitizeInput(req.body.name, 60);
 
-        // Fixed syntax for OR operators
-        if (!/^[0-9]{10}$/.test(mobile) \vert{}\vert{} consumerId.length !== 12 \vert{}\vert{} !/^[0-9]{4}$/.test(pin) || !name || name.length < 2) {
+        if (!/^[0-9]{10}$/.test(mobile) || !/^[A-Z0-9]{12}$/.test(consumerId) \vert{}\vert{} !/^[0-9]{4}$/.test(pin) || name.length < 2) {
             return res.status(400).json({ success: false, message: 'Invalid input format. Check mobile, 12-char alphanumeric ID, and 4-digit PIN.' });
         }
 
@@ -846,7 +859,18 @@ app.get('/api/admin/master-database-dump', authenticateAdmin, async (req, res) =
     }
 });
 
-app.use(express.static(path.join(__dirname)));
+// ===================================================================
+// SOURCE FILE EXPOSURE PROTECTION (NO .ENV / SERVER.JS / .MAP LEAK)
+// ===================================================================
+app.use((req, res, next) => {
+    const blockedPattern = /\.(env|map|log|md|git|sh)$|^\/(server\.js|package\.json|package-lock\.json)/i;
+    if (blockedPattern.test(req.path)) {
+        return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+    next();
+});
+
+app.use(express.static(path.join(__dirname), { index: false, dotfiles: 'ignore' }));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 // SAFE GLOBAL ERROR HANDLER (NO STACK TRACE LEAKAGE)
