@@ -1,10 +1,3 @@
-// ===================================================================
-// EMCS BACKEND SERVER (server.js) - FINAL PRODUCTION HARDENED BUILD
-// Audited against: Rate Limiting, Strict Schema Validation, RBAC/IDOR,
-// Environment Secrets Management, Source File Leak Block, & Legal Compliance
-// ===================================================================
-
-const express = require('express');
 const path = require('path');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
