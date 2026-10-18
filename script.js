@@ -320,7 +320,7 @@ function saveCustomTariffSettings() {
 }
 
 // ---------------------------------------------------------
-// HACKATHON LIVE FLOWCHART & GRAPHS (ZERO DUMMY DATA)
+// LIVE FLOWCHART & GRAPHS (ZERO DUMMY DATA)
 // ---------------------------------------------------------
 function renderAppliances() {
     const tbody = $('applianceList');
@@ -1031,9 +1031,12 @@ function enterAdminHub(data) {
 function exitAdminView() {
     secureApiFetch('/admin/logout', { method: 'POST' }).catch(() => {});
     $('adminSection').classList.add('hidden');
-    $('mainAppSection').classList.remove('hidden');$('appSidebar').classList.remove('hidden');
+    $('mainAppSection').classList.remove('hidden');
+    $('appSidebar').classList.remove('hidden');
+    
+    safeSetVal('adminLoginUser', '');
+    safeSetVal('adminLoginPass', '');
 }
-
 function switchAdminSubTab(tab, btn) {
     document.querySelectorAll('.admin-sub-pane').forEach(p => p.classList.add('hidden'));
     document.querySelectorAll('#adminSection .auth-tabs button').forEach(b => b.classList.remove('active'));
@@ -1125,9 +1128,9 @@ async function clearSystemErrors() {
 async function loadCmsContent() {
     let cms = JSON.parse(localStorage.getItem('emcsCmsData')) || {
         broadcast: "",
-        about: "EMCS (Energy Management Control System) is an intelligent energy monitoring, tariff estimation, and load automation platform.",
+        about: "EMCS (Energy Management Control System) is an intelligent energy monitoring, tariff estimation, and load automation platform.Powered By KamAbhi Tech Solutions.",
         privacy: "1. DATA COLLECTION (DPDP Act 2023 Compliance): We collect minimal data (Mobile, Consumer ID, Name) strictly for authentication and load monitoring. We do not sell your data to third parties.\n\n2. OCR & FILE UPLOADS: Bill images uploaded for OCR and CSV files are processed securely in memory. We do not permanently store images of your physical electricity bills.\n\n3. DATA RETENTION & ERASURE: Upon account deactivation, all sessions are revoked, and records enter a secured 2-year retention archive for compliance before automatic permanent erasure.\n\n4. COOKIES: We use HTTP-only cookies strictly for session authorization.",
-        terms: "1. ACCEPTANCE OF TERMS: By using EMCS, you agree to these legal terms.\n\n2. NO FINANCIAL LIABILITY: The electricity bills, solar ROI, and tariff calculations provided by EMCS are 'Estimates' based on standard utility slabs. EMCS is not an official billing authority. You must pay your actual utility provider based on their official meter readings.\n\n3. HARDWARE & IOT SAFETY WAIVER: The hardware relay control, voltage surge guard, and IoT features are provided 'AS IS'. EMCS and its developers are NOT liable for any electrical damage, short circuits, hardware failure, fire hazards, or personal injury resulting from automated appliance switching. Use IoT features at your own risk.\n\n4. PAYMENTS: EMCS provides a simulated settlement ledger. No real financial transactions are processed on this platform.",
+        terms and conditions: "1. ACCEPTANCE OF TERMS: By using EMCS, you agree to these legal terms.\n\n2. NO FINANCIAL LIABILITY: The electricity bills, solar ROI, and tariff calculations provided by EMCS are 'Estimates' based on standard utility slabs. EMCS is not an official billing authority. You must pay your actual utility provider based on their official meter readings.\n\n3. HARDWARE & IOT SAFETY WAIVER: The hardware relay control, voltage surge guard, and IoT features are provided 'AS IS'. EMCS and its developers are NOT liable for any electrical damage, short circuits, hardware failure, fire hazards, or personal injury resulting from automated appliance switching. Use IoT features at your own risk.\n\n4. PAYMENTS: EMCS provides a simulated settlement ledger. No real financial transactions are processed on this platform.",
         faqs: [
             { q: "Are the electricity bills shown here official?", a: "No. All bills and solar ROI figures are estimates calculated using state/private DISCOM tariff slabs for planning and energy-saving purposes." },
             { q: "How does the 2-year account deletion policy work?", a: "When you deactivate your account, all active devices are logged out immediately and your records are automatically erased after 2 years." },
