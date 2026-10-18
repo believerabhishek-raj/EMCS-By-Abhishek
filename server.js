@@ -263,7 +263,7 @@ async function logBackendError(source, err, req = null) {
         await new SystemError({
             source: sanitizeInput(source || 'Secure Storage Layer', 50),
             message: sanitizeInput(err?.message || String(err), 300),
-            location: sanitizeInput(req ? `${req.method} ${req.originalUrl}` : 'Internal', 150),
+            location: sanitizeInput(req ? `${req.method}${req.originalUrl}` : 'Internal', 150),
             userOrIp: sanitizeInput(req ? (req.user?.consumerId || req.ip) : 'System', 60)
         }).save();
     } catch (ignore) {}
@@ -377,7 +377,7 @@ app.post('/api/auth/register', strictRegisterLimiter, async (req, res) => {
         const pin = sanitizeInput(req.body.pin, 4);
         const name = sanitizeInput(req.body.name, 60);
 
-        if (!/^[0-9]{10}$/.test(mobile) || !/^[A-Z0-9]{12}$/.test(consumerId) \vert{}\vert{} !/^[0-9]{4}$/.test(pin) || name.length < 2) {
+        if (!/^[0-9]{10}$/.test(mobile) || !/^[A-Z0-9]{12}$/.test(consumerId) || !/^[0-9]{4}$/.test(pin) || name.length < 2) {
             return res.status(400).json({ success: false, message: 'Invalid input format. Check mobile, 12-char alphanumeric ID, and 4-digit PIN.' });
         }
 
@@ -408,7 +408,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         const mobile = sanitizeInput(req.body.mobile, 10);
         const pin = sanitizeInput(req.body.pin, 4);
 
-        if (!/^[0-9]{10}$/.test(mobile) \vert{}\vert{} !/^[0-9]{4}$/.test(pin)) {
+        if (!/^[0-9]{10}$/.test(mobile) || !/^[0-9]{4}$/.test(pin)) {
             return res.status(400).json({ success: false, message: 'Invalid mobile number or PIN.' });
         }
 
@@ -464,10 +464,11 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
         const token = jwt.sign({ userId: user._id, sessionId }, JWT_SECRET, { expiresIn: '7d', algorithm: 'HS256' });
 
+        // SameSite 'lax' ensures first-party compatibility across Safari, Brave, and Chrome
         res.cookie('emcs_auth_token', token, {
             httpOnly: true,
             secure: IS_PROD,
-            sameSite: IS_PROD ? 'none' : 'lax',
+            sameSite: 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
@@ -510,7 +511,7 @@ app.post('/api/auth/verify-and-reset-pin', loginLimiter, async (req, res) => {
         const registeredName = sanitizeInput(req.body.registeredName, 60).toLowerCase();
         const newPin = sanitizeInput(req.body.newPin, 4);
 
-        if (!/^[0-9]{10}$/.test(mobile) || !/^[A-Z0-9]{12}$/.test(consumerId) \vert{}\vert{} !/^[0-9]{4}$/.test(newPin)) {
+        if (!/^[0-9]{10}$/.test(mobile) || !/^[A-Z0-9]{12}$/.test(consumerId) || !/^[0-9]{4}$/.test(newPin)) {
             return res.status(400).json({ success: false, message: 'Invalid recovery details provided.' });
         }
 
@@ -593,6 +594,7 @@ app.get('/api/user/get-cloud-data', authenticateUser, (req, res) => {
 app.post('/api/user/sync-cloud', authenticateUser, async (req, res) => {
     try {
         const {
+            name,
             appliances,
             sanctionedLoadKw,
             budgetThreshold,
@@ -601,6 +603,11 @@ app.post('/api/user/sync-cloud', authenticateUser, async (req, res) => {
             tariffArea,
             customTariff
         } = req.body;
+
+        if (name !== undefined) {
+            const cleanName = sanitizeInput(name, 60);
+            if (cleanName.length >= 2) req.user.name = cleanName;
+        }
 
         if (Array.isArray(appliances)) {
             req.user.appliances = appliances.slice(0, 50).map(a => {
@@ -705,6 +712,11 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
     }
 });
 
+app.post('/api/admin/logout', (req, res) => {
+    res.clearCookie('emcs_admin_token');
+    res.json({ success: true });
+});
+
 // Staff RBAC Management (Owner Only)
 app.get('/api/admin/staff', authenticateAdmin, async (req, res) => {
     if (req.admin.role !== 'owner') return res.status(403).json({ success: false });
@@ -773,6 +785,16 @@ app.post('/api/admin/cms', authenticateAdmin, requireAdminPermission('canEditCMS
         res.json({ success: true });
     } catch (e) {
         await logBackendError('CMS Update Route', e, req);
+        res.status(500).json({ success: false });
+    }
+});
+
+// Two-Way User Support Chat Routes (Row-Level Security Enforced)
+app.get('/api/support/user/messages', authenticateUser, async (req, res) => {
+    try {
+        const messages = await SupportMessage.find({ consumerId: req.user.consumerId }).sort({ timestamp: 1 }).limit(100);
+        res.json({ success: true, messages });
+    } catch (e) {
         res.status(500).json({ success: false });
     }
 });
