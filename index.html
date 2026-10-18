@@ -69,13 +69,17 @@
         .mt-1 { margin-top: 0.5rem; }
         .mt-2 { margin-top: 1rem; }
         .mt-3 { margin-top: 1.5rem; }
+        .p-0 { padding: 0 !important; }
         .p-2 { padding: 1rem; }
         .p-3 { padding: 1.5rem; }
         .w-100 { width: 100% !important; }
 
         .flex-between { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
         .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .text-left { text-align: left; }
         .text-primary { color: var(--primary); }
+        .text-accent { color: var(--accent); }
         .green-text { color: var(--savings-green); }
         .danger-text { color: var(--danger); }
         .text-warning { color: var(--warning); }
@@ -110,6 +114,7 @@
         .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; align-items: start; }
 
         input, select, textarea { padding: 10px 14px; border-radius: 10px; border: 1px solid var(--card-border); background: var(--bg-color); color: var(--text-color); font-size: 0.92rem; width: 100%; outline: none; }
+        input::placeholder, textarea::placeholder { color: #94A3B8; opacity: 1; }
         input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--accent-light); }
         .form-group { margin-bottom: 12px; }
         .form-group label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 6px; color: var(--text-muted); }
@@ -150,7 +155,12 @@
         .legal-link { color: var(--primary); text-decoration: none; font-weight: 600; cursor: pointer; }
         .legal-link:hover { text-decoration: underline; }
 
-        /* Custom Admin Chat Styles */
+        /* Custom Support & Admin Chat Styles */
+        .emcs-chat-wrapper { max-width: 780px; margin: 0 auto; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); }
+        .emcs-header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
+        .emcs-avatar { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.2); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+        .emcs-online-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34D399; margin-right: 6px; }
+        .emcs-time { display: block; font-size: 0.68rem; color: var(--text-muted); margin-top: 4px; text-align: right; }
         .admin-wa-container { display: grid; grid-template-columns: 260px 1fr; height: 460px; }
         .admin-wa-users-panel { border-right: 1px solid var(--card-border); display: flex; flex-direction: column; overflow-y: auto; }
         .admin-wa-user-item { padding: 10px 12px; border-bottom: 1px solid var(--card-border); cursor: pointer; display: flex; align-items: center; gap: 10px; }
@@ -161,7 +171,7 @@
         .emcs-sent { align-self: flex-end; background: var(--accent-light); color: var(--text-color); border: 1px solid rgba(99, 102, 241, 0.2); border-bottom-right-radius: 2px; }
         .emcs-input-bar { background: var(--card-bg); padding: 15px 20px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--card-border); }
         .emcs-send-btn { width: 45px; height: 45px; border-radius: 12px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.1rem; }
-        
+
         .mobile-top-bar { display: none; }
         .drawer-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 999; }
         @media (max-width: 920px) {
@@ -240,6 +250,7 @@
             <button class="icon-btn borderless" onclick="document.getElementById('systemBroadcastBanner').classList.add('hidden')"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
+        <!-- SECURE ADMIN CONTROL CONSOLE -->
         <section id="adminSection" class="hidden">
             <div class="clean-card mb-2 flex-between" style="border-left: 4px solid var(--danger);">
                 <div>
@@ -311,9 +322,15 @@
                 <div class="clean-card mb-3">
                     <h3><i class="fa-solid fa-user-shield text-warning"></i> Provision Admin Staff Account</h3>
                     <div class="grid-3 mt-2 mb-2">
-                        <input type="text" id="staffNewName" placeholder="Staff Name">
+                        <input type="text" id="staffNewName" placeholder="Staff Full Name">
                         <input type="text" id="staffNewUser" placeholder="Username">
-                        <input type="password" id="staffNewPass" placeholder="Password">
+                        <input type="password" id="staffNewPass" placeholder="Password (min 6 chars)">
+                    </div>
+                    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:14px; font-size:0.84rem;">
+                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="permManageUsers" checked style="width:auto;"> View Accounts</label>
+                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="permChat" checked style="width:auto;"> Reply Support</label>
+                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="permCMS" style="width:auto;"> Edit Portal CMS</label>
+                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="permDeleteChat" style="width:auto;"> Delete Chats</label>
                     </div>
                     <button class="primary-btn sm-btn" onclick="createNewStaffMember()"><i class="fa-solid fa-plus"></i> Grant Role Access</button>
                     <h4 class="mt-3">Assigned Personnel</h4>
@@ -378,6 +395,7 @@
             </div>
         </section>
 
+        <!-- MAIN CONSUMER APPLICATION -->
         <section id="mainAppSection">
             <div class="flex-between mb-3">
                 <div>
@@ -411,6 +429,7 @@
                 <button class="danger-btn sm-btn" onclick="promptSetBudget()">Update Budget</button>
             </div>
 
+            <!-- TAB 1: DASHBOARD -->
             <div id="dashboard" class="feature-content active-feature">
                 <div class="clean-card mb-3 p-3" style="border-left: 4px solid var(--primary);">
                     <div class="flex-between mb-2">
@@ -470,7 +489,7 @@
                     <div class="clean-card p-2">
                         <p class="card-label">Active Monthly Load</p>
                         <h2 id="dashLoadDisplay" class="text-primary">0.0 kWh</h2>
-                        <span class="badge light-green-bg mt-1">Live Telemetry</span>
+                        <span class="badge light-green-bg mt-1">Live Draw: <b id="liveWattsDisplay">0 W</b></span>
                     </div>
                     <div class="clean-card p-2">
                         <p class="card-label">Efficiency Index</p>
@@ -517,7 +536,7 @@
                 </div>
             </div>
 
-            <!-- TAB 2: APPLIANCES -->
+            <!-- TAB 2: APPLIANCES (1. Add Form -> 2. List -> 3. Flowchart & Hackathon Graphs) -->
             <div id="appliances" class="feature-content hidden">
                 <div class="clean-card mb-3">
                     <h3><i class="fa-solid fa-plug-circle-plus text-primary"></i> Appliance Setup & Profiler</h3>
@@ -526,16 +545,19 @@
                         <select id="presetSelect" onchange="applyPreset(this.value)">
                             <option value="">-- Select Standard Appliance Preset --</option>
                             <option value="ac15">1.5 Ton Split AC (1400 W)</option>
+                            <option value="ac10">1.0 Ton Inverter AC (1000 W)</option>
                             <option value="fridge">Double Door Refrigerator (180 W)</option>
                             <option value="fan">BLDC Ceiling Fan (35 W)</option>
+                            <option value="oldfan">Standard Ceiling Fan (75 W)</option>
                             <option value="geyser">Water Geyser (2000 W)</option>
+                            <option value="pc">Desktop Computer (350 W)</option>
                             <option value="wm">Washing Machine (450 W)</option>
                         </select>
                     </div>
                     <div class="grid-4">
-                        <input type="text" id="appName" placeholder="Device Name">
-                        <input type="number" id="appPower" placeholder="Power Watts" min="1" max="50000">
-                        <input type="number" id="appHours" placeholder="Daily Hours" min="0.1" max="24" step="0.5">
+                        <input type="text" id="appName" placeholder="Device Name (e.g. Room AC)">
+                        <input type="number" id="appPower" placeholder="Power Watts (e.g. 1400)" min="1" max="50000">
+                        <input type="number" id="appHours" placeholder="Daily Hours (e.g. 6)" min="0.1" max="24" step="0.5">
                         <button class="primary-btn" onclick="addAppliance()"><i class="fa-solid fa-plus"></i> Add Device</button>
                     </div>
                 </div>
@@ -576,6 +598,7 @@
                 </div>
             </div>
 
+            <!-- TAB 3: VOLTAGE & SURGE GUARD -->
             <div id="gridSafety" class="feature-content hidden">
                 <div class="clean-card" style="max-width:780px; margin:0 auto;">
                     <div class="flex-between mb-2">
@@ -595,6 +618,7 @@
                 </div>
             </div>
 
+            <!-- TAB 4: INVERTER BACKUP -->
             <div id="inverterAssistant" class="feature-content hidden">
                 <div class="clean-card" style="max-width:780px; margin:0 auto; border-left:4px solid var(--warning);">
                     <h3><i class="fa-solid fa-car-battery text-warning"></i> Inverter Backup Calculator</h3>
@@ -623,6 +647,7 @@
                 </div>
             </div>
 
+            <!-- TAB 5: VAMPIRE AUDIT -->
             <div id="vampireCheck" class="feature-content hidden">
                 <div class="clean-card" style="max-width:720px; margin:0 auto;">
                     <div class="flex-between mb-2">
@@ -641,11 +666,12 @@
                 </div>
             </div>
 
+            <!-- TAB 6: BILL OCR SCANNER -->
             <div id="ocrScanner" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
                     <h3><i class="fa-solid fa-file-arrow-up text-primary"></i> Electricity Bill OCR Scanner</h3>
-                    <p class="small-text mb-2">Upload a physical bill image to extract units automatically.</p>
-                    <input type="file" id="billImageInput" accept="image/*" class="mb-2">
+                    <p class="small-text mb-2">Upload a physical bill image (JPG/PNG/WebP under 4MB) to extract units automatically.</p>
+                    <input type="file" id="billImageInput" accept="image/jpeg,image/png,image/webp" class="mb-2">
                     <button class="primary-btn" onclick="processBillOcr()"><i class="fa-solid fa-wand-magic-sparkles"></i> Scan Bill Image</button>
                     <div id="ocrLoader" class="hidden text-center mt-2"><i class="fa-solid fa-spinner fa-spin text-primary"></i> Processing image...</div>
                     <div id="ocrResultBox" class="hidden mt-2 p-2" style="background:var(--accent-light); border-radius:10px;">
@@ -655,10 +681,11 @@
                 </div>
             </div>
 
+            <!-- TAB 7: SMART METER CSV -->
             <div id="smartMeterCsv" class="feature-content hidden">
                 <div class="clean-card" style="max-width:700px; margin:0 auto;">
                     <h3><i class="fa-solid fa-file-csv green-text"></i> Smart Meter CSV Analyzer</h3>
-                    <p class="small-text mb-2">Upload interval logs exported from utility smart meters.</p>
+                    <p class="small-text mb-2">Upload interval logs (.csv or .txt under 2MB) exported from utility smart meters.</p>
                     <input type="file" id="meterCsvInput" accept=".csv,.txt" onchange="handleSmartMeterCsv(event)">
                     <div id="csvSummaryBox" class="hidden mt-3 grid-3 text-center">
                         <div class="p-2 clean-card"><p class="small-text">Total Consumption</p><h3 class="text-primary" id="csvTotalKwh">0 kWh</h3></div>
@@ -668,6 +695,7 @@
                 </div>
             </div>
 
+            <!-- TAB 8: TOD OPTIMIZER -->
             <div id="todOptimizer" class="feature-content hidden">
                 <div class="clean-card" style="max-width:780px; margin:0 auto;">
                     <h3><i class="fa-solid fa-clock-rotate-left text-primary"></i> ToD Smart Tariff Optimizer</h3>
@@ -692,6 +720,7 @@
                 </div>
             </div>
 
+            <!-- TAB 9: SOLAR ROI -->
             <div id="solarRoi" class="feature-content hidden">
                 <div class="clean-card" style="max-width:780px; margin:0 auto;">
                     <h3><i class="fa-solid fa-sun text-warning"></i> Solar Rooftop Sizing & Subsidy Estimator</h3>
@@ -708,6 +737,7 @@
                 </div>
             </div>
 
+            <!-- TAB 10: IOT HARDWARE RELAY -->
             <div id="iotControl" class="feature-content hidden">
                 <div class="clean-card" style="max-width:850px; margin:0 auto;">
                     <div class="flex-between mb-2">
@@ -741,6 +771,7 @@
                 </div>
             </div>
 
+            <!-- TAB 11: AUDIT & LEDGER -->
             <div id="audit" class="feature-content hidden">
                 <div class="grid-2">
                     <div class="clean-card">
@@ -765,6 +796,7 @@
                 </div>
             </div>
 
+            <!-- TAB 12: SAVINGS SIMULATOR -->
             <div id="simulator" class="feature-content hidden">
                 <div class="clean-card text-center" style="max-width:650px; margin:0 auto;">
                     <h3><i class="fa-solid fa-sliders text-primary"></i> Monthly Savings Simulator</h3>
@@ -783,6 +815,7 @@
                 </div>
             </div>
 
+            <!-- TAB 13: BILL SETTLEMENT -->
             <div id="payment" class="feature-content hidden">
                 <div class="clean-card text-center" style="max-width:480px; margin:0 auto; padding:2.2rem;">
                     <i class="fa-solid fa-file-invoice-dollar text-primary" style="font-size:3rem;"></i>
@@ -793,6 +826,7 @@
                 </div>
             </div>
 
+            <!-- TAB 14: HELP & SUPPORT CHAT -->
             <div id="userSupportChat" class="feature-content hidden">
                 <div class="emcs-chat-wrapper">
                     <div class="emcs-header">
@@ -815,6 +849,7 @@
                 </div>
             </div>
 
+            <!-- TAB 15: PROFILE & SECURITY -->
             <div id="profile" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
                     <h3><i class="fa-solid fa-user-shield text-primary"></i> Account Settings & Security</h3>
@@ -855,7 +890,7 @@
     <!-- Modals Overlay -->
     <div id="popupOverlay" class="popup-overlay hidden" onclick="closeAllPopups()"></div>
 
-    <!-- AI Assistant Modal -->
+    <!-- 1. AI Assistant Modal -->
     <div id="aiModal" class="popup-modal hidden" style="max-width:520px;">
         <div class="chat-header">
             <h4 style="margin:0;"><i class="fa-solid fa-robot"></i> EMCS Ai Energy Assistant</h4>
@@ -895,13 +930,13 @@
             <form id="modalLoginForm" onsubmit="handleSecureLogin(event)">
                 <div class="form-group">
                     <label>Mobile Number</label>
-                    <input type="tel" id="loginMobile" pattern="[0-9]{10}" placeholder="Enter Your Mobile Number (e.g. 9876543210)" required style="color-scheme: light;">
+                    <input type="tel" id="loginMobile" pattern="[0-9]{10}" placeholder="Enter Your Mobile Number" required>
                 </div>
                 <div class="form-group">
                     <label>4-Digit Security PIN</label>
                     <div style="position: relative; display: flex; align-items: center;">
-                        <input type="password" id="loginPin" maxlength="4" pattern="[0-9]{4}" placeholder="••••" required style="padding-right: 40px; width: 100%;">
-                        <button type="button" onclick="togglePasswordVisibility('loginPin', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px;">
+                        <input type="password" id="loginPin" maxlength="4" pattern="[0-9]{4}" placeholder="Enter 4-Digit PIN" required style="padding-right: 42px; width: 100%;">
+                        <button type="button" onclick="togglePasswordVisibility('loginPin', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide PIN">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
@@ -912,20 +947,20 @@
             <!-- Register Form -->
             <form id="modalRegisterForm" class="hidden" onsubmit="handleSecureRegister(event)">
                 <input type="text" id="regHoneypot" name="_bot_honeypot" style="display:none;" tabindex="-1" autocomplete="off">
-                <div class="form-group"><label>Full Name</label><input type="text" id="regName" placeholder="Full Name" required></div>
+                <div class="form-group"><label>Full Name</label><input type="text" id="regName" placeholder="Enter Your Full Name" required></div>
                 <div class="form-group">
                     <label>Mobile Number</label>
-                    <input type="tel" id="regMobile" pattern="[0-9]{10}" placeholder="Enter Your Mobile Number (e.g. 9876543210)" required>
+                    <input type="tel" id="regMobile" pattern="[0-9]{10}" placeholder="Enter Your Mobile Number" required>
                 </div>
                 <div class="form-group">
                     <label>12-Character Consumer ID</label>
-                    <input type="text" id="regConsumerId" minlength="12" maxlength="12" placeholder="e.g. EM1009842105" style="text-transform:uppercase;" required>
+                    <input type="text" id="regConsumerId" minlength="12" maxlength="12" placeholder="Enter 12-Character Consumer ID" style="text-transform:uppercase;" required>
                 </div>
                 <div class="form-group">
                     <label>4-Digit Security PIN</label>
                     <div style="position: relative; display: flex; align-items: center;">
-                        <input type="password" id="regPin" maxlength="4" pattern="[0-9]{4}" placeholder="••••" required style="padding-right: 40px; width: 100%;">
-                        <button type="button" onclick="togglePasswordVisibility('regPin', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px;">
+                        <input type="password" id="regPin" maxlength="4" pattern="[0-9]{4}" placeholder="Create 4-Digit PIN" required style="padding-right: 42px; width: 100%;">
+                        <button type="button" onclick="togglePasswordVisibility('regPin', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide PIN">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
@@ -944,15 +979,15 @@
                 <p class="small-text mb-2 text-primary"><b>PIN Recovery:</b> Match registered details to re-secure your access.</p>
                 <div class="form-group">
                     <label>Mobile Number</label>
-                    <input type="tel" id="forgotMobile" placeholder="Enter Your Mobile Number (e.g. 9876543210)" pattern="[0-9]{10}" required>
+                    <input type="tel" id="forgotMobile" placeholder="Enter Your Mobile Number" pattern="[0-9]{10}" required>
                 </div>
-                <div class="form-group"><label>Consumer ID</label><input type="text" id="forgotConsumerId" minlength="12" maxlength="12" style="text-transform:uppercase;" required></div>
-                <div class="form-group"><label>Registered Full Name</label><input type="text" id="forgotName" required></div>
+                <div class="form-group"><label>Consumer ID</label><input type="text" id="forgotConsumerId" minlength="12" maxlength="12" placeholder="Enter 12-Character Consumer ID" style="text-transform:uppercase;" required></div>
+                <div class="form-group"><label>Registered Full Name</label><input type="text" id="forgotName" placeholder="Enter Registered Full Name" required></div>
                 <div class="form-group">
                     <label>New 4-Digit PIN</label>
                     <div style="position: relative; display: flex; align-items: center;">
-                        <input type="password" id="forgotNewPin" maxlength="4" pattern="[0-9]{4}" placeholder="••••" required style="padding-right: 40px; width: 100%;">
-                        <button type="button" onclick="togglePasswordVisibility('forgotNewPin', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px;">
+                        <input type="password" id="forgotNewPin" maxlength="4" pattern="[0-9]{4}" placeholder="Enter New 4-Digit PIN" required style="padding-right: 42px; width: 100%;">
+                        <button type="button" onclick="togglePasswordVisibility('forgotNewPin', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide PIN">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
@@ -962,12 +997,12 @@
 
             <!-- Admin Login Form -->
             <form id="modalAdminForm" class="hidden" onsubmit="handleSecureAdminLogin(event)">
-                <div class="form-group"><label>Staff Username (Blank for Owner)</label><input type="text" id="adminLoginUser" placeholder="Optional"></div>
+                <div class="form-group"><label>Staff Username (Blank for Owner)</label><input type="text" id="adminLoginUser" placeholder="Optional for Master Owner"></div>
                 <div class="form-group">
                     <label>Administrator Access Key</label>
                     <div style="position: relative; display: flex; align-items: center;">
-                        <input type="password" id="adminLoginPass" placeholder="••••" required style="padding-right: 40px; width: 100%;">
-                        <button type="button" onclick="togglePasswordVisibility('adminLoginPass', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px;">
+                        <input type="password" id="adminLoginPass" placeholder="Enter Security Access Key" required style="padding-right: 42px; width: 100%;">
+                        <button type="button" onclick="togglePasswordVisibility('adminLoginPass', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide Password">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
@@ -1031,6 +1066,7 @@
         <div class="p-3" id="legalModalBody" style="line-height:1.6; overflow-y:auto; max-height:70vh;"></div>
     </div>
 
+    <button id="floatingAIBtn" class="hover-pop" onclick="openAIModal()" title="EMCS Ai Assistant"><i class="fa-solid fa-robot"></i></button>
     <script src="script.js"></script>
 </body>
 </html>
