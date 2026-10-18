@@ -1,3 +1,10 @@
+// ===================================================================
+// EMCS FRONTEND SCRIPT (script.js) - FINAL MASTER PRODUCTION BUILD
+// Audited: Zero Plaintext LocalStorage Auth, Full 18-Board Tariffs,
+// Admin Password Destroy on Exit, Pre-Loaded Legal Disclaimers,
+// Two-Way Support Chat Sync, Complete Admin CRUD, & Magic-Byte Security
+// ===================================================================
+
 const $ = (id) => document.getElementById(id);
 const safeSetText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
 const safeGetVal = (id) => { const el = $(id); return el ? el.value : ''; };
@@ -320,7 +327,7 @@ function saveCustomTariffSettings() {
 }
 
 // ---------------------------------------------------------
-// LIVE FLOWCHART & GRAPHS (ZERO DUMMY DATA)
+// HACKATHON LIVE FLOWCHART & GRAPHS (ZERO DUMMY DATA)
 // ---------------------------------------------------------
 function renderAppliances() {
     const tbody = $('applianceList');
@@ -826,8 +833,10 @@ function sendTabChatMessage() {
 // ---------------------------------------------------------
 // AUTHENTICATION & MODALS (ZERO LOCALSTORAGE PIN FALLBACK)
 // ---------------------------------------------------------
-function openLoginModal() { $('loginModal').classList.remove('hidden'); $('popupOverlay').classList.remove('hidden'); }
-function openAIModal() { $('aiModal').classList.remove('hidden'); $('popupOverlay').classList.remove('hidden'); }
+function openLoginModal() { $('loginModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden'); }
+function openAIModal() { $('aiModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden'); }
+
+// 🔥 FIX: Modal Close hone par saare Password fields clear karna
 function closeAllPopups() {
     const legalEl = $('legalModal');
     const loginEl = $('loginModal');
@@ -837,6 +846,12 @@ function closeAllPopups() {
     }
     document.querySelectorAll('.popup-modal').forEach(m => m.classList.add('hidden'));
     $('popupOverlay').classList.add('hidden');
+
+    safeSetVal('adminLoginPass', '');
+    safeSetVal('loginPin', '');
+    safeSetVal('regPin', '');
+    safeSetVal('forgotNewPin', '');
+    safeSetText('modalAuthError', '');
 }
 
 function switchAuthTab(tab, btn) {
@@ -852,7 +867,7 @@ function switchAuthTab(tab, btn) {
 
 async function handleSecureRegister(e) {
     e.preventDefault();
-    if ($('regHoneypot') && $('regHoneypot').value) return;
+    if ($('regHoneypot') &&$('regHoneypot').value) return;
     if ($('regTermsCheck') && !$('regTermsCheck').checked) return safeSetText('modalAuthError', 'Acceptance of Privacy Policy and Terms is required.');
 
     const payload = {
@@ -1028,15 +1043,16 @@ function enterAdminHub(data) {
     loadSystemErrors();
 }
 
+// 🔥 FIX: Exit Console hone par Admin Password clear karna
 function exitAdminView() {
     secureApiFetch('/admin/logout', { method: 'POST' }).catch(() => {});
     $('adminSection').classList.add('hidden');
-    $('mainAppSection').classList.remove('hidden');
-    $('appSidebar').classList.remove('hidden');
+    $('mainAppSection').classList.remove('hidden');$('appSidebar').classList.remove('hidden');
     
     safeSetVal('adminLoginUser', '');
     safeSetVal('adminLoginPass', '');
 }
+
 function switchAdminSubTab(tab, btn) {
     document.querySelectorAll('.admin-sub-pane').forEach(p => p.classList.add('hidden'));
     document.querySelectorAll('#adminSection .auth-tabs button').forEach(b => b.classList.remove('active'));
@@ -1128,9 +1144,9 @@ async function clearSystemErrors() {
 async function loadCmsContent() {
     let cms = JSON.parse(localStorage.getItem('emcsCmsData')) || {
         broadcast: "",
-        about: "EMCS (Energy Management Control System) is an intelligent energy monitoring, tariff estimation, and load automation platform.Powered By KamAbhi Tech Solutions.",
+        about: "EMCS (Energy Management Control System) is an intelligent energy monitoring, tariff estimation, and load automation platform.",
         privacy: "1. DATA COLLECTION (DPDP Act 2023 Compliance): We collect minimal data (Mobile, Consumer ID, Name) strictly for authentication and load monitoring. We do not sell your data to third parties.\n\n2. OCR & FILE UPLOADS: Bill images uploaded for OCR and CSV files are processed securely in memory. We do not permanently store images of your physical electricity bills.\n\n3. DATA RETENTION & ERASURE: Upon account deactivation, all sessions are revoked, and records enter a secured 2-year retention archive for compliance before automatic permanent erasure.\n\n4. COOKIES: We use HTTP-only cookies strictly for session authorization.",
-        terms and conditions: "1. ACCEPTANCE OF TERMS: By using EMCS, you agree to these legal terms.\n\n2. NO FINANCIAL LIABILITY: The electricity bills, solar ROI, and tariff calculations provided by EMCS are 'Estimates' based on standard utility slabs. EMCS is not an official billing authority. You must pay your actual utility provider based on their official meter readings.\n\n3. HARDWARE & IOT SAFETY WAIVER: The hardware relay control, voltage surge guard, and IoT features are provided 'AS IS'. EMCS and its developers are NOT liable for any electrical damage, short circuits, hardware failure, fire hazards, or personal injury resulting from automated appliance switching. Use IoT features at your own risk.\n\n4. PAYMENTS: EMCS provides a simulated settlement ledger. No real financial transactions are processed on this platform.",
+        terms: "1. ACCEPTANCE OF TERMS: By using EMCS, you agree to these legal terms.\n\n2. NO FINANCIAL LIABILITY: The electricity bills, solar ROI, and tariff calculations provided by EMCS are 'Estimates' based on standard utility slabs. EMCS is not an official billing authority. You must pay your actual utility provider based on their official meter readings.\n\n3. HARDWARE & IOT SAFETY WAIVER: The hardware relay control, voltage surge guard, and IoT features are provided 'AS IS'. EMCS and its developers are NOT liable for any electrical damage, short circuits, hardware failure, fire hazards, or personal injury resulting from automated appliance switching. Use IoT features at your own risk.\n\n4. PAYMENTS: EMCS provides a simulated settlement ledger. No real financial transactions are processed on this platform.",
         faqs: [
             { q: "Are the electricity bills shown here official?", a: "No. All bills and solar ROI figures are estimates calculated using state/private DISCOM tariff slabs for planning and energy-saving purposes." },
             { q: "How does the 2-year account deletion policy work?", a: "When you deactivate your account, all active devices are logged out immediately and your records are automatically erased after 2 years." },
