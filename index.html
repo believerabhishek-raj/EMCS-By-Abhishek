@@ -450,13 +450,30 @@
                         <div class="form-group" style="margin:0;">
                             <label class="small-text">Utility Board</label>
                             <select id="tariffProviderSelect" onchange="onTariffConfigChange()">
-                                <option value="bihar" selected>Bihar (NBPDCL / SBPDCL)</option>
-                                <option value="up">Uttar Pradesh (UPPCL)</option>
-                                <option value="maharashtra">Maharashtra (MSEDCL)</option>
-                                <option value="delhi">Delhi Discoms</option>
-                                <option value="tata_mumbai">Tata Power Mumbai</option>
-                                <option value="national">Standard National Average</option>
-                                <option value="custom">★ Custom Defined Rate</option>
+                                <optgroup label="State Electricity Boards (DISCOMs)">
+                                    <option value="bihar" selected>Bihar (NBPDCL / SBPDCL)</option>
+                                    <option value="up">Uttar Pradesh (UPPCL)</option>
+                                    <option value="maharashtra">Maharashtra (MSEDCL)</option>
+                                    <option value="delhi">Delhi (BSES / NDPL)</option>
+                                    <option value="karnataka">Karnataka (BESCOM)</option>
+                                    <option value="rajasthan">Rajasthan (JVVNL)</option>
+                                    <option value="wb">West Bengal (WBSEDCL)</option>
+                                    <option value="tn">Tamil Nadu (TANGEDCO)</option>
+                                    <option value="gujarat">Gujarat (UGVCL / DGVCL)</option>
+                                    <option value="punjab">Punjab (PSPCL)</option>
+                                    <option value="haryana">Haryana (UHBVN / DHBVN)</option>
+                                    <option value="mp">Madhya Pradesh (MPPKVVCL)</option>
+                                </optgroup>
+                                <optgroup label="Private Utilities & National">
+                                    <option value="tata_delhi">Tata Power Delhi (TPDDL)</option>
+                                    <option value="bses_delhi">BSES Rajdhani / Yamuna</option>
+                                    <option value="tata_mumbai">Tata Power Mumbai</option>
+                                    <option value="adani_mumbai">Adani Electricity Mumbai</option>
+                                    <option value="cesc_kolkata">CESC Kolkata</option>
+                                    <option value="torrent">Torrent Power</option>
+                                    <option value="national">Standard National Average</option>
+                                    <option value="custom">★ Custom Defined Rate</option>
+                                </optgroup>
                             </select>
                         </div>
                         <div class="form-group" style="margin:0;">
@@ -861,7 +878,7 @@
                         <button class="secondary-btn sm-btn" onclick="openDeviceManager()">Manage Devices</button>
                     </div>
 
-                    <div class="form-group"><label>Consumer Full Name</label><input type="text" id="profileName" placeholder="Name"></div>
+                    <div class="form-group"><label>Consumer Full Name</label><input type="text" id="profileName" placeholder="Enter Full Name"></div>
                     <div class="form-group"><label>Consumer ID</label><input type="text" id="profileId" readonly></div>
                     <button class="primary-btn" onclick="saveUserProfile()"><i class="fa-solid fa-floppy-disk"></i> Save & Sync</button>
                     <p id="profileMsg" class="green-text text-center mt-2"></p>
