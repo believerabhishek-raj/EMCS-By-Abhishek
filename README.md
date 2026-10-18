@@ -46,7 +46,6 @@ Audited and fortified against top-tier OWASP vulnerabilities:
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/believerabhishek-raj/EMCS-By-Abhishek
-   cd emcs-energy-system
 
 2.Install dependencies:
 npm install
