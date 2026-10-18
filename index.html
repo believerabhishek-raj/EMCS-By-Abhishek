@@ -39,7 +39,7 @@
             --savings-green: #10B981;
             --danger: #EF4444;
             --warning: #F59E0B;
-            --shadow: 0 4px 20px -2px rgba(99, 102, 241, 0.08);
+            --shadow: 0 8px 30px rgba(99, 102, 241, 0.06);
             --sidebar-width: 270px;
         }
 
@@ -55,10 +55,37 @@
             --accent-light: rgba(129, 140, 248, 0.15);
             --savings-green: #34D399;
             --danger: #F87171;
-            --shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+            --shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: background-color 0.25s ease, color 0.25s ease; }
+        /* 🌟 KEYFRAME ANIMATIONS (Hardware Accelerated) */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes modalPop {
+            0% { transform: translate(-50%, -45%) scale(0.92); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+        @keyframes overlayFade {
+            from { opacity: 0; backdrop-filter: blur(0px); }
+            to { opacity: 1; backdrop-filter: blur(4px); }
+        }
+        @keyframes livePulse {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        @keyframes bubbleSlideLeft {
+            from { opacity: 0; transform: translateX(-15px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes bubbleSlideRight {
+            from { opacity: 0; transform: translateX(15px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
         h1, h2, h3, h4, h5, h6, .logo-main, .primary-btn, .secondary-btn, .danger-btn { font-family: 'Poppins', sans-serif; }
         body { background-color: var(--bg-color); color: var(--text-color); display: flex; min-height: 100vh; overflow-x: hidden; }
         .hidden { display: none !important; }
@@ -88,23 +115,32 @@
         .light-red-bg { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
         .danger-bg { background: var(--danger); color: #fff; }
 
-        .sidebar { width: var(--sidebar-width); background: var(--card-bg); border-right: 1px solid var(--card-border); padding: 1.25rem 0.9rem; display: flex; flex-direction: column; height: 100vh; position: fixed; left: 0; top: 0; z-index: 1000; }
+        /* Animation Utility Classes */
+        .live-pulse { animation: livePulse 2s infinite; border-radius: 20px; }
+        .hover-pop { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .hover-pop:hover { transform: scale(1.05); }
+        
+        .active-feature { animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        
+        .sidebar { width: var(--sidebar-width); background: var(--card-bg); border-right: 1px solid var(--card-border); padding: 1.25rem 0.9rem; display: flex; flex-direction: column; height: 100vh; position: fixed; left: 0; top: 0; z-index: 1000; transition: transform 0.3s ease, background-color 0.3s ease; }
         .sidebar-top { display: flex; justify-content: space-between; align-items: center; padding: 0 8px 12px 8px; }
         .logo-main { font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 8px; color: var(--text-color); }
         .logo-sub { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-left: 28px; font-weight: 600; }
 
         .nav-controls { display: flex; gap: 8px; margin-bottom: 12px; padding: 0 6px; }
-        .nav-controls select { padding: 6px 8px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; }
+        .nav-controls select { padding: 6px 8px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
         .nav-links { list-style: none; flex: 1; overflow-y: auto; padding-right: 4px; }
-        .nav-item { padding: 10px 12px; margin-bottom: 4px; border-radius: 10px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; gap: 11px; font-weight: 500; font-size: 0.88rem; transition: 0.2s; }
-        .nav-item i { width: 18px; text-align: center; font-size: 1rem; }
-        .nav-item:hover { background: var(--bg-color); color: var(--text-color); transform: translateX(3px); }
+        .nav-item { padding: 10px 12px; margin-bottom: 4px; border-radius: 10px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; gap: 11px; font-weight: 500; font-size: 0.88rem; transition: all 0.2s ease; }
+        .nav-item i { width: 18px; text-align: center; font-size: 1rem; transition: transform 0.2s ease; }
+        .nav-item:hover { background: var(--bg-color); color: var(--text-color); transform: translateX(4px); }
         .nav-item.active { background: var(--accent-light); color: var(--primary); font-weight: 600; }
+        .nav-item.active i { transform: scale(1.15); }
 
         .sidebar-auth-btn-box { padding-top: 10px; border-top: 1px solid var(--card-border); margin-top: 8px; }
         .main-content { margin-left: var(--sidebar-width); flex: 1; padding: 1.8rem 2.5rem; width: calc(100% - var(--sidebar-width)); display: flex; flex-direction: column; min-height: 100vh; }
 
-        .clean-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 1.4rem; box-shadow: var(--shadow); }
+        .clean-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 1.4rem; box-shadow: var(--shadow); transition: transform 0.3s ease, box-shadow 0.3s ease; }
+        .clean-card:hover { transform: translateY(-3px); box-shadow: 0 12px 35px rgba(99, 102, 241, 0.1); }
         .card-label { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; }
         .small-text { font-size: 0.82rem; color: var(--text-muted); line-height: 1.4; }
         .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.73rem; font-weight: 600; display: inline-block; }
@@ -113,71 +149,85 @@
         .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
         .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; align-items: start; }
 
-        input, select, textarea { padding: 10px 14px; border-radius: 10px; border: 1px solid var(--card-border); background: var(--bg-color); color: var(--text-color); font-size: 0.92rem; width: 100%; outline: none; }
+        input, select, textarea { padding: 10px 14px; border-radius: 10px; border: 1px solid var(--card-border); background: var(--bg-color); color: var(--text-color); font-size: 0.92rem; width: 100%; outline: none; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
         input::placeholder, textarea::placeholder { color: #94A3B8; opacity: 1; }
         input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--accent-light); }
         .form-group { margin-bottom: 12px; }
         .form-group label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 6px; color: var(--text-muted); }
 
         button { cursor: pointer; border: none; outline: none; }
-        .primary-btn, .secondary-btn, .danger-btn, .sm-btn { padding: 11px 18px; border-radius: 10px; font-weight: 600; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.92rem; width: 100%; }
+        .primary-btn, .secondary-btn, .danger-btn, .sm-btn { padding: 11px 18px; border-radius: 10px; font-weight: 600; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.92rem; width: 100%; transition: all 0.2s ease; position: relative; overflow: hidden; }
         .primary-btn { background: var(--primary); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.22); }
-        .primary-btn:hover { background: var(--primary-hover); }
+        .primary-btn:hover { background: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 6px 15px rgba(99, 102, 241, 0.35); }
+        .primary-btn:active { transform: translateY(0); }
         .secondary-btn { background: #64748B; }
+        .secondary-btn:hover { background: #475569; }
         .danger-btn { background: var(--danger); }
+        .danger-btn:hover { background: #DC2626; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3); }
         .sm-btn { width: auto; padding: 7px 14px; font-size: 0.82rem; border-radius: 8px; }
-        .icon-btn { background: var(--card-bg); border: 1px solid var(--card-border); padding: 8px 12px; border-radius: 8px; color: var(--text-color); font-weight: 600; font-size: 0.85rem; }
+        .icon-btn { background: var(--card-bg); border: 1px solid var(--card-border); padding: 8px 12px; border-radius: 8px; color: var(--text-color); font-weight: 600; font-size: 0.85rem; transition: all 0.2s ease; }
+        .icon-btn:hover { background: var(--bg-color); color: var(--primary); border-color: var(--primary); }
         .borderless { border: none !important; background: transparent !important; }
 
-        /* Switch Toggle */
+        /* Switch Toggle Animation */
         .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
         .switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--card-border); transition: .3s; border-radius: 24px; }
-        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .3s; border-radius: 50%; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--card-border); transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         input:checked + .slider { background-color: var(--primary); }
         input:checked + .slider:before { transform: translateX(20px); }
 
-        .table-container { overflow-x: auto; width: 100%; }
+        .table-container { overflow-x: auto; width: 100%; border-radius: 8px; }
         table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid var(--card-border); font-size: 0.9rem; }
+        th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid var(--card-border); font-size: 0.9rem; transition: background-color 0.2s ease; }
+        tbody tr:hover { background-color: rgba(99, 102, 241, 0.03); }
         th { background: var(--bg-color); font-weight: 600; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; }
 
-        .popup-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px); z-index: 9998; }
+        /* Modal Animations */
+        .popup-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.65); z-index: 9998; }
+        .popup-overlay:not(.hidden) { animation: overlayFade 0.3s ease forwards; }
         .popup-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 92%; max-width: 500px; max-height: 90vh; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; z-index: 9999; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.45); }
+        .popup-modal:not(.hidden) { animation: modalPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        
         .chat-header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; }
-        .close-btn { background: none; color: #fff; font-size: 1.3rem; width: auto; padding: 4px; }
-        .auth-tabs { display: flex; gap: 6px; background: var(--bg-color); padding: 5px; border-radius: 10px; flex-wrap: wrap; }
-        .auth-tabs button { flex: 1; padding: 8px; border-radius: 8px; background: transparent; color: var(--text-muted); font-weight: 600; font-size: 0.83rem; white-space: nowrap; }
-        .auth-tabs button.active { background: var(--card-bg); color: var(--primary); box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+        .close-btn { background: none; color: #fff; font-size: 1.3rem; width: auto; padding: 4px; transition: transform 0.2s ease; }
+        .close-btn:hover { transform: rotate(90deg); }
+        .auth-tabs { display: flex; gap: 6px; background: var(--bg-color); padding: 5px; border-radius: 10px; flex-wrap: wrap; transition: all 0.3s ease; }
+        .auth-tabs button { flex: 1; padding: 8px; border-radius: 8px; background: transparent; color: var(--text-muted); font-weight: 600; font-size: 0.83rem; white-space: nowrap; transition: all 0.3s ease; }
+        .auth-tabs button.active { background: var(--card-bg); color: var(--primary); box-shadow: 0 2px 6px rgba(0,0,0,0.06); transform: scale(1.02); }
         .error-text { color: var(--danger); font-size: 0.85rem; text-align: center; margin-top: 8px; font-weight: 500; }
 
-        #floatingAIBtn { position: fixed; bottom: 25px; right: 25px; width: 58px; height: 58px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; font-size: 1.45rem; box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4); z-index: 9990; display: flex; align-items: center; justify-content: center; }
-        .legal-link { color: var(--primary); text-decoration: none; font-weight: 600; cursor: pointer; }
-        .legal-link:hover { text-decoration: underline; }
+        #floatingAIBtn { position: fixed; bottom: 25px; right: 25px; width: 58px; height: 58px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; font-size: 1.45rem; box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4); z-index: 9990; display: flex; align-items: center; justify-content: center; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        #floatingAIBtn:hover { transform: scale(1.1) rotate(10deg); }
+        .legal-link { color: var(--primary); text-decoration: none; font-weight: 600; cursor: pointer; transition: color 0.2s ease; }
+        .legal-link:hover { text-decoration: underline; color: var(--accent); }
 
-        /* Custom Support & Admin Chat Styles */
+        /* Custom Support & Admin Chat Animations */
         .emcs-chat-wrapper { max-width: 780px; margin: 0 auto; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); }
         .emcs-header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
         .emcs-avatar { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.2); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; }
-        .emcs-online-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34D399; margin-right: 6px; }
+        .emcs-online-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34D399; margin-right: 6px; box-shadow: 0 0 6px #34D399; }
         .emcs-time { display: block; font-size: 0.68rem; color: var(--text-muted); margin-top: 4px; text-align: right; }
         .admin-wa-container { display: grid; grid-template-columns: 260px 1fr; height: 460px; }
         .admin-wa-users-panel { border-right: 1px solid var(--card-border); display: flex; flex-direction: column; overflow-y: auto; }
-        .admin-wa-user-item { padding: 10px 12px; border-bottom: 1px solid var(--card-border); cursor: pointer; display: flex; align-items: center; gap: 10px; }
+        .admin-wa-user-item { padding: 10px 12px; border-bottom: 1px solid var(--card-border); cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background-color 0.2s ease; }
         .admin-wa-user-item:hover, .admin-wa-user-item.active { background: var(--accent-light); }
-        .emcs-chat-body { height: 400px; background: var(--bg-color); padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+        .emcs-chat-body { height: 400px; background: var(--bg-color); padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+        
         .emcs-bubble { max-width: 75%; padding: 12px 16px; border-radius: 14px; font-size: 0.9rem; line-height: 1.5; position: relative; word-wrap: break-word; box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
-        .emcs-received { align-self: flex-start; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--card-border); border-bottom-left-radius: 2px; }
-        .emcs-sent { align-self: flex-end; background: var(--accent-light); color: var(--text-color); border: 1px solid rgba(99, 102, 241, 0.2); border-bottom-right-radius: 2px; }
+        .emcs-received { align-self: flex-start; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--card-border); border-bottom-left-radius: 2px; animation: bubbleSlideRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .emcs-sent { align-self: flex-end; background: var(--accent-light); color: var(--text-color); border: 1px solid rgba(99, 102, 241, 0.2); border-bottom-right-radius: 2px; animation: bubbleSlideLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        
         .emcs-input-bar { background: var(--card-bg); padding: 15px 20px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--card-border); }
-        .emcs-send-btn { width: 45px; height: 45px; border-radius: 12px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.1rem; }
+        .emcs-send-btn { width: 45px; height: 45px; border-radius: 12px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.1rem; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .emcs-send-btn:hover { transform: scale(1.08); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); }
 
         .mobile-top-bar { display: none; }
-        .drawer-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 999; }
+        .drawer-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 999; backdrop-filter: blur(2px); transition: opacity 0.3s ease; }
         @media (max-width: 920px) {
             .mobile-top-bar { display: flex; position: fixed; top: 0; left: 0; width: 100vw; height: 60px; background: var(--card-bg); border-bottom: 1px solid var(--card-border); padding: 0 16px; align-items: center; justify-content: space-between; z-index: 998; }
             body { padding-top: 60px; flex-direction: column; }
-            .sidebar { left: -290px; transition: left 0.3s ease; box-shadow: 10px 0 25px rgba(0,0,0,0.25); }
+            .sidebar { left: -290px; transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 10px 0 25px rgba(0,0,0,0.25); }
             .sidebar.drawer-open { left: 0; }
             .main-content { margin-left: 0; width: 100%; padding: 1.1rem; }
             .grid-4, .grid-3, .grid-2, .admin-wa-container { grid-template-columns: 1fr; height: auto; }
@@ -242,9 +292,9 @@
     </nav>
 
     <div class="main-content">
-        <div id="systemBroadcastBanner" class="clean-card mb-2 p-2 flex-between hidden" style="background: rgba(99, 102, 241, 0.08); border: 1px dashed var(--primary);">
+        <div id="systemBroadcastBanner" class="clean-card mb-2 p-2 flex-between hidden" style="background: rgba(99, 102, 241, 0.08); border: 1px dashed var(--primary); animation: fadeUp 0.5s ease;">
             <div style="display:flex; align-items:center; gap: 10px;">
-                <i class="fa-solid fa-bullhorn text-primary"></i>
+                <i class="fa-solid fa-bullhorn text-primary hover-pop"></i>
                 <span id="systemBroadcastText" style="font-weight: 500; font-size: 0.9rem;"></span>
             </div>
             <button class="icon-btn borderless" onclick="document.getElementById('systemBroadcastBanner').classList.add('hidden')"><i class="fa-solid fa-xmark"></i></button>
@@ -288,11 +338,11 @@
                                     <p class="small-text" id="activeChatSub" style="margin:0;">Click a thread on the left</p>
                                 </div>
                                 <div id="singleChatActionBox" class="hidden">
-                                    <button class="sm-btn danger-bg" onclick="deleteSelectedConsumerChat()"><i class="fa-solid fa-trash"></i> Clear</button>
+                                    <button class="sm-btn danger-bg hover-pop" onclick="deleteSelectedConsumerChat()"><i class="fa-solid fa-trash"></i> Clear</button>
                                 </div>
                             </div>
                             <div class="emcs-chat-body" id="adminChatMsgArea" style="flex:1;">
-                                <div class="small-text text-center">Select a thread to review messages</div>
+                                <div class="small-text text-center" style="margin-top:auto; margin-bottom:auto;">Select a thread to review messages</div>
                             </div>
                             <div class="emcs-input-bar">
                                 <input type="text" id="adminChatInput" maxlength="500" placeholder="Type official response..." onkeypress="if(event.key==='Enter') sendAdminSupportMessage()">
@@ -307,7 +357,7 @@
                 <div class="clean-card">
                     <div class="flex-between mb-2">
                         <h3>Registered Accounts Registry</h3>
-                        <span class="badge light-green-bg">Total Active: <b id="adminUserCount">0</b></span>
+                        <span class="badge light-green-bg live-pulse">Total Active: <b id="adminUserCount">0</b></span>
                     </div>
                     <div class="table-container">
                         <table>
@@ -320,7 +370,7 @@
 
             <div id="adminStaffSubPane" class="admin-sub-pane hidden">
                 <div class="clean-card mb-3">
-                    <h3><i class="fa-solid fa-user-shield text-warning"></i> Provision Admin Staff Account</h3>
+                    <h3><i class="fa-solid fa-user-shield text-warning hover-pop"></i> Provision Admin Staff Account</h3>
                     <div class="grid-3 mt-2 mb-2">
                         <input type="text" id="staffNewName" placeholder="Staff Full Name">
                         <input type="text" id="staffNewUser" placeholder="Username">
@@ -345,7 +395,7 @@
 
             <div id="adminCmsSubPane" class="admin-sub-pane hidden">
                 <div class="clean-card">
-                    <h3><i class="fa-solid fa-pen-to-square text-primary"></i> Portal CMS & Knowledge Base</h3>
+                    <h3><i class="fa-solid fa-pen-to-square text-primary hover-pop"></i> Portal CMS & Knowledge Base</h3>
                     <div class="form-group mt-2">
                         <label>Global Notification Broadcast</label>
                         <input type="text" id="cmsBroadcastInput" placeholder="e.g. Scheduled maintenance update">
@@ -377,7 +427,7 @@
                 <div class="clean-card">
                     <div class="flex-between mb-2">
                         <div>
-                            <h3><i class="fa-solid fa-triangle-exclamation danger-text"></i> System Error Telemetry</h3>
+                            <h3><i class="fa-solid fa-triangle-exclamation danger-text hover-pop"></i> System Error Telemetry</h3>
                             <p class="small-text">Encrypted application runtime error ledger.</p>
                         </div>
                         <div style="display:flex; gap:8px;">
@@ -399,7 +449,7 @@
         <section id="mainAppSection">
             <div class="flex-between mb-3">
                 <div>
-                    <h2 id="userGreeting" data-i18n="greetDefault">Energy Analytics Overview ☀️</h2>
+                    <h2 id="userGreeting" data-i18n="greetDefault" style="animation: fadeUp 0.5s ease;">Energy Analytics Overview ☀️</h2>
                     <p class="small-text" data-i18n="greetSub">Monitor and optimize your daily energy consumption securely.</p>
                 </div>
                 <div style="display:flex; gap:10px; align-items:center;">
@@ -410,7 +460,7 @@
                 </div>
             </div>
 
-            <div id="mdiOverloadBanner" class="clean-card mb-2 p-2 flex-between hidden" style="border: 2px solid var(--danger); background: rgba(239, 68, 68, 0.08);">
+            <div id="mdiOverloadBanner" class="clean-card mb-2 p-2 flex-between hidden" style="border: 2px solid var(--danger); background: rgba(239, 68, 68, 0.08); animation: livePulse 1s infinite alternate;">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <i class="fa-solid fa-bolt text-danger" style="font-size:1.5rem;"></i>
                     <div>
@@ -418,15 +468,15 @@
                         <p class="small-text">Active appliance wattage exceeds safe threshold limit.</p>
                     </div>
                 </div>
-                <button class="danger-btn sm-btn" onclick="executeHeavyApplianceCutoff()">Cut Heavy Load</button>
+                <button class="danger-btn sm-btn hover-pop" onclick="executeHeavyApplianceCutoff()">Cut Heavy Load</button>
             </div>
 
-            <div id="budgetAlertBanner" class="clean-card mb-2 p-2 flex-between hidden" style="border: 1px solid var(--danger); background: rgba(239, 68, 68, 0.06);">
+            <div id="budgetAlertBanner" class="clean-card mb-2 p-2 flex-between hidden" style="border: 1px solid var(--danger); background: rgba(239, 68, 68, 0.06); animation: fadeUp 0.4s ease;">
                 <div>
                     <strong class="danger-text">Monthly Budget Target Exceeded!</strong>
                     <p class="small-text">Projected billing has crossed your custom ceiling threshold.</p>
                 </div>
-                <button class="danger-btn sm-btn" onclick="promptSetBudget()">Update Budget</button>
+                <button class="danger-btn sm-btn hover-pop" onclick="promptSetBudget()">Update Budget</button>
             </div>
 
             <!-- TAB 1: DASHBOARD -->
@@ -434,14 +484,14 @@
                 <div class="clean-card mb-3 p-3" style="border-left: 4px solid var(--primary);">
                     <div class="flex-between mb-2">
                         <div>
-                            <h4 style="margin:0;"><i class="fa-solid fa-bolt text-primary"></i> Tariff & Calculation Engine</h4>
+                            <h4 style="margin:0;"><i class="fa-solid fa-bolt text-primary hover-pop"></i> Tariff & Calculation Engine</h4>
                             <p class="small-text">Multi-utility rate slabs, fixed demand, and tax computation</p>
                         </div>
                         <div style="display:flex; gap:10px; align-items:center;">
                             <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:600; cursor:pointer;">
                                 <input type="checkbox" id="includeFppcaToggle" checked onchange="renderAppliances()" style="width:auto;"> Include Surcharges
                             </label>
-                            <button type="button" class="sm-btn" style="background:var(--primary); color:#fff;" onclick="toggleCustomTariffModal()">
+                            <button type="button" class="sm-btn hover-pop" style="background:var(--primary); color:#fff;" onclick="toggleCustomTariffModal()">
                                 <i class="fa-solid fa-sliders"></i> Custom Rate
                             </button>
                         </div>
@@ -503,35 +553,35 @@
                 </div>
 
                 <div class="grid-4 mb-3">
-                    <div class="clean-card p-2">
+                    <div class="clean-card p-2" style="animation-delay: 0.1s;">
                         <p class="card-label">Active Monthly Load</p>
                         <h2 id="dashLoadDisplay" class="text-primary">0.0 kWh</h2>
-                        <span class="badge light-green-bg mt-1">Live Draw: <b id="liveWattsDisplay">0 W</b></span>
+                        <span class="badge light-green-bg live-pulse mt-1">Live Draw: <b id="liveWattsDisplay">0 W</b></span>
                     </div>
-                    <div class="clean-card p-2">
+                    <div class="clean-card p-2" style="animation-delay: 0.2s;">
                         <p class="card-label">Efficiency Index</p>
                         <h2 id="ecoScoreDisplay" class="green-text">94%</h2>
                         <span class="badge light-green-bg mt-1">Optimized</span>
                     </div>
-                    <div class="clean-card p-2" style="border-left: 3px solid var(--danger);">
+                    <div class="clean-card p-2" style="border-left: 3px solid var(--danger); animation-delay: 0.3s;">
                         <p class="card-label">Estimated Monthly Bill</p>
                         <div class="flex-between">
                             <h2 id="dashBillDisplay" class="danger-text">₹0</h2>
-                            <button class="primary-btn sm-btn" style="padding:4px 10px;" onclick="showFeature('payment', null)">Pay</button>
+                            <button class="primary-btn sm-btn hover-pop" style="padding:4px 10px;" onclick="showFeature('payment', null)">Pay</button>
                         </div>
                         <span class="badge light-red-bg mt-1">Slabs + Taxes</span>
                     </div>
-                    <div class="clean-card p-2" style="border-left: 3px solid var(--accent);">
+                    <div class="clean-card p-2" style="border-left: 3px solid var(--accent); animation-delay: 0.4s;">
                         <p class="card-label">Standby Waste</p>
                         <h2 id="vampireDisplay" class="text-accent">₹0</h2>
                         <span class="badge light-red-bg mt-1">Phantom Load</span>
                     </div>
                 </div>
 
-                <div class="clean-card mb-3" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));">
+                <div class="clean-card mb-3" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05)); animation-delay: 0.5s;">
                     <div class="flex-between">
                         <div>
-                            <h4><i class="fa-solid fa-chart-line text-primary"></i> Billing Forecast</h4>
+                            <h4><i class="fa-solid fa-chart-line text-primary hover-pop"></i> Billing Forecast</h4>
                             <p class="small-text">Projected estimate based on current running profiles</p>
                         </div>
                         <div class="text-right">
@@ -541,12 +591,12 @@
                     </div>
                 </div>
 
-                <div class="clean-card">
+                <div class="clean-card" style="animation-delay: 0.6s;">
                     <div class="flex-between mb-2">
-                        <h3><i class="fa-solid fa-chart-area text-primary"></i> Daily Energy Consumption Trend</h3>
+                        <h3><i class="fa-solid fa-chart-area text-primary hover-pop"></i> Daily Energy Consumption Trend</h3>
                         <div style="display:flex; gap:6px;">
-                            <button class="sm-btn" style="background:var(--primary);" onclick="setChartMode('line')">Curve</button>
-                            <button class="sm-btn" style="background:#64748B;" onclick="setChartMode('bar')">Bar</button>
+                            <button class="sm-btn hover-pop" style="background:var(--primary);" onclick="setChartMode('line')">Curve</button>
+                            <button class="sm-btn hover-pop" style="background:#64748B;" onclick="setChartMode('bar')">Bar</button>
                         </div>
                     </div>
                     <div style="height: 310px; position: relative;"><canvas id="energyChart"></canvas></div>
@@ -556,7 +606,7 @@
             <!-- TAB 2: APPLIANCES (1. Add Form -> 2. List -> 3. Flowchart & Hackathon Graphs) -->
             <div id="appliances" class="feature-content hidden">
                 <div class="clean-card mb-3">
-                    <h3><i class="fa-solid fa-plug-circle-plus text-primary"></i> Appliance Setup & Profiler</h3>
+                    <h3><i class="fa-solid fa-plug-circle-plus text-primary hover-pop"></i> Appliance Setup & Profiler</h3>
                     <div class="form-group mt-2">
                         <label>Quick Preset Options</label>
                         <select id="presetSelect" onchange="applyPreset(this.value)">
@@ -580,7 +630,7 @@
                 </div>
 
                 <div class="clean-card mb-3">
-                    <h4><i class="fa-solid fa-list-check text-primary"></i> Connected Nodes</h4>
+                    <h4><i class="fa-solid fa-list-check text-primary hover-pop"></i> Connected Nodes</h4>
                     <div class="table-container">
                         <table>
                             <thead><tr><th>Name</th><th>Watts</th><th>Daily Usage</th><th>Monthly Units</th><th>Status</th><th>Est. Cost</th><th>Action</th></tr></thead>
@@ -591,8 +641,8 @@
 
                 <div class="clean-card mb-3">
                     <div class="flex-between mb-2">
-                        <h4><i class="fa-solid fa-diagram-project text-primary"></i> Live Power Distribution Flowchart</h4>
-                        <span class="badge light-green-bg" id="flowTotalWattsBadge">Active Draw: 0 W</span>
+                        <h4><i class="fa-solid fa-diagram-project text-primary hover-pop"></i> Live Power Distribution Flowchart</h4>
+                        <span class="badge light-green-bg live-pulse" id="flowTotalWattsBadge">Active Draw: 0 W</span>
                     </div>
                     <div id="applianceFlowchartContainer" style="padding: 18px; background: var(--bg-color); border-radius: 12px; border: 1px dashed var(--card-border); overflow-x: auto;"></div>
                 </div>
@@ -600,16 +650,16 @@
                 <div class="grid-2">
                     <div class="clean-card">
                         <div class="flex-between mb-2">
-                            <h4><i class="fa-solid fa-chart-area text-primary"></i> Flowgraph Analysis</h4>
+                            <h4><i class="fa-solid fa-chart-area text-primary hover-pop"></i> Flowgraph Analysis</h4>
                             <div style="display:flex; gap:6px;">
-                                <button type="button" class="sm-btn" id="appFlowBtn" style="background:var(--primary);" onclick="setAppChartMode('line')">Flow Curve</button>
-                                <button type="button" class="sm-btn" id="appBarBtn" style="background:#64748B;" onclick="setAppChartMode('bar')">2D Bar</button>
+                                <button type="button" class="sm-btn hover-pop" id="appFlowBtn" style="background:var(--primary);" onclick="setAppChartMode('line')">Flow Curve</button>
+                                <button type="button" class="sm-btn hover-pop" id="appBarBtn" style="background:#64748B;" onclick="setAppChartMode('bar')">2D Bar</button>
                             </div>
                         </div>
                         <div style="height: 290px; position: relative;"><canvas id="applianceCompChart"></canvas></div>
                     </div>
                     <div class="clean-card">
-                        <h4 class="mb-2"><i class="fa-solid fa-chart-pie text-primary"></i> Load Share Breakdown</h4>
+                        <h4 class="mb-2"><i class="fa-solid fa-chart-pie text-primary hover-pop"></i> Load Share Breakdown</h4>
                         <div style="height: 290px; position: relative;"><canvas id="pieChart"></canvas></div>
                     </div>
                 </div>
@@ -619,26 +669,26 @@
             <div id="gridSafety" class="feature-content hidden">
                 <div class="clean-card" style="max-width:780px; margin:0 auto;">
                     <div class="flex-between mb-2">
-                        <h3><i class="fa-solid fa-gauge-high text-warning"></i> Voltage & Surge Guard</h3>
-                        <span class="badge light-green-bg" id="voltageHealthBadge">228 V • Normal</span>
+                        <h3><i class="fa-solid fa-gauge-high text-warning hover-pop"></i> Voltage & Surge Guard</h3>
+                        <span class="badge light-green-bg live-pulse" id="voltageHealthBadge">228 V • Normal</span>
                     </div>
                     <p class="small-text mb-3">Protects sensitive compressors by isolating heavy circuits during brownouts (&lt;180V) or voltage surges (&gt;260V).</p>
                     <div class="p-3 text-center" style="background:var(--bg-color); border-radius:12px;">
-                        <h1 id="liveVoltageMetric" style="font-size:3rem; color:var(--primary);">228 V</h1>
+                        <h1 id="liveVoltageMetric" style="font-size:3rem; color:var(--primary); transition: color 0.3s ease;">228 V</h1>
                         <div style="display:flex; gap:10px; justify-content:center; margin-top:12px; flex-wrap:wrap;">
-                            <button class="sm-btn" style="background:#10B981;" onclick="simulateGridVoltage(226)">Normal Grid (226V)</button>
-                            <button class="sm-btn" style="background:#F59E0B;" onclick="simulateGridVoltage(168)">Simulate Brownout (168V)</button>
-                            <button class="sm-btn" style="background:#EF4444;" onclick="simulateGridVoltage(278)">Simulate Surge (278V)</button>
+                            <button class="sm-btn hover-pop" style="background:#10B981; color:#fff;" onclick="simulateGridVoltage(226)">Normal Grid (226V)</button>
+                            <button class="sm-btn hover-pop" style="background:#F59E0B; color:#fff;" onclick="simulateGridVoltage(168)">Simulate Brownout (168V)</button>
+                            <button class="sm-btn hover-pop" style="background:#EF4444; color:#fff;" onclick="simulateGridVoltage(278)">Simulate Surge (278V)</button>
                         </div>
                     </div>
-                    <div id="voltageAlertBox" class="p-2 mt-2 hidden text-center" style="border-radius:8px; font-weight:600;"></div>
+                    <div id="voltageAlertBox" class="p-2 mt-2 hidden text-center" style="border-radius:8px; font-weight:600; animation: fadeUp 0.3s ease;"></div>
                 </div>
             </div>
 
             <!-- TAB 4: INVERTER BACKUP -->
             <div id="inverterAssistant" class="feature-content hidden">
                 <div class="clean-card" style="max-width:780px; margin:0 auto; border-left:4px solid var(--warning);">
-                    <h3><i class="fa-solid fa-car-battery text-warning"></i> Inverter Backup Calculator</h3>
+                    <h3><i class="fa-solid fa-car-battery text-warning hover-pop"></i> Inverter Backup Calculator</h3>
                     <p class="small-text mb-3">Compute exact backup runtime based on battery Ah and active load.</p>
                     <div class="grid-3">
                         <div class="form-group"><label>Battery Capacity (Ah)</label><input type="number" id="invBatteryAh" value="150" min="10" max="2000" oninput="calculateInverterRuntime()"></div>
@@ -659,7 +709,7 @@
                     </div>
                     <div class="mt-3 p-3 text-center" style="background:var(--accent-light); border-radius:12px;">
                         <p class="small-text" style="color:var(--primary); font-weight:600;">Estimated Backup Runtime</p>
-                        <h1 class="text-primary m-0" id="inverterRuntimeOutput" style="font-size:2.5rem;">-- Hrs -- Min</h1>
+                        <h1 class="text-primary m-0" id="inverterRuntimeOutput" style="font-size:2.5rem; transition: all 0.3s ease;">-- Hrs -- Min</h1>
                     </div>
                 </div>
             </div>
@@ -668,15 +718,15 @@
             <div id="vampireCheck" class="feature-content hidden">
                 <div class="clean-card" style="max-width:720px; margin:0 auto;">
                     <div class="flex-between mb-2">
-                        <h3><i class="fa-solid fa-shield-virus text-danger"></i> Standby (Vampire) Power Audit</h3>
+                        <h3><i class="fa-solid fa-shield-virus text-danger hover-pop"></i> Standby (Vampire) Power Audit</h3>
                         <span class="badge light-green-bg" id="vampireTotalSavedBadge">Saved: ₹0/mo</span>
                     </div>
                     <p class="small-text mb-3">Eliminate phantom wall drain from idle devices.</p>
-                    <div class="flex-between p-2 mb-2" style="background:var(--bg-color); border-radius:10px;">
+                    <div class="flex-between p-2 mb-2" style="background:var(--bg-color); border-radius:10px; transition: transform 0.2s ease;">
                         <div><strong>Unplug Microwave & Induction</strong><p class="small-text">Saves continuous display LED drain</p></div>
                         <label class="switch"><input type="checkbox" onchange="toggleVampireItem(45, this)"><span class="slider"></span></label>
                     </div>
-                    <div class="flex-between p-2 mb-2" style="background:var(--bg-color); border-radius:10px;">
+                    <div class="flex-between p-2 mb-2" style="background:var(--bg-color); border-radius:10px; transition: transform 0.2s ease;">
                         <div><strong>Turn off TV & Set-Top Box wall switch</strong><p class="small-text">Saves standby receiver draw</p></div>
                         <label class="switch"><input type="checkbox" onchange="toggleVampireItem(85, this)"><span class="slider"></span></label>
                     </div>
@@ -686,14 +736,14 @@
             <!-- TAB 6: BILL OCR SCANNER -->
             <div id="ocrScanner" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-file-arrow-up text-primary"></i> Electricity Bill OCR Scanner</h3>
+                    <h3><i class="fa-solid fa-file-arrow-up text-primary hover-pop"></i> Electricity Bill OCR Scanner</h3>
                     <p class="small-text mb-2">Upload a physical bill image (JPG/PNG/WebP under 4MB) to extract units automatically.</p>
-                    <input type="file" id="billImageInput" accept="image/jpeg,image/png,image/webp" class="mb-2">
+                    <input type="file" id="billImageInput" accept="image/jpeg,image/png,image/webp" class="mb-2" style="padding: 6px;">
                     <button class="primary-btn" onclick="processBillOcr()"><i class="fa-solid fa-wand-magic-sparkles"></i> Scan Bill Image</button>
-                    <div id="ocrLoader" class="hidden text-center mt-2"><i class="fa-solid fa-spinner fa-spin text-primary"></i> Processing image...</div>
-                    <div id="ocrResultBox" class="hidden mt-2 p-2" style="background:var(--accent-light); border-radius:10px;">
+                    <div id="ocrLoader" class="hidden text-center mt-2"><i class="fa-solid fa-spinner fa-spin text-primary"></i> Processing secure image stream...</div>
+                    <div id="ocrResultBox" class="hidden mt-2 p-2" style="background:var(--accent-light); border-radius:10px; animation: fadeUp 0.4s ease;">
                         <p><b>Consumer ID:</b> <span id="ocrConsumerId">—</span> | <b>Units Read:</b> <span id="ocrUnits">—</span> kWh | <b>Est Bill:</b> <span id="ocrAmount">—</span></p>
-                        <button class="primary-btn sm-btn mt-2" onclick="applyOcrToSimulator()">Load Into Simulator</button>
+                        <button class="primary-btn sm-btn mt-2 hover-pop" onclick="applyOcrToSimulator()">Load Into Simulator</button>
                     </div>
                 </div>
             </div>
@@ -701,13 +751,13 @@
             <!-- TAB 7: SMART METER CSV -->
             <div id="smartMeterCsv" class="feature-content hidden">
                 <div class="clean-card" style="max-width:700px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-file-csv green-text"></i> Smart Meter CSV Analyzer</h3>
+                    <h3><i class="fa-solid fa-file-csv green-text hover-pop"></i> Smart Meter CSV Analyzer</h3>
                     <p class="small-text mb-2">Upload interval logs (.csv or .txt under 2MB) exported from utility smart meters.</p>
-                    <input type="file" id="meterCsvInput" accept=".csv,.txt" onchange="handleSmartMeterCsv(event)">
+                    <input type="file" id="meterCsvInput" accept=".csv,.txt" onchange="handleSmartMeterCsv(event)" style="padding: 6px;">
                     <div id="csvSummaryBox" class="hidden mt-3 grid-3 text-center">
-                        <div class="p-2 clean-card"><p class="small-text">Total Consumption</p><h3 class="text-primary" id="csvTotalKwh">0 kWh</h3></div>
-                        <div class="p-2 clean-card"><p class="small-text">Peak Draw</p><h3 class="danger-text" id="csvPeakHour">--</h3></div>
-                        <div class="p-2 clean-card"><p class="small-text">Daily Average</p><h3 class="green-text" id="csvAvgDaily">0 kWh</h3></div>
+                        <div class="p-2 clean-card" style="animation: fadeUp 0.3s ease;"><p class="small-text">Total Consumption</p><h3 class="text-primary" id="csvTotalKwh">0 kWh</h3></div>
+                        <div class="p-2 clean-card" style="animation: fadeUp 0.4s ease;"><p class="small-text">Peak Draw</p><h3 class="danger-text" id="csvPeakHour">--</h3></div>
+                        <div class="p-2 clean-card" style="animation: fadeUp 0.5s ease;"><p class="small-text">Daily Average</p><h3 class="green-text" id="csvAvgDaily">0 kWh</h3></div>
                     </div>
                 </div>
             </div>
@@ -715,20 +765,20 @@
             <!-- TAB 8: TOD OPTIMIZER -->
             <div id="todOptimizer" class="feature-content hidden">
                 <div class="clean-card" style="max-width:780px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-clock-rotate-left text-primary"></i> ToD Smart Tariff Optimizer</h3>
+                    <h3><i class="fa-solid fa-clock-rotate-left text-primary hover-pop"></i> ToD Smart Tariff Optimizer</h3>
                     <p class="small-text mb-2">Shift heavy appliance execution to solar off-peak hours.</p>
                     <div class="grid-3 mt-2 text-center">
-                        <div class="p-2 clean-card" style="border-top:4px solid #10B981;">
+                        <div class="p-2 clean-card" style="border-top:4px solid #10B981; transition: transform 0.2s ease;">
                             <span class="badge light-green-bg">10 AM - 3 PM (Solar)</span>
                             <h3 class="green-text mt-1">-20% Rebate</h3>
                             <p class="small-text">Ideal for Washing Machine & Geyser</p>
                         </div>
-                        <div class="p-2 clean-card" style="border-top:4px solid #6366F1;">
+                        <div class="p-2 clean-card" style="border-top:4px solid #6366F1; transition: transform 0.2s ease;">
                             <span class="badge" style="background:var(--accent-light); color:var(--primary);">Normal Hours</span>
                             <h3 class="text-primary mt-1">Standard Rate</h3>
                             <p class="small-text">Regular household operation</p>
                         </div>
-                        <div class="p-2 clean-card" style="border-top:4px solid #EF4444;">
+                        <div class="p-2 clean-card" style="border-top:4px solid #EF4444; transition: transform 0.2s ease;">
                             <span class="badge light-red-bg">6 PM - 10 PM (Peak)</span>
                             <h3 class="danger-text mt-1">+20% Tariff</h3>
                             <p class="small-text">Minimize heavy load usage</p>
@@ -740,7 +790,7 @@
             <!-- TAB 9: SOLAR ROI -->
             <div id="solarRoi" class="feature-content hidden">
                 <div class="clean-card" style="max-width:780px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-sun text-warning"></i> Solar Rooftop Sizing & Subsidy Estimator</h3>
+                    <h3><i class="fa-solid fa-sun text-warning hover-pop"></i> Solar Rooftop Sizing & Subsidy Estimator</h3>
                     <div class="grid-2 mt-2 mb-2">
                         <div class="form-group"><label>Monthly Consumption (kWh)</label><input type="number" id="solarInputUnits" value="300" oninput="calculateSolarRoi()"></div>
                         <div class="form-group"><label>Available Roof Area (Sq.Ft)</label><input type="number" id="solarInputArea" value="250" oninput="calculateSolarRoi()"></div>
@@ -758,14 +808,14 @@
             <div id="iotControl" class="feature-content hidden">
                 <div class="clean-card" style="max-width:850px; margin:0 auto;">
                     <div class="flex-between mb-2">
-                        <h3><i class="fa-solid fa-microchip text-primary"></i> Hardware Relay Control</h3>
-                        <span class="badge light-green-bg" id="hardwareConnectionBadge">Ready</span>
+                        <h3><i class="fa-solid fa-microchip text-primary hover-pop"></i> Hardware Relay Control</h3>
+                        <span class="badge light-green-bg live-pulse" id="hardwareConnectionBadge">Ready</span>
                     </div>
                     <div class="grid-2 mb-3">
                         <div class="p-2 clean-card text-center">
                             <h4>USB Serial Link</h4>
                             <p class="small-text mb-2">Direct microcontroller cable connection</p>
-                            <button class="primary-btn sm-btn" onclick="connectSerialHardware()"><i class="fa-solid fa-link"></i> Connect USB</button>
+                            <button class="primary-btn sm-btn hover-pop" onclick="connectSerialHardware()"><i class="fa-solid fa-link"></i> Connect USB</button>
                         </div>
                         <div class="p-2 clean-card text-center">
                             <h4>Secure Local Wi-Fi Gateway</h4>
@@ -794,12 +844,12 @@
                     <div class="clean-card">
                         <div class="flex-between mb-2">
                             <h3>Carbon Footprint & Export</h3>
-                            <button class="primary-btn sm-btn" style="background:#10B981;" onclick="exportYearlyExcel()"><i class="fa-solid fa-file-excel"></i> Export CSV</button>
+                            <button class="primary-btn sm-btn hover-pop" style="background:#10B981;" onclick="exportYearlyExcel()"><i class="fa-solid fa-file-excel"></i> Export CSV</button>
                         </div>
                         <p class="mb-1">Monthly Load: <b id="autoAuditUnits" class="text-primary">0.0 kWh</b></p>
                         <p class="mb-1">Est. Bill: <b id="autoAuditBill" class="danger-text">₹0.00</b></p>
                         <p class="mb-2">Carbon Emissions: <b id="autoAuditCarbon" class="green-text">0.0 kg CO2</b></p>
-                        <button class="primary-btn sm-btn" onclick="downloadInvoicePDF()"><i class="fa-solid fa-file-pdf"></i> Download PDF Summary</button>
+                        <button class="primary-btn sm-btn hover-pop" onclick="downloadInvoicePDF()"><i class="fa-solid fa-file-pdf"></i> Download PDF Summary</button>
                     </div>
                     <div class="clean-card">
                         <h3>Settlement Ledger</h3>
@@ -816,14 +866,14 @@
             <!-- TAB 12: SAVINGS SIMULATOR -->
             <div id="simulator" class="feature-content hidden">
                 <div class="clean-card text-center" style="max-width:650px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-sliders text-primary"></i> Monthly Savings Simulator</h3>
+                    <h3><i class="fa-solid fa-sliders text-primary hover-pop"></i> Monthly Savings Simulator</h3>
                     <div class="grid-2 text-left mt-2">
                         <div class="form-group"><label>Monthly Units (kWh)</label><input type="number" id="simUserUnits" value="300" oninput="calculateSimulator()"></div>
                         <div class="form-group"><label>Average Rate (₹/Unit)</label><input type="number" id="simUserRate" value="7.5" oninput="calculateSimulator()"></div>
                     </div>
                     <div class="p-2 mt-2" style="background:var(--bg-color); border-radius:10px;">
                         <label>Reduction Target: <b id="simPctVal" class="text-primary">15</b>%</label>
-                        <input type="range" id="simSlider" min="5" max="50" value="15" oninput="calculateSimulator()" class="mt-1">
+                        <input type="range" id="simSlider" min="5" max="50" value="15" oninput="calculateSimulator()" class="mt-1" style="cursor: pointer;">
                     </div>
                     <div class="grid-2 mt-2">
                         <div class="p-2 clean-card"><p class="small-text">Units Saved</p><h2 class="green-text" id="simUnitsResult">45 kWh</h2></div>
@@ -835,11 +885,11 @@
             <!-- TAB 13: BILL SETTLEMENT -->
             <div id="payment" class="feature-content hidden">
                 <div class="clean-card text-center" style="max-width:480px; margin:0 auto; padding:2.2rem;">
-                    <i class="fa-solid fa-file-invoice-dollar text-primary" style="font-size:3rem;"></i>
+                    <i class="fa-solid fa-file-invoice-dollar text-primary hover-pop" style="font-size:3rem; margin-bottom: 10px;"></i>
                     <h3 class="mt-2">Bill Settlement</h3>
                     <p class="small-text mb-2">Computed according to active tariff rules</p>
-                    <h1 class="text-primary mb-3" id="paymentTabAmount" style="font-size:2.8rem;">₹0.00</h1>
-                    <button class="primary-btn" onclick="executeRealPayment()"><i class="fa-solid fa-shield-halved"></i> Authorize & Settle Bill</button>
+                    <h1 class="text-primary mb-3" id="paymentTabAmount" style="font-size:2.8rem; transition: transform 0.2s ease;">₹0.00</h1>
+                    <button class="primary-btn hover-pop" onclick="executeRealPayment()"><i class="fa-solid fa-shield-halved"></i> Authorize & Settle Bill</button>
                 </div>
             </div>
 
@@ -869,25 +919,25 @@
             <!-- TAB 15: PROFILE & SECURITY -->
             <div id="profile" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-user-shield text-primary"></i> Account Settings & Security</h3>
+                    <h3><i class="fa-solid fa-user-shield text-primary hover-pop"></i> Account Settings & Security</h3>
                     <div class="p-2 mb-3 flex-between mt-2" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
                         <div>
                             <strong><i class="fa-solid fa-laptop-mobile text-primary"></i> Active Sessions</strong>
                             <p class="small-text">Manage authorized client devices securely.</p>
                         </div>
-                        <button class="secondary-btn sm-btn" onclick="openDeviceManager()">Manage Devices</button>
+                        <button class="secondary-btn sm-btn hover-pop" onclick="openDeviceManager()">Manage Devices</button>
                     </div>
 
                     <div class="form-group"><label>Consumer Full Name</label><input type="text" id="profileName" placeholder="Enter Full Name"></div>
-                    <div class="form-group"><label>Consumer ID</label><input type="text" id="profileId" readonly></div>
-                    <button class="primary-btn" onclick="saveUserProfile()"><i class="fa-solid fa-floppy-disk"></i> Save & Sync</button>
+                    <div class="form-group"><label>Consumer ID</label><input type="text" id="profileId" readonly style="opacity: 0.7;"></div>
+                    <button class="primary-btn hover-pop" onclick="saveUserProfile()"><i class="fa-solid fa-floppy-disk"></i> Save & Sync</button>
                     <p id="profileMsg" class="green-text text-center mt-2"></p>
 
                     <hr style="border:0; border-top:1px solid var(--card-border); margin:20px 0;">
                     <div class="p-2" style="background:rgba(239, 68, 68, 0.06); border:1px solid rgba(239, 68, 68, 0.25); border-radius:10px;">
                         <strong class="danger-text"><i class="fa-solid fa-triangle-exclamation"></i> Deactivation & Retention Policy</strong>
                         <p class="small-text mt-1 mb-2">Deactivating your account logs out all endpoints. Data is retained in secure archives for 2 years prior to automatic purge.</p>
-                        <button type="button" class="danger-btn sm-btn" onclick="deleteMyAccount()"><i class="fa-solid fa-user-xmark"></i> Deactivate & Schedule Deletion</button>
+                        <button type="button" class="danger-btn sm-btn hover-pop" onclick="deleteMyAccount()"><i class="fa-solid fa-user-xmark"></i> Deactivate & Schedule Deletion</button>
                     </div>
                 </div>
             </div>
@@ -915,16 +965,16 @@
         </div>
         <div class="p-3" style="display:flex; flex-direction:column; height:62vh;">
             <div id="tabChatBox" style="flex:1; overflow-y:auto; background:var(--bg-color); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px; border: 1px solid var(--card-border);">
-                <div class="clean-card p-2" style="max-width:88%; align-self:flex-start;">
+                <div class="clean-card p-2" style="max-width:88%; align-self:flex-start; animation: bubbleSlideRight 0.3s ease;">
                     <p class="small-text" style="color:var(--text-color);">Namaste! I am your EMCS Ai Energy Assistant. How can I assist with your load management today?</p>
-                    <button class="sm-btn mt-1" style="background:var(--accent-light); color:var(--primary);" onclick="speakFemaleVoice('Namaste! I am your EMCS Ai Assistant. How can I assist with your energy optimization today?')">
+                    <button class="sm-btn mt-1 hover-pop" style="background:var(--accent-light); color:var(--primary);" onclick="speakFemaleVoice('Namaste! I am your EMCS Ai Assistant. How can I assist with your energy optimization today?')">
                         <i class="fa-solid fa-volume-high"></i> Listen
                     </button>
                 </div>
             </div>
             <div style="display:flex; gap:8px; margin-top:12px;">
                 <input type="text" id="tabChatInput" maxlength="500" placeholder="Ask questions or command..." onkeypress="if(event.key==='Enter') sendTabChatMessage()">
-                <button class="primary-btn sm-btn" onclick="sendTabChatMessage()"><i class="fa-solid fa-paper-plane"></i></button>
+                <button class="primary-btn sm-btn hover-pop" onclick="sendTabChatMessage()"><i class="fa-solid fa-paper-plane"></i></button>
             </div>
         </div>
     </div>
@@ -944,7 +994,7 @@
             </div>
 
             <!-- Login Form -->
-            <form id="modalLoginForm" onsubmit="handleSecureLogin(event)">
+            <form id="modalLoginForm" onsubmit="handleSecureLogin(event)" style="animation: fadeUp 0.3s ease;">
                 <div class="form-group">
                     <label>Mobile Number</label>
                     <input type="tel" id="loginMobile" pattern="[0-9]{10}" placeholder="Enter Your Mobile Number" required>
@@ -958,11 +1008,11 @@
                         </button>
                     </div>
                 </div>
-                <button type="submit" class="primary-btn">Authenticate & Sign In</button>
+                <button type="submit" class="primary-btn hover-pop">Authenticate & Sign In</button>
             </form>
 
             <!-- Register Form -->
-            <form id="modalRegisterForm" class="hidden" onsubmit="handleSecureRegister(event)">
+            <form id="modalRegisterForm" class="hidden" onsubmit="handleSecureRegister(event)" style="animation: fadeUp 0.3s ease;">
                 <input type="text" id="regHoneypot" name="_bot_honeypot" style="display:none;" tabindex="-1" autocomplete="off">
                 <div class="form-group"><label>Full Name</label><input type="text" id="regName" placeholder="Enter Your Full Name" required></div>
                 <div class="form-group">
@@ -988,11 +1038,11 @@
                         <span>I accept the <span class="legal-link" onclick="event.preventDefault(); openLegalModal('privacy')">Privacy Policy</span> and <span class="legal-link" onclick="event.preventDefault(); openLegalModal('terms')">Terms & Conditions</span>.</span>
                     </label>
                 </div>
-                <button type="submit" class="primary-btn">Create Secure Account</button>
+                <button type="submit" class="primary-btn hover-pop">Create Secure Account</button>
             </form>
 
             <!-- Forgot PIN Form -->
-            <form id="modalForgotForm" class="hidden" onsubmit="handleFreePinReset(event)">
+            <form id="modalForgotForm" class="hidden" onsubmit="handleFreePinReset(event)" style="animation: fadeUp 0.3s ease;">
                 <p class="small-text mb-2 text-primary"><b>PIN Recovery:</b> Match registered details to re-secure your access.</p>
                 <div class="form-group">
                     <label>Mobile Number</label>
@@ -1009,11 +1059,11 @@
                         </button>
                     </div>
                 </div>
-                <button type="submit" class="primary-btn">Reset PIN</button>
+                <button type="submit" class="primary-btn hover-pop">Reset PIN</button>
             </form>
 
             <!-- Admin Login Form -->
-            <form id="modalAdminForm" class="hidden" onsubmit="handleSecureAdminLogin(event)">
+            <form id="modalAdminForm" class="hidden" onsubmit="handleSecureAdminLogin(event)" style="animation: fadeUp 0.3s ease;">
                 <div class="form-group"><label>Staff Username (Blank for Owner)</label><input type="text" id="adminLoginUser" placeholder="Optional for Master Owner"></div>
                 <div class="form-group">
                     <label>Administrator Access Key</label>
@@ -1024,7 +1074,7 @@
                         </button>
                     </div>
                 </div>
-                <button type="submit" class="danger-btn">Open Secure Console</button>
+                <button type="submit" class="danger-btn hover-pop">Open Secure Console</button>
             </form>
 
             <div id="modalAuthError" class="error-text"></div>
@@ -1054,7 +1104,7 @@
                 <div class="form-group"><label>Slab 2 Rate</label><input type="number" id="custSlab2Rate" placeholder="7.00" step="0.05"></div>
             </div>
             <div class="form-group mb-3"><label>Above Slab 2 Rate</label><input type="number" id="custSlabFinalRate" placeholder="9.00" step="0.05"></div>
-            <button type="button" class="primary-btn w-100" onclick="saveCustomTariffSettings()"><i class="fa-solid fa-floppy-disk"></i> Save & Apply</button>
+            <button type="button" class="primary-btn w-100 hover-pop" onclick="saveCustomTariffSettings()"><i class="fa-solid fa-floppy-disk"></i> Save & Apply</button>
         </div>
     </div>
 
