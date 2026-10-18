@@ -18,6 +18,7 @@
 * **Smart Bill OCR Scanner:** Extracts consumer IDs and consumed units directly from paper bill images using Tesseract.js OCR.
 * **Smart Meter CSV Analyzer:** Parses granular hourly interval telemetry data for deep energy audits.
 * **Hardware Relay Control:** Dual-mode IoT control protected by time-stamped **SHA-256 HMAC signatures**.
+* **Multi-Language UI:** Seamlessly switch between **English**, **Hindi**, and **Hinglish** across the entire platform.
 
 ---
 
@@ -29,6 +30,8 @@ Audited and fortified against top-tier OWASP vulnerabilities:
 4. **Secrets Management:** Zero hardcoded credentials. All JWT keys and hardware secrets are injected dynamically via environment variables.
 5. **File Upload Security:** Magic-bytes (File Signature) validation, strict MIME-type checks, and 2MB/4MB file size caps.
 6. **Zero Information Leakage:** Generic client-facing error handling with an encrypted server-side system telemetry ledger for admin debugging.
+* **Legal & DPDP Act 2023 Compliance:** Embedded Privacy Policy and IoT hardware safety waivers with an automated 2-year data retention and erasure cycle.
+7. **Source File Exposure Protection:** Explicit Express.js routing blocks to prevent unauthorized browser access to `.env`, `server.js`, and source map files.
 
 ---
 
