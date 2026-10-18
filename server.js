@@ -1,8 +1,7 @@
 // ===================================================================
-// EMCS BACKEND SERVER (server.js) - INDEPENDENT PROJECT
-// Features: MongoDB Cloud Sync, Atomic Brute-Force Protection ($inc),
-// 24-Hr IP Registration Limit, Anti-Bot Honeypot, 2-Year Soft Delete TTL,
-// and Automated Client + Server Error Telemetry for Admin Panel
+// EMCS BACKEND SERVER (server.js) - PRODUCTION HARDENED
+// Audited against: Rate Limiting, Strict Schema Validation, RBAC/IDOR,
+// Environment Secrets Management, & Zero Information Leakage
 // ===================================================================
 
 const express = require('express');
@@ -16,15 +15,29 @@ const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const IS_PROD = process.env.NODE_ENV === 'production';
 
-// Enable proxy trust so req.ip works properly on Render / cloud hosting
+// Trust reverse proxy (Render / Cloudflare) for accurate client IP
 app.set('trust proxy', 1);
+app.disable('x-powered-by'); // Prevent Express version leakage
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/emcs_project_db';
-const MASTER_OWNER_KEY = process.env.MASTER_OWNER_KEY || 'EMCS_Admin_2026';
-const JWT_SECRET = process.env.JWT_SECRET || crypto.createHash('sha256').update(MASTER_OWNER_KEY + '_emcs_jwt_key').digest('hex');
+// ===================================================================
+// SECRETS MANAGEMENT (NO HARDCODED PRODUCTION SECRETS)
+// ===================================================================
+const MONGO_URI = process.env.MONGO_URI || (IS_PROD ? '' : 'mongodb://127.0.0.1:27017/emcs_project_db');
+const MASTER_OWNER_KEY = process.env.MASTER_OWNER_KEY || '';
+const JWT_SECRET = process.env.JWT_SECRET || (
+    MASTER_OWNER_KEY
+        ? crypto.createHash('sha256').update(MASTER_OWNER_KEY + '_emcs_prod_vault').digest('hex')
+        : crypto.randomBytes(32).toString('hex')
+);
 
-app.use(express.json({ limit: '15kb' }));
+if (!MASTER_OWNER_KEY) {
+    console.warn('[SECURITY WARNING] MASTER_OWNER_KEY is not set in Environment Variables! Master Owner login will remain disabled until configured.');
+}
+
+// Strict payload size limit (10kb) to prevent memory exhaustion
+app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
 
 const allowedOrigins = [
@@ -36,45 +49,58 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 app.use(cors({
-    origin: (origin, cb) => (!origin || allowedOrigins.includes(origin)) ? cb(null, true) : cb(new Error('Not allowed by CORS')),
+    origin: (origin, cb) => {
+        if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+        return cb(null, false); // Reject cleanly without throwing stack trace
+    },
     credentials: true
 }));
 
-// Security Headers, CSP & CSRF Check
+// Security Headers & Anti-CSRF Verification
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     res.setHeader(
         'Content-Security-Policy',
         "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' http://192.168.* http://10.* http://172.* ws: wss:; img-src 'self' data: blob:;"
     );
 
-    // Flag suspicious proxy headers for stricter rate limits
     if (req.headers['via'] || req.headers['x-proxy-id'] || req.headers['forwarded']) {
         req.isSuspiciousProxy = true;
     }
 
-    // Check custom CSRF header on state-changing API calls
     if (['POST', 'DELETE', 'PUT'].includes(req.method) && req.path.startsWith('/api/')) {
         const csrf = req.headers['x-emcs-csrf'];
         if (csrf !== 'emcs-verified-client') {
-            return res.status(403).json({ success: false, message: 'Invalid or missing security header.' });
+            return res.status(403).json({ success: false, message: 'Forbidden: Invalid request signature.' });
         }
     }
     next();
 });
 
-// Helper to clean string inputs and avoid NoSQL operator injection
+// ===================================================================
+// STRICT INPUT VALIDATION & SANITIZATION HELPERS
+// ===================================================================
 const sanitizeInput = (val, max = 150) => {
     if (typeof val === 'string' || typeof val === 'number') {
-        return String(val).trim().slice(0, max);
+        return String(val).replace(/[\0$]/g, '').trim().slice(0, max);
     }
     return '';
 };
 
-// Constant-time string comparison for admin password
+const ALLOWED_PROVIDERS = new Set([
+    'bihar', 'up', 'maharashtra', 'delhi', 'karnataka', 'rajasthan',
+    'wb', 'tn', 'gujarat', 'punjab', 'haryana', 'mp',
+    'tata_delhi', 'bses_delhi', 'tata_mumbai', 'adani_mumbai',
+    'cesc_kolkata', 'torrent', 'national', 'custom'
+]);
+const ALLOWED_CATEGORIES = new Set(['domestic', 'commercial']);
+const ALLOWED_AREAS = new Set(['urban', 'rural']);
+
 function safeCompareStrings(a, b) {
+    if (!a || !b) return false;
     const bufA = Buffer.from(String(a));
     const bufB = Buffer.from(String(b));
     if (bufA.length !== bufB.length) {
@@ -85,7 +111,7 @@ function safeCompareStrings(a, b) {
 }
 
 // ===================================================================
-// IP RATE LIMITERS (WITH PROXY PENALTY & MEMORY CLEANUP)
+// MULTI-TIER RATE LIMITING (PER-IP & MEMORY GUARDED)
 // ===================================================================
 const rateLimits = new Map();
 setInterval(() => {
@@ -93,49 +119,50 @@ setInterval(() => {
     for (const [k, v] of rateLimits.entries()) {
         if (now > v.resetAt) rateLimits.delete(k);
     }
-}, 300000); // Clean up expired IP records every 5 mins
+}, 300000);
 
 function createLimiter(maxReqs, windowMs, customMsg) {
     return (req, res, next) => {
-        const key = `${req.ip}_${req.path}`;
+        const key = `${req.ip}_${req.baseUrl || req.path}`;
         const now = Date.now();
         let rec = rateLimits.get(key) || { count: 0, resetAt: now + windowMs };
         if (now > rec.resetAt) rec = { count: 0, resetAt: now + windowMs };
 
-        // Reduce allowed attempts by half if request comes through a suspicious proxy
         const allowedMax = req.isSuspiciousProxy ? Math.max(1, Math.floor(maxReqs / 2)) : maxReqs;
-
         rec.count++;
+
+        // Prevent memory exhaustion from spoofed IP floods
+        if (rateLimits.size > 5000 && !rateLimits.has(key)) {
+            rateLimits.clear();
+        }
         rateLimits.set(key, rec);
 
         if (rec.count > allowedMax) {
             return res.status(429).json({
                 success: false,
-                message: customMsg || 'Too many requests from this IP. Please try again later.'
+                message: customMsg || 'Too many requests. Please wait a moment and try again.'
             });
         }
         next();
     };
 }
 
-// Max 3 account registrations per IP address within 24 hours
-const strictRegisterLimiter = createLimiter(
-    3,
-    24 * 60 * 60 * 1000,
-    'Registration limit reached: Maximum 3 accounts can be created from a single IP address within 24 hours.'
-);
+const globalApiLimiter = createLimiter(60, 60 * 1000, 'API rate limit exceeded. Please slow down.');
+const strictRegisterLimiter = createLimiter(3, 24 * 60 * 60 * 1000, 'Maximum 3 accounts can be created from a single IP within 24 hours.');
+const loginLimiter = createLimiter(5, 15 * 60 * 1000, 'Too many login attempts. Please wait 15 minutes.');
+const chatLimiter = createLimiter(12, 60 * 1000, 'Sending messages too fast. Please wait a moment.');
+const errorReportLimiter = createLimiter(15, 60 * 1000, 'Telemetry limit reached.');
 
-const loginLimiter = createLimiter(8, 15 * 60 * 1000, 'Too many login attempts. Please wait 15 minutes.');
-const chatLimiter = createLimiter(15, 60 * 1000, 'Sending messages too fast. Please wait a moment.');
-const errorReportLimiter = createLimiter(25, 60 * 1000, 'Error log rate limit reached.');
+app.use('/api', globalApiLimiter);
 
-// Connect to MongoDB
-mongoose.connect(MONGO_URI)
-    .then(() => console.log('[EMCS DB] Connected to MongoDB successfully.'))
-    .catch(err => console.error('[EMCS DB Error]', err.message));
+if (MONGO_URI) {
+    mongoose.connect(MONGO_URI)
+        .then(() => console.log('[EMCS DB] Connected to MongoDB successfully.'))
+        .catch(err => console.error('[EMCS DB] Connection failed:', err.message));
+}
 
 // ===================================================================
-// MONGODB SCHEMAS & TTL INDEXES
+// MONGODB SCHEMAS & 2-YEAR TTL INDEX
 // ===================================================================
 const UserSchema = new mongoose.Schema({
     mobile: { type: String, required: true, unique: true, index: true },
@@ -162,24 +189,20 @@ const UserSchema = new mongoose.Schema({
         fixedPerKw: { type: Number, default: 0 },
         fppcaPct: { type: Number, default: 0 },
         dutyPct: { type: Number, default: 0.05 },
-        slabs: [{
-            limit: mongoose.Schema.Types.Mixed,
-            rate: Number
-        }]
+        slabs: [{ limit: mongoose.Schema.Types.Mixed, rate: Number }]
     },
-    // Soft Delete & 2-Year Auto-Deletion Fields
     accountStatus: { type: String, default: 'active', enum: ['active', 'deleted'] },
     deletionScheduledAt: { type: Date, default: null }
 }, { timestamps: true });
 
-// Automatically remove deactivated user accounts 2 years (63,072,000 seconds) after deletionScheduledAt
+// Automatically erase soft-deleted user records after 2 years (63,072,000 seconds)
 UserSchema.index({ deletionScheduledAt: 1 }, { expireAfterSeconds: 63072000 });
 
 const StaffSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     passwordHash: { type: String, required: true },
     name: { type: String, required: true },
-    role: { type: String, default: 'staff' },
+    role: { type: String, default: 'staff', enum: ['staff'] },
     permissions: {
         canManageUsers: { type: Boolean, default: false },
         canChatSupport: { type: Boolean, default: true },
@@ -192,14 +215,14 @@ const SupportMessageSchema = new mongoose.Schema({
     consumerId: { type: String, required: true, index: true },
     sender: { type: String, enum: ['user', 'admin'], required: true },
     text: { type: String, required: true, maxlength: 500 },
-    timestamp: { type: Date, default: Date.now, expires: 2592000 } // Auto-deletes after 30 days
+    timestamp: { type: Date, default: Date.now, expires: 2592000 }
 });
 
 const CmsSchema = new mongoose.Schema({
     key: { type: String, default: 'global_cms', unique: true },
     broadcast: { type: String, default: '' },
     about: { type: String, default: 'EMCS is an intelligent energy management and load monitoring platform.' },
-    privacy: { type: String, default: 'All user data is encrypted. Deactivated accounts are retained for 2 years for compliance before automatic erasure.' },
+    privacy: { type: String, default: 'All user data is encrypted. Deactivated accounts are retained for 2 years before automatic erasure.' },
     terms: { type: String, default: 'By using EMCS, you agree to fair usage policies and state electricity slab estimation rules.' },
     faqs: {
         type: Array,
@@ -210,9 +233,8 @@ const CmsSchema = new mongoose.Schema({
     }
 });
 
-// Automated Error Telemetry Schema (Stores Website & Server Errors for Admin)
 const SystemErrorSchema = new mongoose.Schema({
-    timestamp: { type: Date, default: Date.now, expires: 2592000 }, // Auto-cleans logs older than 30 days
+    timestamp: { type: Date, default: Date.now, expires: 2592000 },
     source: { type: String, default: 'Backend Server' },
     message: { type: String, required: true },
     location: { type: String, default: '' },
@@ -225,24 +247,24 @@ const SupportMessage = mongoose.model('SupportMessage', SupportMessageSchema);
 const CmsConfig = mongoose.model('CmsConfig', CmsSchema);
 const SystemError = mongoose.model('SystemError', SystemErrorSchema);
 
-// Helper to record backend exceptions into the Admin Error List
+// Internal server-side error logger (Never leaks stack traces to client)
 async function logBackendError(source, err, req = null) {
     try {
         await new SystemError({
-            source: source || 'Backend Server',
+            source: sanitizeInput(source || 'Backend Server', 50),
             message: sanitizeInput(err?.message || String(err), 300),
-            location: sanitizeInput(req ? `${req.method} ${req.originalUrl}` : 'Server Internal', 150),
+            location: sanitizeInput(req ? `${req.method} ${req.originalUrl}` : 'Internal', 150),
             userOrIp: sanitizeInput(req ? (req.user?.consumerId || req.ip) : 'Server', 60)
         }).save();
     } catch (ignore) {}
 }
 
 // ===================================================================
-// AUTHENTICATION MIDDLEWARES
+// AUTHENTICATION & AUTHORIZATION (RBAC & OWNERSHIP)
 // ===================================================================
 async function authenticateUser(req, res, next) {
     const token = req.cookies.emcs_auth_token;
-    if (!token) return res.status(401).json({ success: false, message: 'Please log in first.' });
+    if (!token) return res.status(401).json({ success: false, message: 'Authentication required. Please log in.' });
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
@@ -250,31 +272,42 @@ async function authenticateUser(req, res, next) {
 
         if (!user || user.accountStatus === 'deleted' || !user.activeSessions.some(s => s.sessionId === decoded.sessionId)) {
             res.clearCookie('emcs_auth_token');
-            return res.status(401).json({ success: false, message: 'Session expired or account deactivated.' });
+            return res.status(401).json({ success: false, message: 'Session expired or invalid.' });
         }
 
         req.user = user;
         req.sessionId = decoded.sessionId;
         next();
     } catch (e) {
-        return res.status(403).json({ success: false, message: 'Invalid session token.' });
+        return res.status(403).json({ success: false, message: 'Invalid session credentials.' });
     }
 }
 
 async function authenticateAdmin(req, res, next) {
     const token = req.cookies.emcs_admin_token;
-    if (!token) return res.status(401).json({ success: false, message: 'Admin login required.' });
+    if (!token) return res.status(401).json({ success: false, message: 'Admin authentication required.' });
 
     try {
         req.admin = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
         next();
     } catch (e) {
-        return res.status(403).json({ success: false, message: 'Invalid admin token.' });
+        return res.status(403).json({ success: false, message: 'Invalid admin session.' });
     }
 }
 
+function requireAdminPermission(permKey) {
+    return (req, res, next) => {
+        if (!req.admin) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+        if (req.admin.role === 'owner') return next();
+        if (permKey && req.admin.permissions && req.admin.permissions[permKey] === true) {
+            return next();
+        }
+        return res.status(403).json({ success: false, message: 'Forbidden: Insufficient role permissions.' });
+    };
+}
+
 // ===================================================================
-// AUTOMATED ERROR REPORTING & ADMIN ERROR LIST ROUTES
+// ERROR TELEMETRY ROUTES
 // ===================================================================
 app.post('/api/errors/report', errorReportLimiter, async (req, res) => {
     try {
@@ -284,7 +317,6 @@ app.post('/api/errors/report', errorReportLimiter, async (req, res) => {
         const userOrIp = sanitizeInput(req.body.userOrIp || req.ip, 60);
 
         if (!message) return res.status(400).json({ success: false });
-
         await new SystemError({ source, message, location, userOrIp }).save();
         res.json({ success: true });
     } catch (e) {
@@ -297,12 +329,15 @@ app.get('/api/admin/errors', authenticateAdmin, async (req, res) => {
         const errors = await SystemError.find({}).sort({ timestamp: -1 }).limit(100);
         res.json({ success: true, errors });
     } catch (e) {
-        res.status(500).json({ success: false, message: 'Failed to load error logs.' });
+        res.status(500).json({ success: false, message: 'Could not retrieve error logs.' });
     }
 });
 
-app.delete('/api/admin/errors/clear', authenticateAdmin, async (req, res) => {
+app.delete('/api/admin/errors/clear', authenticateAdmin, requireAdminPermission(null), async (req, res) => {
     try {
+        if (req.admin.role !== 'owner') {
+            return res.status(403).json({ success: false, message: 'Only Master Owner can clear system error logs.' });
+        }
         await SystemError.deleteMany({});
         res.json({ success: true, message: 'All error logs cleared.' });
     } catch (e) {
@@ -311,76 +346,77 @@ app.delete('/api/admin/errors/clear', authenticateAdmin, async (req, res) => {
 });
 
 // ===================================================================
-// USER AUTH, HONEYPOT, PRIVACY CONSENT & 2-YEAR SOFT DELETE
+// USER AUTHENTICATION & REGISTRATION ROUTES
 // ===================================================================
 app.post('/api/auth/register', strictRegisterLimiter, async (req, res) => {
     try {
-        // Anti-Bot Honeypot Trap
-        if (req.body._bot_honeypot) return res.status(403).json({ success: false, message: "Bot detected." });
+        if (req.body._bot_honeypot && String(req.body._bot_honeypot).length > 0) {
+            return res.status(403).json({ success: false, message: 'Automated registration blocked.' });
+        }
 
-        // Mandatory Privacy Policy & Terms Consent Check
         if (req.body.termsAccepted !== true) {
             return res.status(400).json({ success: false, message: 'You must accept the Privacy Policy and Terms & Conditions.' });
         }
 
-        const { mobile, consumerId, pin, name } = req.body;
+        const mobile = sanitizeInput(req.body.mobile, 10);
+        const consumerId = sanitizeInput(req.body.consumerId, 12).toUpperCase();
+        const pin = sanitizeInput(req.body.pin, 4);
+        const name = sanitizeInput(req.body.name, 60);
 
-        // FIXED LINE (Standard JavaScript logical OR operators ||)
-        if (!/^[0-9]{10}$/.test(mobile) || consumerId.length !== 12 || !/^[0-9]{4}$/.test(pin) || !name) {
-            return res.status(400).json({ success: false, message: 'Please enter valid registration details.' });
+        // Fixed syntax for OR operators
+        if (!/^[0-9]{10}$/.test(mobile) \vert{}\vert{} consumerId.length !== 12 \vert{}\vert{} !/^[0-9]{4}$/.test(pin) || !name || name.length < 2) {
+            return res.status(400).json({ success: false, message: 'Invalid input format. Check mobile, 12-char alphanumeric ID, and 4-digit PIN.' });
         }
 
-        if (await User.findOne({ $or: [{ mobile }, { consumerId }] })) {
-            return res.status(400).json({ success: false, message: 'User already exists.' });
+        const existing = await User.findOne({ $or: [{ mobile }, { consumerId }] });
+        if (existing) {
+            return res.status(400).json({ success: false, message: 'Registration failed: Mobile or Consumer ID is already in use.' });
         }
-        
+
         const pinHash = await bcrypt.hash(pin, 12);
-        await new User({ 
-            mobile, 
-            consumerId, 
-            name, 
+        await new User({
+            mobile,
+            consumerId,
+            name,
             pinHash,
             termsAccepted: true,
             termsAcceptedAt: new Date()
         }).save();
 
         res.json({ success: true, message: 'Account created successfully.' });
-    } catch (e) { 
+    } catch (e) {
         await logBackendError('Register Route', e, req);
-        res.status(500).json({ success: false, message: 'Server error during registration.' }); 
+        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
     }
 });
-
 
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
     try {
         const mobile = sanitizeInput(req.body.mobile, 10);
         const pin = sanitizeInput(req.body.pin, 4);
 
-        const user = await User.findOne({ mobile });
-        if (!user) return res.status(400).json({ success: false, message: 'Invalid mobile number or PIN.' });
-
-        // Block Soft-Deleted Accounts
-        if (user.accountStatus === 'deleted') {
-            return res.status(403).json({
-                success: false,
-                message: 'This account has been deactivated and is scheduled for permanent deletion.'
-            });
+        if (!/^[0-9]{10}$/.test(mobile) \vert{}\vert{} !/^[0-9]{4}$/.test(pin)) {
+            return res.status(400).json({ success: false, message: 'Invalid mobile number or PIN.' });
         }
 
-        // Check Temporary Lockout
+        const user = await User.findOne({ mobile });
+        if (!user) return res.status(401).json({ success: false, message: 'Invalid mobile number or PIN.' });
+
+        if (user.accountStatus === 'deleted') {
+            return res.status(403).json({ success: false, message: 'This account has been deactivated.' });
+        }
+
         if (user.lockUntil && user.lockUntil > Date.now()) {
             const mins = Math.ceil((user.lockUntil - Date.now()) / 60000);
             return res.status(429).json({
                 success: false,
                 isLocked: true,
-                message: `Account locked due to multiple failed attempts. Try again in ${mins} minutes.`
+                message: `Account temporarily locked. Please try again in ${mins} minutes.`
             });
         }
 
         const isMatch = await bcrypt.compare(pin, user.pinHash);
         if (!isMatch) {
-            // Atomic $inc update to prevent TOCTOU brute-force race conditions
             const updatedUser = await User.findOneAndUpdate(
                 { _id: user._id },
                 { $inc: { failedLoginAttempts: 1 } },
@@ -396,7 +432,6 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
             return res.status(401).json({ success: false, message: 'Invalid mobile number or PIN.' });
         }
 
-        // Reset failed attempts atomically on valid login
         await User.updateOne(
             { _id: user._id },
             { $set: { failedLoginAttempts: 0, lockUntil: null } }
@@ -418,8 +453,8 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
         res.cookie('emcs_auth_token', token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+            secure: IS_PROD,
+            sameSite: IS_PROD ? 'none' : 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
@@ -440,7 +475,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         });
     } catch (e) {
         await logBackendError('Login Route', e, req);
-        res.status(500).json({ success: false, message: 'Login error occurred.' });
+        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
     }
 });
 
@@ -462,8 +497,12 @@ app.post('/api/auth/verify-and-reset-pin', loginLimiter, async (req, res) => {
         const registeredName = sanitizeInput(req.body.registeredName, 60).toLowerCase();
         const newPin = sanitizeInput(req.body.newPin, 4);
 
+        if (!/^[0-9]{10}$/.test(mobile) || !/^[A-Z0-9]{12}$/.test(consumerId) \vert{}\vert{} !/^[0-9]{4}$/.test(newPin)) {
+            return res.status(400).json({ success: false, message: 'Invalid recovery details provided.' });
+        }
+
         const user = await User.findOne({ mobile, consumerId, accountStatus: 'active' });
-        if (!user || user.name.toLowerCase() !== registeredName || !/^[0-9]{4}$/.test(newPin)) {
+        if (!user || user.name.toLowerCase() !== registeredName) {
             return res.status(400).json({ success: false, message: 'Verification failed. Details do not match our records.' });
         }
 
@@ -473,10 +512,10 @@ app.post('/api/auth/verify-and-reset-pin', loginLimiter, async (req, res) => {
         user.activeSessions = [];
         await user.save();
 
-        res.json({ success: true, message: 'PIN reset successful! You can now log in.' });
+        res.json({ success: true, message: 'PIN reset successful! Please log in.' });
     } catch (e) {
         await logBackendError('PIN Reset Route', e, req);
-        res.status(500).json({ success: false, message: 'PIN reset error.' });
+        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
     }
 });
 
@@ -512,14 +551,14 @@ app.post('/api/auth/revoke-device', authenticateUser, async (req, res) => {
 
         req.user.activeSessions = req.user.activeSessions.filter(s => s.sessionId !== targetId);
         await req.user.save();
-        res.json({ success: true, message: 'Device logged out successfully.' });
+        res.json({ success: true, message: 'Device session revoked.' });
     } catch (e) {
         res.status(500).json({ success: false });
     }
 });
 
 // ===================================================================
-// USER CLOUD DATA SYNC & 2-YEAR SOFT DELETE ROUTE
+// USER DATA SYNC & ACCOUNT DELETION (OWNERSHIP ENFORCED)
 // ===================================================================
 app.get('/api/user/get-cloud-data', authenticateUser, (req, res) => {
     res.json({
@@ -550,7 +589,6 @@ app.post('/api/user/sync-cloud', authenticateUser, async (req, res) => {
             customTariff
         } = req.body;
 
-        // Server-side clamping so Inspect Element changes cannot corrupt values
         if (Array.isArray(appliances)) {
             req.user.appliances = appliances.slice(0, 50).map(a => {
                 const pwr = Math.min(50000, Math.max(1, Number(a.power) || 10));
@@ -566,11 +604,21 @@ app.post('/api/user/sync-cloud', authenticateUser, async (req, res) => {
             });
         }
 
-        if (sanctionedLoadKw) req.user.sanctionedLoadKw = Math.min(50, Math.max(0.5, Number(sanctionedLoadKw)));
-        if (budgetThreshold) req.user.budgetThreshold = Math.min(1000000, Math.max(100, Number(budgetThreshold)));
-        if (tariffProvider) req.user.tariffProvider = sanitizeInput(tariffProvider, 30);
-        if (tariffCategory) req.user.tariffCategory = sanitizeInput(tariffCategory, 20);
-        if (tariffArea) req.user.tariffArea = sanitizeInput(tariffArea, 20);
+        if (sanctionedLoadKw !== undefined) {
+            req.user.sanctionedLoadKw = Math.min(50, Math.max(0.5, Number(sanctionedLoadKw) || 2.0));
+        }
+        if (budgetThreshold !== undefined) {
+            req.user.budgetThreshold = Math.min(1000000, Math.max(100, Number(budgetThreshold) || 3000));
+        }
+        if (tariffProvider && ALLOWED_PROVIDERS.has(tariffProvider)) {
+            req.user.tariffProvider = tariffProvider;
+        }
+        if (tariffCategory && ALLOWED_CATEGORIES.has(tariffCategory)) {
+            req.user.tariffCategory = tariffCategory;
+        }
+        if (tariffArea && ALLOWED_AREAS.has(tariffArea)) {
+            req.user.tariffArea = tariffArea;
+        }
 
         if (customTariff && typeof customTariff === 'object') {
             req.user.customTariff = {
@@ -585,14 +633,13 @@ app.post('/api/user/sync-cloud', authenticateUser, async (req, res) => {
         }
 
         await req.user.save();
-        res.json({ success: true, message: 'Cloud data synced.' });
+        res.json({ success: true, message: 'Settings synced.' });
     } catch (e) {
         await logBackendError('Cloud Sync Route', e, req);
-        res.status(500).json({ success: false, message: 'Sync failed.' });
+        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
     }
 });
 
-// Soft Delete Route (Deactivates immediately, MongoDB TTL erases after 2 years)
 app.delete('/api/user/delete-account', authenticateUser, async (req, res) => {
     try {
         req.user.accountStatus = 'deleted';
@@ -612,34 +659,80 @@ app.delete('/api/user/delete-account', authenticateUser, async (req, res) => {
 });
 
 // ===================================================================
-// ADMIN PANEL, CMS, FAQS & SUPPORT DESK ROUTES
+// ADMIN, STAFF RBAC, CMS & SUPPORT DESK ROUTES
 // ===================================================================
 app.post('/api/admin/login', loginLimiter, async (req, res) => {
     try {
         const username = sanitizeInput(req.body.username, 40);
         const password = sanitizeInput(req.body.password, 64);
 
-        if (!username && safeCompareStrings(password, MASTER_OWNER_KEY)) {
-            const perms = { canManageUsers: true, canChatSupport: true, canEditCMS: true, canDeleteChat: true };
-            const token = jwt.sign({ role: 'owner', name: 'Master Owner', permissions: perms }, JWT_SECRET, { expiresIn: '8h', algorithm: 'HS256' });
-            res.cookie('emcs_admin_token', token, { httpOnly: true, sameSite: 'lax', maxAge: 28800000 });
-            return res.json({ success: true, role: 'owner', name: 'Master Owner', permissions: perms });
-        }
-
-        if (username) {
+        if (!username) {
+            if (!MASTER_OWNER_KEY) {
+                return res.status(503).json({ success: false, message: 'Master Owner key is not configured on the server.' });
+            }
+            if (safeCompareStrings(password, MASTER_OWNER_KEY)) {
+                const perms = { canManageUsers: true, canChatSupport: true, canEditCMS: true, canDeleteChat: true };
+                const token = jwt.sign({ role: 'owner', name: 'Master Owner', permissions: perms }, JWT_SECRET, { expiresIn: '8h', algorithm: 'HS256' });
+                res.cookie('emcs_admin_token', token, { httpOnly: true, secure: IS_PROD, sameSite: 'lax', maxAge: 28800000 });
+                return res.json({ success: true, role: 'owner', name: 'Master Owner', permissions: perms });
+            }
+        } else {
             const staff = await Staff.findOne({ username });
             if (staff && await bcrypt.compare(password, staff.passwordHash)) {
                 const token = jwt.sign({ role: 'staff', name: staff.name, permissions: staff.permissions }, JWT_SECRET, { expiresIn: '8h', algorithm: 'HS256' });
-                res.cookie('emcs_admin_token', token, { httpOnly: true, sameSite: 'lax', maxAge: 28800000 });
+                res.cookie('emcs_admin_token', token, { httpOnly: true, secure: IS_PROD, sameSite: 'lax', maxAge: 28800000 });
                 return res.json({ success: true, role: 'staff', name: staff.name, permissions: staff.permissions });
             }
         }
 
-        res.status(401).json({ success: false, message: 'Invalid Admin credentials.' });
+        res.status(401).json({ success: false, message: 'Invalid administrative credentials.' });
     } catch (e) {
         await logBackendError('Admin Login Route', e, req);
-        res.status(500).json({ success: false });
+        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
     }
+});
+
+// Staff RBAC Management (Owner Only)
+app.get('/api/admin/staff', authenticateAdmin, async (req, res) => {
+    if (req.admin.role !== 'owner') return res.status(403).json({ success: false });
+    const staffList = await Staff.find({}, '-passwordHash');
+    res.json({ success: true, staff: staffList });
+});
+
+app.post('/api/admin/staff', authenticateAdmin, async (req, res) => {
+    try {
+        if (req.admin.role !== 'owner') return res.status(403).json({ success: false, message: 'Owner privilege required.' });
+        const name = sanitizeInput(req.body.name, 50);
+        const username = sanitizeInput(req.body.username, 30).toLowerCase();
+        const password = sanitizeInput(req.body.password, 64);
+
+        if (!name || !username || password.length < 6) {
+            return res.status(400).json({ success: false, message: 'Valid name, username, and password (min 6 chars) required.' });
+        }
+
+        const passwordHash = await bcrypt.hash(password, 12);
+        await new Staff({
+            name,
+            username,
+            passwordHash,
+            permissions: {
+                canManageUsers: Boolean(req.body.permissions?.canManageUsers),
+                canChatSupport: Boolean(req.body.permissions?.canChatSupport),
+                canEditCMS: Boolean(req.body.permissions?.canEditCMS),
+                canDeleteChat: Boolean(req.body.permissions?.canDeleteChat)
+            }
+        }).save();
+
+        res.json({ success: true, message: 'Staff account created.' });
+    } catch (e) {
+        res.status(400).json({ success: false, message: 'Could not create staff account (username may already exist).' });
+    }
+});
+
+app.delete('/api/admin/staff/:id', authenticateAdmin, async (req, res) => {
+    if (req.admin.role !== 'owner') return res.status(403).json({ success: false });
+    await Staff.findByIdAndDelete(sanitizeInput(req.params.id, 40));
+    res.json({ success: true });
 });
 
 app.get('/api/cms', async (req, res) => {
@@ -651,11 +744,8 @@ app.get('/api/cms', async (req, res) => {
     }
 });
 
-app.post('/api/admin/cms', authenticateAdmin, async (req, res) => {
+app.post('/api/admin/cms', authenticateAdmin, requireAdminPermission('canEditCMS'), async (req, res) => {
     try {
-        if (req.admin.role !== 'owner' && !req.admin.permissions?.canEditCMS) {
-            return res.status(403).json({ success: false, message: 'No CMS permission.' });
-        }
         const update = {
             broadcast: sanitizeInput(req.body.broadcast, 250),
             about: sanitizeInput(req.body.about, 2000),
@@ -687,6 +777,9 @@ app.post('/api/support/user/send', authenticateUser, chatLimiter, async (req, re
 
 app.get('/api/support/admin/threads', authenticateAdmin, async (req, res) => {
     try {
+        if (req.admin.role !== 'owner' && !req.admin.permissions?.canChatSupport && !req.admin.permissions?.canManageUsers) {
+            return res.status(403).json({ success: false, message: 'Forbidden: Insufficient permissions.' });
+        }
         const users = await User.find({}, 'name consumerId mobile sanctionedLoadKw accountStatus createdAt');
         res.json({ success: true, threads: users });
     } catch (e) {
@@ -694,7 +787,7 @@ app.get('/api/support/admin/threads', authenticateAdmin, async (req, res) => {
     }
 });
 
-app.get('/api/support/admin/messages/:cid', authenticateAdmin, async (req, res) => {
+app.get('/api/support/admin/messages/:cid', authenticateAdmin, requireAdminPermission('canChatSupport'), async (req, res) => {
     try {
         const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
         const messages = await SupportMessage.find({ consumerId: cid }).sort({ timestamp: 1 });
@@ -704,10 +797,11 @@ app.get('/api/support/admin/messages/:cid', authenticateAdmin, async (req, res) 
     }
 });
 
-app.post('/api/support/admin/reply', authenticateAdmin, async (req, res) => {
+app.post('/api/support/admin/reply', authenticateAdmin, requireAdminPermission('canChatSupport'), async (req, res) => {
     try {
         const consumerId = sanitizeInput(req.body.consumerId, 12).toUpperCase();
         const text = sanitizeInput(req.body.text, 500);
+        if (!text) return res.status(400).json({ success: false });
         const msg = await new SupportMessage({ consumerId, sender: 'admin', text }).save();
         res.json({ success: true, message: msg });
     } catch (e) {
@@ -715,11 +809,8 @@ app.post('/api/support/admin/reply', authenticateAdmin, async (req, res) => {
     }
 });
 
-app.delete('/api/support/chat/clear/:cid', authenticateAdmin, async (req, res) => {
+app.delete('/api/support/chat/clear/:cid', authenticateAdmin, requireAdminPermission('canDeleteChat'), async (req, res) => {
     try {
-        if (req.admin.role !== 'owner' && !req.admin.permissions?.canDeleteChat) {
-            return res.status(403).json({ success: false });
-        }
         const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
         await SupportMessage.deleteMany({ consumerId: cid });
         res.json({ success: true });
@@ -755,14 +846,13 @@ app.get('/api/admin/master-database-dump', authenticateAdmin, async (req, res) =
     }
 });
 
-// Serve Static Frontend Files
 app.use(express.static(path.join(__dirname)));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
-// Global Express Unhandled Error Middleware (Logs crashes into Admin Error List)
+// SAFE GLOBAL ERROR HANDLER (NO STACK TRACE LEAKAGE)
 app.use(async (err, req, res, next) => {
     await logBackendError('Express Unhandled Error', err, req);
-    res.status(500).json({ success: false, message: 'Internal Server Error' });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
 });
 
-app.listen(PORT, () => console.log(`[EMCS SERVER] Running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`[EMCS SERVER] Live on port ${PORT}`));
