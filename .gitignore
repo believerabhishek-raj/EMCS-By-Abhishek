@@ -1,3 +1,14 @@
+# Dependency directories
 node_modules/
+
+# Environment Secrets
 .env
+
+# Logs
 npm-debug.log
+logs/
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
