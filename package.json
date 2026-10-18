@@ -1,7 +1,7 @@
 {
   "name": "emcs-energy-management-system",
-  "version": "1.0.0",
-  "description": "EMCS - Energy Management Control System (Independent Project)",
+  "version": "2.0.0",
+  "description": "EMCS - Energy Management Control System (Production Hardened)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -14,5 +14,8 @@
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
