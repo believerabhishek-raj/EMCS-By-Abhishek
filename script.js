@@ -382,7 +382,7 @@ function saveCustomTariffSettings() {
 }
 
 // ---------------------------------------------------------
-// HACKATHON LIVE FLOWCHART & GRAPHS (ZERO DUMMY DATA)
+// HACKATHON LIVE FLOWCHART & GRAPHS
 // ---------------------------------------------------------
 function renderAppliances() {
     const tbody = $('applianceList');
@@ -886,9 +886,42 @@ function sendTabChatMessage() {
 }
 
 // ---------------------------------------------------------
-// AUTHENTICATION, CLEAN FORM TOGGLES & MODALS
+// AUTHENTICATION UI, FORM AUTO-DESTROY & MODALS
 // ---------------------------------------------------------
-function openLoginModal() { $('loginModal').classList.remove('hidden'); $('popupOverlay').classList.remove('hidden'); }
+// 🔥 MASTER CLEANUP: Destroys all half-filled inputs & resets toggles when popups are closed
+function destroyAllAuthFormData() {
+    const formIds = ['modalLoginForm', 'modalRegisterForm', 'modalForgotForm', 'modalAdminForm'];
+    formIds.forEach(id => {
+        const formEl = $(id);
+        if (formEl) formEl.reset();
+    });
+
+    ['loginMobile', 'loginCredential', 'regName', 'regMobile', 'regConsumerId', 'regEmail', 'regCredential', 'regHoneypot', 'forgotMobile', 'forgotName', 'forgotRecoveryValue', 'forgotNewCredential', 'adminLoginUser', 'adminLoginPass'].forEach(fieldId => safeSetVal(fieldId, ''));
+
+    if ($('regTermsCheck')) $('regTermsCheck').checked = false;
+
+    // Reset password fields and eye icons
+    ['loginCredential', 'regCredential', 'forgotNewCredential', 'adminLoginPass'].forEach(fieldId => {
+        const el = $(fieldId);
+        if (el) el.type = 'password';
+    });
+    document.querySelectorAll('#loginModal .fa-eye-slash').forEach(icon => {
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    });
+
+    toggleRegAuthUI();
+    toggleForgotUI();
+    toggleForgotAuthUI();
+    safeSetText('modalAuthError', '');
+}
+
+function openLoginModal() { 
+    destroyAllAuthFormData();
+    switchAuthTab('login', $('authTabButtons')?.children[0]);
+    $('loginModal').classList.remove('hidden'); 
+    $('popupOverlay').classList.remove('hidden'); 
+}
 function openAIModal() { $('aiModal').classList.remove('hidden'); $('popupOverlay').classList.remove('hidden'); }
 
 function toggleRegAuthUI() {
@@ -950,7 +983,6 @@ function toggleForgotAuthUI() {
     }
 }
 
-// Destroy all sensitive PINs and Passwords immediately when closing popups
 function closeAllPopups() {
     const legalEl = $('legalModal');
     const loginEl = $('loginModal');
@@ -961,14 +993,12 @@ function closeAllPopups() {
     document.querySelectorAll('.popup-modal').forEach(m => m.classList.add('hidden'));
     $('popupOverlay').classList.add('hidden');
 
-    safeSetVal('adminLoginPass', '');
-    safeSetVal('loginCredential', '');
-    safeSetVal('regCredential', '');
-    safeSetVal('forgotNewCredential', '');
-    safeSetText('modalAuthError', '');
+    // Destroy all auth data when modal closes
+    destroyAllAuthFormData();
 }
 
 function switchAuthTab(tab, btn) {
+    destroyAllAuthFormData();
     document.querySelectorAll('#authTabButtons button').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
     ['modalLoginForm', 'modalRegisterForm', 'modalForgotForm', 'modalAdminForm'].forEach(id => $(id).classList.add('hidden'));
@@ -976,9 +1006,11 @@ function switchAuthTab(tab, btn) {
     if (tab === 'register') $('modalRegisterForm').classList.remove('hidden');
     if (tab === 'forgot') $('modalForgotForm').classList.remove('hidden');
     if (tab === 'admin') $('modalAdminForm').classList.remove('hidden');
-    safeSetText('modalAuthError', '');
 }
 
+// ---------------------------------------------------------
+// AUTHENTICATION HANDLERS
+// ---------------------------------------------------------
 async function handleSecureRegister(e) {
     e.preventDefault();
     if ($('regHoneypot') && $('regHoneypot').value) return;
@@ -1012,7 +1044,6 @@ async function handleSecureRegister(e) {
         const res = await secureApiFetch('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
         const data = await res.json();
         if (data.success) {
-            safeSetVal('regCredential', '');
             alert("Account registered securely! Please log in.");
             switchAuthTab('login', $('authTabButtons').children[0]);
         } else {
@@ -1026,10 +1057,12 @@ async function handleSecureRegister(e) {
 
 async function handleSecureLogin(e) {
     e.preventDefault();
-    const mobile = safeGetVal('loginMobile').trim();
-    const credential = safeGetVal('loginCredential').trim();
+    const payload = {
+        mobile: safeGetVal('loginMobile').trim(),
+        credential: safeGetVal('loginCredential').trim()
+    };
     try {
-        const res = await secureApiFetch('/auth/login', { method: 'POST', body: JSON.stringify({ mobile, credential }) });
+        const res = await secureApiFetch('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
         const data = await res.json();
         if (data.success) {
             localStorage.setItem('ecoActiveUser', JSON.stringify(data.user));
@@ -1079,7 +1112,6 @@ async function handleForgotReset(e) {
         const res = await secureApiFetch('/auth/verify-and-reset', { method: 'POST', body: JSON.stringify(payload) });
         const data = await res.json();
         if (data.success) {
-            safeSetVal('forgotNewCredential', '');
             alert(data.message);
             switchAuthTab('login', $('authTabButtons').children[0]);
         } else {
@@ -1091,6 +1123,9 @@ async function handleForgotReset(e) {
 }
 const handleFreePinReset = handleForgotReset;
 
+// ---------------------------------------------------------
+// CLOUD SYNC & SESSION MANAGEMENT
+// ---------------------------------------------------------
 async function refreshDataFromCloud() {
     try {
         const res = await secureApiFetch('/user/get-cloud-data');
@@ -1201,7 +1236,6 @@ function enterAdminHub(data) {
     closeAllPopups();
     $('mainAppSection').classList.add('hidden');$('adminSection').classList.remove('hidden');
 
-    // Keep Left Sidebar visible and switch links to Admin Menu
     $('appSidebar').classList.remove('hidden');
     $('consumerNavLinks')?.classList.add('hidden');$('sidebarAuthArea')?.classList.add('hidden');
     $('adminNavLinks')?.classList.remove('hidden');$('adminSidebarFooter')?.classList.remove('hidden');
@@ -1223,7 +1257,6 @@ function exitAdminView() {
     secureApiFetch('/admin/logout', { method: 'POST' }).catch(() => {});
     $('adminSection').classList.add('hidden');$('mainAppSection').classList.remove('hidden');
 
-    // Restore Consumer Sidebar Navigation
     $('adminNavLinks')?.classList.add('hidden');$('adminSidebarFooter')?.classList.add('hidden');
     $('consumerNavLinks')?.classList.remove('hidden');$('sidebarAuthArea')?.classList.remove('hidden');
     safeSetText('sidebarSubTitle', 'Energy Management System');
@@ -1277,7 +1310,6 @@ async function fetchAdminUserDetails(consumerId) {
                 badge.className = u.accountStatus === 'active' ? 'badge light-green-bg' : 'badge light-red-bg';
             }
 
-            // Populate Appliances
             safeSetText('kycAppCount', u.appliances ? u.appliances.length : 0);
             const appListEl = $('kycAppList');
             if (appListEl) {
@@ -1288,7 +1320,6 @@ async function fetchAdminUserDetails(consumerId) {
                 }
             }
 
-            // Populate Login IPs & Device Models
             const sessionBody = $('kycSessionList');
             if (sessionBody) {
                 if (u.activeSessions && u.activeSessions.length > 0) {
@@ -1302,7 +1333,6 @@ async function fetchAdminUserDetails(consumerId) {
                 }
             }
 
-            // Populate 24-Month Billing Ledger
             const billingBody = $('kycBillingList');
             if (billingBody) {
                 if (data.paymentLedger && data.paymentLedger.length > 0) {
@@ -1404,7 +1434,6 @@ async function clearSystemErrors() {
     loadSystemErrors();
 }
 
-// Pre-loaded with complete DPDP Act 2023, Email, IP/Device Security & IoT Waivers
 async function loadCmsContent() {
     let cms = JSON.parse(localStorage.getItem('emcsCmsData')) || {
         broadcast: "",
@@ -1525,7 +1554,6 @@ async function loadAdminChatThreads() {
         if (data.success && Array.isArray(data.threads)) {
             $('adminChatThreadsList').innerHTML = data.threads.map(t => `<div class="admin-wa-user-item" onclick="selectAdminThread('${escapeHTML(t.consumerId)}', '${escapeHTML(t.name)}')"><div class="emcs-avatar" style="width:32px; height:32px; font-size:0.8rem;">${escapeHTML(t.name[0] || 'U')}</div><div><strong>${escapeHTML(t.name)}</strong><br><small class="small-text">${escapeHTML(t.consumerId)}</small></div></div>`).join('');
 
-            // Populate Registered Accounts Registry Table with Clickable KYC Name Link
             safeSetText('adminUserCount', data.threads.length);
             const userTbody = $('adminUserListBody');
             if (userTbody) {
