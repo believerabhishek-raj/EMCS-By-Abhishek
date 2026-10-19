@@ -26,6 +26,67 @@ async function secureApiFetch(endpoint, options = {}) {
 }
 
 // ---------------------------------------------------------
+// STRICT EMAIL & TEMP-MAIL VALIDATOR (CLIENT-SIDE GUARD)
+// ---------------------------------------------------------
+const BLOCKED_TEMP_DOMAINS = new Set([
+    'mailinator.com', 'yopmail.com', '10minutemail.com', 'guerrillamail.com',
+    'tempmail.com', 'temp-mail.org', 'dropmail.me', 'trashmail.com',
+    'sharklasers.com', 'getnada.com', 'maildrop.cc', 'dispostable.com',
+    'fakeinbox.com', 'throwawaymail.com', 'mohmal.com', 'emailondeck.com',
+    'mailnesia.com', 'mintemail.com', 'mytemp.email', 'burnermail.io'
+]);
+
+function isStrictValidEmail(emailStr) {
+    const clean = String(emailStr || '').trim().toLowerCase();
+    if (clean.length < 6 || clean.length > 90) return { ok: false, msg: 'Email must be between 6 and 90 characters.' };
+    if (/[\s\0$<>'"`;\\(){}[\]|!#$%^&*=+/?~]|\.\./.test(clean)) {
+        return { ok: false, msg: 'Security Block: Invalid characters in Email ID.' };
+    }
+    const parts = clean.split('@');
+    if (parts.length !== 2) return { ok: false, msg: 'Please enter a valid Email address.' };
+    const [local, domain] = parts;
+    if (!/^[a-z0-9]+([._-][a-z0-9]+)*$/.test(local) || !/^[a-z0-9]+(-[a-z0-9]+)*(\.[a-z0-9]+(-[a-z0-9]+)*)+$/.test(domain)) {
+        return { ok: false, msg: 'Please enter a valid Email address (e.g. name@gmail.com).' };
+    }
+    if (BLOCKED_TEMP_DOMAINS.has(domain)) {
+        return { ok: false, msg: 'Security Block: Temporary or disposable email addresses are not allowed.' };
+    }
+    return { ok: true, email: clean };
+}
+
+// ---------------------------------------------------------
+// CLIENT-SIDE URL & DOM TAMPERING SHIELD (ANTI-IDOR)
+// ---------------------------------------------------------
+function enforceUrlAntiIdorGuard() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const hash = window.location.hash || '';
+        const activeCid = window.KamAbhiRAM?.userSession?.consumerId;
+
+        const urlCid = params.get('consumerId') || params.get('cid') || params.get('user') || params.get('id');
+        if (urlCid && (!activeCid || urlCid.toUpperCase() !== activeCid.toUpperCase())) {
+            reportSystemError('Client Anti-IDOR Guard', `Blocked URL parameter tampering: ${urlCid}`, window.location.href);
+            window.history.replaceState({}, document.title, window.location.pathname);
+            alert('Security Block: Unauthorized Consumer ID parameter in URL was blocked.');
+        }
+
+        if (/consumerId=|cid=/i.test(hash)) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        // Ensure profileId input box is never manually edited via DevTools
+        const profileInput = $('profileId');
+        if (activeCid && profileInput && profileInput.value && profileInput.value !== activeCid) {
+            profileInput.value = activeCid;
+            reportSystemError('Client Anti-IDOR Guard', 'Blocked DOM manipulation on #profileId', 'Profile Tab');
+        }
+    } catch (ignore) {}
+}
+
+window.addEventListener('popstate', enforceUrlAntiIdorGuard);
+window.addEventListener('hashchange', enforceUrlAntiIdorGuard);
+
+// ---------------------------------------------------------
 // PASSWORD VISIBILITY TOGGLE (EYE ICON)
 // ---------------------------------------------------------
 function togglePasswordVisibility(fieldId, btn) {
@@ -230,6 +291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await refreshDataFromCloud();
     }
 
+    enforceUrlAntiIdorGuard();
     loadCmsContent();
     renderAppliances();
     renderRealPaymentLedger();
@@ -824,12 +886,71 @@ function sendTabChatMessage() {
 }
 
 // ---------------------------------------------------------
-// AUTHENTICATION & MODALS (ZERO LOCALSTORAGE PIN FALLBACK)
+// AUTHENTICATION, FORM TOGGLES & MODALS
 // ---------------------------------------------------------
-function openLoginModal() { $('loginModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden'); }
-function openAIModal() { $('aiModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden'); }
+function openLoginModal() { $('loginModal').classList.remove('hidden'); $('popupOverlay').classList.remove('hidden'); }
+function openAIModal() { $('aiModal').classList.remove('hidden'); $('popupOverlay').classList.remove('hidden'); }
 
-// 🔥 FIX: Modal Close hone par saare Password fields clear karna
+function toggleRegAuthUI() {
+    const checked = document.querySelector('input[name="regAuthType"]:checked');
+    const type = checked ? checked.value : 'pin';
+    const input = $('regCredential');
+    if (!input) return;
+    input.value = '';
+    if (type === 'pin') {
+        input.setAttribute('pattern', '[0-9]{4,6}');
+        input.setAttribute('minlength', '4');
+        input.setAttribute('maxlength', '6');
+        input.placeholder = 'Create 4 to 6 Digit PIN';
+    } else {
+        input.removeAttribute('pattern');
+        input.setAttribute('minlength', '8');
+        input.setAttribute('maxlength', '16');
+        input.placeholder = 'Create 8 to 16 Char Password';
+    }
+}
+
+function toggleForgotUI() {
+    const checked = document.querySelector('input[name="recoveryType"]:checked');
+    const type = checked ? checked.value : 'cid';
+    const input = $('forgotRecoveryValue');
+    if (!input) return;
+    input.value = '';
+    if (type === 'cid') {
+        input.type = 'text';
+        input.setAttribute('minlength', '12');
+        input.setAttribute('maxlength', '12');
+        input.placeholder = 'Enter 12-Char Consumer ID';
+        input.style.textTransform = 'uppercase';
+    } else {
+        input.type = 'email';
+        input.removeAttribute('minlength');
+        input.setAttribute('maxlength', '100');
+        input.placeholder = 'Enter Registered Email ID';
+        input.style.textTransform = 'none';
+    }
+}
+
+function toggleForgotAuthUI() {
+    const checked = document.querySelector('input[name="forgotAuthType"]:checked');
+    const type = checked ? checked.value : 'pin';
+    const input = $('forgotNewCredential');
+    if (!input) return;
+    input.value = '';
+    if (type === 'pin') {
+        input.setAttribute('pattern', '[0-9]{4,6}');
+        input.setAttribute('minlength', '4');
+        input.setAttribute('maxlength', '6');
+        input.placeholder = 'Create 4 to 6 Digit PIN';
+    } else {
+        input.removeAttribute('pattern');
+        input.setAttribute('minlength', '8');
+        input.setAttribute('maxlength', '16');
+        input.placeholder = 'Create 8 to 16 Char Password';
+    }
+}
+
+// Destroy all sensitive PINs and Passwords immediately when closing popups
 function closeAllPopups() {
     const legalEl = $('legalModal');
     const loginEl = $('loginModal');
@@ -841,9 +962,9 @@ function closeAllPopups() {
     $('popupOverlay').classList.add('hidden');
 
     safeSetVal('adminLoginPass', '');
-    safeSetVal('loginPin', '');
-    safeSetVal('regPin', '');
-    safeSetVal('forgotNewPin', '');
+    safeSetVal('loginCredential', '');
+    safeSetVal('regCredential', '');
+    safeSetVal('forgotNewCredential', '');
     safeSetText('modalAuthError', '');
 }
 
@@ -860,20 +981,38 @@ function switchAuthTab(tab, btn) {
 
 async function handleSecureRegister(e) {
     e.preventDefault();
-    if ($('regHoneypot') &&$('regHoneypot').value) return;
-    if ($('regTermsCheck') && !$('regTermsCheck').checked) return safeSetText('modalAuthError', 'Acceptance of Privacy Policy and Terms is required.');
+    if ($('regHoneypot') && $('regHoneypot').value) return;
+    if ($('regTermsCheck') && !$('regTermsCheck').checked) {
+        return safeSetText('modalAuthError', 'Acceptance of Privacy Policy and Terms is required.');
+    }
+
+    const emailCheck = isStrictValidEmail(safeGetVal('regEmail'));
+    if (!emailCheck.ok) return safeSetText('modalAuthError', emailCheck.msg);
+
+    const authType = document.querySelector('input[name="regAuthType"]:checked')?.value || 'pin';
+    const credential = safeGetVal('regCredential').trim();
+
+    if (authType === 'pin' && !/^[0-9]{4,6}$/.test(credential)) {
+        return safeSetText('modalAuthError', 'PIN must be 4 to 6 numeric digits.');
+    }
+    if (authType === 'password' && (credential.length < 8 || credential.length > 16)) {
+        return safeSetText('modalAuthError', 'Password must be 8 to 16 characters.');
+    }
 
     const payload = {
         name: safeGetVal('regName').trim(),
         mobile: safeGetVal('regMobile').trim(),
+        email: emailCheck.email,
         consumerId: safeGetVal('regConsumerId').trim().toUpperCase(),
-        pin: safeGetVal('regPin').trim(),
+        authType,
+        credential,
         termsAccepted: true
     };
     try {
         const res = await secureApiFetch('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
         const data = await res.json();
         if (data.success) {
+            safeSetVal('regCredential', '');
             alert("Account registered securely! Please log in.");
             switchAuthTab('login', $('authTabButtons').children[0]);
         } else {
@@ -888,9 +1027,9 @@ async function handleSecureRegister(e) {
 async function handleSecureLogin(e) {
     e.preventDefault();
     const mobile = safeGetVal('loginMobile').trim();
-    const pin = safeGetVal('loginPin').trim();
+    const credential = safeGetVal('loginCredential').trim();
     try {
-        const res = await secureApiFetch('/auth/login', { method: 'POST', body: JSON.stringify({ mobile, pin }) });
+        const res = await secureApiFetch('/auth/login', { method: 'POST', body: JSON.stringify({ mobile, credential }) });
         const data = await res.json();
         if (data.success) {
             localStorage.setItem('ecoActiveUser', JSON.stringify(data.user));
@@ -905,6 +1044,53 @@ async function handleSecureLogin(e) {
         safeSetText('modalAuthError', 'Network error or server unreachable. Try again later.');
     }
 }
+
+async function handleForgotReset(e) {
+    e.preventDefault();
+    const recoveryType = document.querySelector('input[name="recoveryType"]:checked')?.value || 'cid';
+    const recoveryValue = safeGetVal('forgotRecoveryValue').trim();
+
+    if (recoveryType === 'email') {
+        const check = isStrictValidEmail(recoveryValue);
+        if (!check.ok) return safeSetText('modalAuthError', check.msg);
+    } else if (!/^[A-Za-z0-9]{12}$/.test(recoveryValue)) {
+        return safeSetText('modalAuthError', 'Please enter a valid 12-character Consumer ID.');
+    }
+
+    const newAuthType = document.querySelector('input[name="forgotAuthType"]:checked')?.value || 'pin';
+    const newCredential = safeGetVal('forgotNewCredential').trim();
+
+    if (newAuthType === 'pin' && !/^[0-9]{4,6}$/.test(newCredential)) {
+        return safeSetText('modalAuthError', 'New PIN must be 4 to 6 numeric digits.');
+    }
+    if (newAuthType === 'password' && (newCredential.length < 8 || newCredential.length > 16)) {
+        return safeSetText('modalAuthError', 'New Password must be 8 to 16 characters.');
+    }
+
+    const payload = {
+        mobile: safeGetVal('forgotMobile').trim(),
+        registeredName: safeGetVal('forgotName').trim(),
+        recoveryType,
+        recoveryValue: recoveryType === 'cid' ? recoveryValue.toUpperCase() : recoveryValue.toLowerCase(),
+        newAuthType,
+        newCredential
+    };
+    try {
+        const res = await secureApiFetch('/auth/verify-and-reset', { method: 'POST', body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (data.success) {
+            safeSetVal('forgotNewCredential', '');
+            alert(data.message);
+            switchAuthTab('login', $('authTabButtons').children[0]);
+        } else {
+            safeSetText('modalAuthError', data.message);
+        }
+    } catch (err) {
+        safeSetText('modalAuthError', 'Something went wrong. Please try again later.');
+    }
+}
+// Alias for backward compatibility
+const handleFreePinReset = handleForgotReset;
 
 async function refreshDataFromCloud() {
     try {
@@ -921,6 +1107,7 @@ async function refreshDataFromCloud() {
                 safeSetText('userGreeting', `Welcome, ${d.name}! ☀️`);
                 safeSetVal('profileName', d.name);
             }
+            if (d.consumerId) safeSetVal('profileId', d.consumerId);
             if (Array.isArray(d.appliances)) window.KamAbhiRAM.appliances = d.appliances;
             if (d.sanctionedLoadKw) { window.KamAbhiRAM.sanctionedLoadKw = d.sanctionedLoadKw; safeSetVal('sanctionedLoadSelect', d.sanctionedLoadKw.toFixed(1)); }
             if (d.budgetThreshold) { window.KamAbhiRAM.budgetThreshold = d.budgetThreshold; safeSetText('currentBudgetDisplay', `₹${d.budgetThreshold}`); }
@@ -935,6 +1122,7 @@ async function refreshDataFromCloud() {
 
 async function autoSyncToCloud() {
     if (!window.KamAbhiRAM.userSession) return;
+    enforceUrlAntiIdorGuard();
     const payload = {
         appliances: window.KamAbhiRAM.appliances,
         sanctionedLoadKw: window.KamAbhiRAM.sanctionedLoadKw,
@@ -947,30 +1135,13 @@ async function autoSyncToCloud() {
     secureApiFetch('/user/sync-cloud', { method: 'POST', body: JSON.stringify(payload) }).catch(() => {});
 }
 
-async function handleFreePinReset(e) {
-    e.preventDefault();
-    const payload = {
-        mobile: safeGetVal('forgotMobile').trim(),
-        consumerId: safeGetVal('forgotConsumerId').trim().toUpperCase(),
-        registeredName: safeGetVal('forgotName').trim(),
-        newPin: safeGetVal('forgotNewPin').trim()
-    };
-    try {
-        const res = await secureApiFetch('/auth/verify-and-reset-pin', { method: 'POST', body: JSON.stringify(payload) });
-        const data = await res.json();
-        if (data.success) { alert(data.message); switchAuthTab('login', $('authTabButtons').children[0]); }
-        else safeSetText('modalAuthError', data.message);
-    } catch (err) {
-        safeSetText('modalAuthError', 'Something went wrong. Please try again later.');
-    }
-}
-
 function setupUserSession(user) {
     window.KamAbhiRAM.userSession = user;
     safeSetText('userGreeting', `Welcome, ${user.name}! ☀️`);
     safeSetVal('profileName', user.name);
     safeSetVal('profileId', user.consumerId);
     $('sidebarAuthArea').innerHTML = `<button class="secondary-btn sm-btn w-100" onclick="logoutUser()"><i class="fa-solid fa-power-off"></i> Logout (${escapeHTML(user.name)})</button>`;
+    enforceUrlAntiIdorGuard();
 }
 
 function logoutUser() {
@@ -1006,7 +1177,7 @@ async function revokeDevice(targetSessionId) {
 }
 
 // ---------------------------------------------------------
-// SECURE ADMIN CONSOLE, STAFF CRUD & PRE-LOADED LEGAL CMS
+// SECURE ADMIN CONSOLE, KYC FORENSICS, STAFF CRUD & LEGAL CMS
 // ---------------------------------------------------------
 async function handleSecureAdminLogin(e) {
     e.preventDefault();
@@ -1015,8 +1186,12 @@ async function handleSecureAdminLogin(e) {
     try {
         const res = await secureApiFetch('/admin/login', { method: 'POST', body: JSON.stringify({ username, password }) });
         const data = await res.json();
-        if (data.success) enterAdminHub(data);
-        else safeSetText('modalAuthError', data.message || 'Invalid authorization key.');
+        if (data.success) {
+            safeSetVal('adminLoginPass', '');
+            enterAdminHub(data);
+        } else {
+            safeSetText('modalAuthError', data.message || 'Invalid authorization key.');
+        }
     } catch (err) {
         reportSystemError('Admin Auth API', err.message, '/api/admin/login');
         safeSetText('modalAuthError', 'Something went wrong. Please try again later.');
@@ -1036,12 +1211,11 @@ function enterAdminHub(data) {
     loadSystemErrors();
 }
 
-// 🔥 FIX: Exit Console hone par Admin Password clear karna
 function exitAdminView() {
     secureApiFetch('/admin/logout', { method: 'POST' }).catch(() => {});
     $('adminSection').classList.add('hidden');
     $('mainAppSection').classList.remove('hidden');$('appSidebar').classList.remove('hidden');
-    
+
     safeSetVal('adminLoginUser', '');
     safeSetVal('adminLoginPass', '');
 }
@@ -1055,6 +1229,78 @@ function switchAdminSubTab(tab, btn) {
     if (tab === 'staffTab') { $('adminStaffSubPane').classList.remove('hidden'); loadStaffList(); }
     if (tab === 'cmsTab') $('adminCmsSubPane').classList.remove('hidden');
     if (tab === 'errorTab') { $('adminErrorSubPane')?.classList.remove('hidden'); loadSystemErrors(); }
+}
+
+// 🔥 FETCH & RENDER CONSUMER KYC, IP LOGS & 24-MONTH BILLING LEDGER
+async function fetchAdminUserDetails(consumerId) {
+    try {
+        const res = await secureApiFetch(`/admin/user/${encodeURIComponent(consumerId)}`);
+        const data = await res.json();
+        if (data.success && data.user) {
+            const u = data.user;
+            safeSetText('kycName', u.name);
+            safeSetText('kycConsumerId', `Consumer ID: ${u.consumerId} (${(u.authType || 'pin').toUpperCase()} Auth)`);
+            safeSetText('kycMobile', u.mobile);
+            safeSetText('kycEmail', u.email || 'Not Provided');
+            safeSetText('kycSanctioned', `${u.sanctionedLoadKw || 2.0} kW`);
+            safeSetText('kycJoinDate', new Date(u.createdAt).toLocaleDateString());
+            safeSetText('kycLifetimeUnits', `${data.lifetimeUsage || 0} kWh`);
+
+            const badge = $('kycStatusBadge');
+            if (badge) {
+                badge.textContent = (u.accountStatus || 'active').toUpperCase();
+                badge.className = u.accountStatus === 'active' ? 'badge light-green-bg' : 'badge light-red-bg';
+            }
+
+            // Populate Appliances
+            safeSetText('kycAppCount', u.appliances ? u.appliances.length : 0);
+            const appListEl = $('kycAppList');
+            if (appListEl) {
+                if (u.appliances && u.appliances.length > 0) {
+                    appListEl.innerHTML = u.appliances.map(a => `<div>• <b>${escapeHTML(a.name)}</b> — ${Number(a.power)}W, ${Number(a.hours)}h/day (${Number(a.monthlyKwh)} kWh/mo) [${a.state ? '<span class="green-text">ON</span>' : '<span class="danger-text">OFF</span>'}]</div>`).join('');
+                } else {
+                    appListEl.innerHTML = "No appliances registered.";
+                }
+            }
+
+            // Populate Login IPs & Device Models
+            const sessionBody = $('kycSessionList');
+            if (sessionBody) {
+                if (u.activeSessions && u.activeSessions.length > 0) {
+                    sessionBody.innerHTML = u.activeSessions.slice().reverse().map(s => `<tr>
+                        <td><small>${escapeHTML(s.deviceInfo || 'Browser Client')}</small></td>
+                        <td><code>${escapeHTML(s.ipAddress || 'Secured IP')}</code></td>
+                        <td><small>${new Date(s.createdAt).toLocaleString()}</small></td>
+                    </tr>`).join('');
+                } else {
+                    sessionBody.innerHTML = '<tr><td colspan="3" class="text-center small-text">No active session logs available.</td></tr>';
+                }
+            }
+
+            // Populate 24-Month Billing Ledger
+            const billingBody = $('kycBillingList');
+            if (billingBody) {
+                if (data.paymentLedger && data.paymentLedger.length > 0) {
+                    billingBody.innerHTML = data.paymentLedger.map(p => `<tr>
+                        <td><b>${escapeHTML(p.month)}</b></td>
+                        <td><small><code>${escapeHTML(p.txnId)}</code></small></td>
+                        <td>${escapeHTML(p.units)} kWh</td>
+                        <td class="text-primary"><b>₹${escapeHTML(p.amount)}</b></td>
+                        <td><span class="badge light-green-bg">${escapeHTML(p.status)}</span></td>
+                    </tr>`).join('');
+                } else {
+                    billingBody.innerHTML = '<tr><td colspan="5" class="text-center small-text">No billing records found.</td></tr>';
+                }
+            }
+
+            $('kycTabSessions')?.classList.remove('hidden');$('kycTabBilling')?.classList.add('hidden');
+            $('adminUserKycModal')?.classList.remove('hidden');$('popupOverlay')?.classList.remove('hidden');
+        } else {
+            alert(data.message || "Could not fetch consumer KYC details.");
+        }
+    } catch (e) {
+        alert("Server error while fetching KYC details.");
+    }
 }
 
 async function createNewStaffMember() {
@@ -1121,7 +1367,7 @@ async function loadSystemErrors() {
     safeSetText('adminErrorCountBadge', logs.length);
     if (logs.length === 0) return tbody.innerHTML = '<tr><td colspan="5" class="text-center small-text">No recorded system exceptions.</td></tr>';
     tbody.innerHTML = logs.map(err => {
-        const isServer = /backend|server|db|storage/i.test(err.source);
+        const isServer = /backend|server|db|storage|idor/i.test(err.source);
         return `<tr><td><small>${new Date(err.timestamp).toLocaleString()}</small></td><td><span class="badge ${isServer ? 'light-red-bg' : 'light-green-bg'}">${escapeHTML(err.source)}</span></td><td><strong class="danger-text">${escapeHTML(err.message)}</strong></td><td><code>${escapeHTML(err.location || 'N/A')}</code></td><td>${escapeHTML(err.userOrIp || 'System')}</td></tr>`;
     }).join('');
 }
@@ -1133,17 +1379,19 @@ async function clearSystemErrors() {
     loadSystemErrors();
 }
 
-// Pre-loaded with complete DPDP Act 2023, IoT Hardware Waiver & Billing Disclaimers
+// Pre-loaded with complete DPDP Act 2023, Email, IP/Device Security & IoT Waivers
 async function loadCmsContent() {
     let cms = JSON.parse(localStorage.getItem('emcsCmsData')) || {
         broadcast: "",
         about: "EMCS (Energy Management Control System) is an intelligent energy monitoring, tariff estimation, and load automation platform.",
-        privacy: "1. DATA COLLECTION (DPDP Act 2023 Compliance): We collect minimal data (Mobile, Consumer ID, Name) strictly for authentication and load monitoring. We do not sell your data to third parties.\n\n2. OCR & FILE UPLOADS: Bill images uploaded for OCR and CSV files are processed securely in memory. We do not permanently store images of your physical electricity bills.\n\n3. DATA RETENTION & ERASURE: Upon account deactivation, all sessions are revoked, and records enter a secured 2-year retention archive for compliance before automatic permanent erasure.\n\n4. COOKIES: We use HTTP-only cookies strictly for session authorization.",
-        terms: "1. ACCEPTANCE OF TERMS: By using EMCS, you agree to these legal terms.\n\n2. NO FINANCIAL LIABILITY: The electricity bills, solar ROI, and tariff calculations provided by EMCS are 'Estimates' based on standard utility slabs. EMCS is not an official billing authority. You must pay your actual utility provider based on their official meter readings.\n\n3. HARDWARE & IOT SAFETY WAIVER: The hardware relay control, voltage surge guard, and IoT features are provided 'AS IS'. EMCS and its developers are NOT liable for any electrical damage, short circuits, hardware failure, fire hazards, or personal injury resulting from automated appliance switching. Use IoT features at your own risk.\n\n4. PAYMENTS: EMCS provides a simulated settlement ledger. No real financial transactions are processed on this platform.",
+        privacy: "1. DATA COLLECTION & SECURITY (DPDP Act 2023 Compliance): We collect minimal data (Mobile, Verified Email ID, Consumer ID, Name) strictly for authentication, account recovery, and load monitoring. FOR SECURITY & ANTI-FRAUD PURPOSES, we explicitly log your Device Models (OS/Browser) and IP Addresses during login to prevent unauthorized cross-account access (Anti-IDOR) and secure active sessions.\n\n2. OCR & FILE UPLOADS: Bill images uploaded for OCR and CSV files are processed securely in memory. We do not permanently store images of your physical electricity bills.\n\n3. DATA RETENTION & ERASURE: Upon account deactivation, all sessions are revoked immediately, and records enter a secured 2-year retention archive for compliance before automatic permanent erasure.\n\n4. COOKIES: We use HTTP-only cookies strictly for session authorization.",
+        terms: "1. ACCEPTANCE OF TERMS: By using EMCS, you agree to these legal terms.\n\n2. NO FINANCIAL LIABILITY: The electricity bills, solar ROI, and tariff calculations provided by EMCS are 'Estimates' based on standard utility slabs. EMCS is not an official billing authority. You must pay your actual utility provider based on their official meter readings.\n\n3. ACCOUNT & EMAIL SECURITY: Users must register with a valid, non-disposable email address. Attempting to manipulate URLs, Consumer IDs, or API payloads to access another consumer's profile is a strict security violation and will result in immediate session termination and IP logging.\n\n4. HARDWARE & IOT SAFETY WAIVER: The hardware relay control, voltage surge guard, and IoT features are provided 'AS IS'. EMCS and its developers are NOT liable for any electrical damage, short circuits, hardware failure, fire hazards, or personal injury resulting from automated appliance switching. Use IoT features at your own risk.\n\n5. PAYMENTS: EMCS provides a simulated 24-month settlement ledger. No real financial transactions are processed on this platform.",
         faqs: [
+            { q: "How can I reset my forgotten PIN or Password?", a: "Open the Login modal, select 'Forgot Access', and verify your identity using either your 12-Character Consumer ID OR your Registered Email ID to set a new 4-6 digit PIN or 8-16 character Password." },
+            { q: "Why does EMCS log my Device Model and IP Address?", a: "For your account security. Logging device models and IP addresses allows you and system administrators to detect suspicious logins, block cross-account (IDOR) tampering, and revoke unauthorized sessions." },
+            { q: "Are temporary or disposable email addresses allowed?", a: "No. To protect the platform from automated bots and ensure reliable account recovery, disposable email domains are strictly blocked." },
             { q: "Are the electricity bills shown here official?", a: "No. All bills and solar ROI figures are estimates calculated using state/private DISCOM tariff slabs for planning and energy-saving purposes." },
-            { q: "How does the 2-year account deletion policy work?", a: "When you deactivate your account, all active devices are logged out immediately and your records are automatically erased after 2 years." },
-            { q: "Is it safe to connect my ESP32 / Arduino relay?", a: "Yes, local hardware triggers use HMAC-SHA256 signatures, but always ensure qualified electrical insulation when dealing with 230V AC loads." }
+            { q: "How does the 2-year account deletion policy work?", a: "When you deactivate your account, all active devices are logged out immediately and your records are automatically erased after 2 years." }
         ]
     };
     try {
@@ -1209,7 +1457,7 @@ function openLegalModal(type) {
 }
 
 // ---------------------------------------------------------
-// TWO-WAY SUPPORT CHAT & REGISTERED USERS TABLE
+// TWO-WAY SUPPORT CHAT & CLICKABLE KYC REGISTRY TABLE
 // ---------------------------------------------------------
 async function loadUserSupportMessages() {
     if (!window.KamAbhiRAM.userSession) return;
@@ -1252,13 +1500,13 @@ async function loadAdminChatThreads() {
         if (data.success && Array.isArray(data.threads)) {
             $('adminChatThreadsList').innerHTML = data.threads.map(t => `<div class="admin-wa-user-item" onclick="selectAdminThread('${escapeHTML(t.consumerId)}', '${escapeHTML(t.name)}')"><div class="emcs-avatar" style="width:32px; height:32px; font-size:0.8rem;">${escapeHTML(t.name[0] || 'U')}</div><div><strong>${escapeHTML(t.name)}</strong><br><small class="small-text">${escapeHTML(t.consumerId)}</small></div></div>`).join('');
 
-            // Also populate Registered Accounts Registry Table
+            // Populate Registered Accounts Registry Table with Clickable KYC Name Link
             safeSetText('adminUserCount', data.threads.length);
             const userTbody = $('adminUserListBody');
             if (userTbody) {
                 userTbody.innerHTML = data.threads.map(u => `<tr>
                     <td><b>${escapeHTML(u.consumerId)}</b></td>
-                    <td>${escapeHTML(u.name)}</td>
+                    <td><a href="javascript:void(0)" class="text-primary hover-pop" style="font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:6px;" onclick="fetchAdminUserDetails('${escapeHTML(u.consumerId)}')">${escapeHTML(u.name)} <i class="fa-solid fa-address-card" style="font-size:0.8rem;"></i></a></td>
                     <td>${escapeHTML(u.mobile)}</td>
                     <td>${Number(u.sanctionedLoadKw || 2.0)} kW</td>
                     <td><span class="badge ${u.accountStatus === 'deleted' ? 'light-red-bg' : 'light-green-bg'}">${escapeHTML(u.accountStatus || 'active')}</span></td>
@@ -1328,6 +1576,7 @@ function enableBrowserNotifications() { if ("Notification" in window) Notificati
 
 async function saveUserProfile() {
     if (!window.KamAbhiRAM.userSession) return alert("Please log in first to save profile settings.");
+    enforceUrlAntiIdorGuard();
     const newName = safeGetVal('profileName').trim();
     if (newName.length >= 2) {
         window.KamAbhiRAM.userSession.name = newName;
@@ -1352,6 +1601,7 @@ async function saveUserProfile() {
 
 function toggleMobileDrawer() { $('appSidebar').classList.toggle('drawer-open');$('drawerOverlay').classList.toggle('hidden'); }
 function showFeature(id, btn) {
+    enforceUrlAntiIdorGuard();
     document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
     document.querySelectorAll('.feature-content').forEach(fc => { fc.classList.add('hidden'); fc.classList.remove('active-feature'); });
