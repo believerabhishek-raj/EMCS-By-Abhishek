@@ -154,6 +154,12 @@
         .form-group { margin-bottom: 12px; }
         .form-group label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 6px; color: var(--text-muted); }
 
+        /* Phone +91 Input Group */
+        .phone-input-group { display: flex; align-items: stretch; border: 1px solid var(--card-border); border-radius: 10px; background: var(--bg-color); overflow: hidden; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+        .phone-input-group:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--accent-light); }
+        .phone-prefix { padding: 10px 12px; background: var(--accent-light); color: var(--primary); font-weight: 700; font-size: 0.9rem; border-right: 1px solid var(--card-border); display: flex; align-items: center; user-select: none; }
+        .phone-input-group input { border: none !important; border-radius: 0 !important; box-shadow: none !important; flex: 1; }
+
         button { cursor: pointer; border: none; outline: none; }
         .primary-btn, .secondary-btn, .danger-btn, .sm-btn { padding: 11px 18px; border-radius: 10px; font-weight: 600; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.92rem; width: 100%; transition: all 0.2s ease; position: relative; overflow: hidden; }
         .primary-btn { background: var(--primary); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.22); }
@@ -250,7 +256,7 @@
         <div class="sidebar-top">
             <div>
                 <div class="logo-main"><i class="fa-solid fa-bolt text-primary"></i> EMCS</div>
-                <div class="logo-sub">Energy Management System</div>
+                <div class="logo-sub" id="sidebarSubTitle">Energy Management System</div>
             </div>
             <button class="icon-btn borderless" onclick="toggleMobileDrawer()" style="display:none;" id="mobileCloseBtn"><i class="fa-solid fa-xmark"></i></button>
         </div>
@@ -264,7 +270,8 @@
             <button onclick="toggleTheme()" class="icon-btn" title="Toggle Theme"><i class="fa-solid fa-moon"></i></button>
         </div>
 
-        <ul class="nav-links">
+        <!-- CONSUMER NAVIGATION LINKS -->
+        <ul class="nav-links" id="consumerNavLinks">
             <li class="nav-item active" onclick="showFeature('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> <span data-i18n="navDash">Dashboard</span></li>
             <li class="nav-item" onclick="showFeature('appliances', this)"><i class="fa-solid fa-plug"></i> <span data-i18n="navAppliances">Appliances & Flowgraph</span></li>
             <li class="nav-item" onclick="showFeature('gridSafety', this)"><i class="fa-solid fa-gauge-high text-warning"></i> <span data-i18n="navVoltage">Voltage & Surge Guard</span></li>
@@ -283,9 +290,33 @@
             <li class="nav-item" onclick="showFeature('profile', this)"><i class="fa-solid fa-user-shield"></i> <span data-i18n="navProfile">Account & Security</span></li>
         </ul>
 
+        <!-- ADMIN LEFT SIDEBAR NAVIGATION LINKS (Visible when Admin logs in) -->
+        <ul class="nav-links hidden" id="adminNavLinks">
+            <li class="nav-item active" onclick="switchAdminSubTab('chatTab', this)"><i class="fa-solid fa-headset text-primary"></i> <span>Inquiry Desk</span></li>
+            <li class="nav-item" id="adminUsersTabBtn" onclick="switchAdminSubTab('usersTab', this)"><i class="fa-solid fa-users-gear text-primary"></i> <span>Registered Accounts</span></li>
+            <li class="nav-item" id="ownerStaffTabBtn" onclick="switchAdminSubTab('staffTab', this)"><i class="fa-solid fa-user-lock text-warning"></i> <span>Access Roles</span></li>
+            <li class="nav-item" id="ownerCmsTabBtn" onclick="switchAdminSubTab('cmsTab', this)"><i class="fa-solid fa-pen-to-square text-primary"></i> <span>Portal CMS & FAQs</span></li>
+            <li class="nav-item" id="adminErrorTabBtn" onclick="switchAdminSubTab('errorTab', this)">
+                <i class="fa-solid fa-bug danger-text"></i>
+                <span style="flex:1;">System Error Logs</span>
+                <span id="adminErrorCountBadge" class="badge light-red-bg">0</span>
+            </li>
+            <li class="nav-item" id="masterDumpBtn" onclick="downloadAdminMasterDatabase()" style="margin-top:12px; border:1px dashed var(--savings-green); background:rgba(16,185,129,0.06);">
+                <i class="fa-solid fa-database green-text"></i> <span class="green-text" style="font-weight:600;">Secure Vault Export</span>
+            </li>
+        </ul>
+
+        <!-- CONSUMER AUTH FOOTER -->
         <div class="sidebar-auth-btn-box" id="sidebarAuthArea">
             <button class="primary-btn sm-btn w-100" onclick="openLoginModal()">
                 <i class="fa-solid fa-arrow-right-to-bracket"></i> <span data-i18n="btnConnect">Login / Connect</span>
+            </button>
+        </div>
+
+        <!-- ADMIN SIDEBAR FOOTER -->
+        <div class="sidebar-auth-btn-box hidden" id="adminSidebarFooter">
+            <button type="button" class="danger-btn sm-btn w-100" onclick="exitAdminView()">
+                <i class="fa-solid fa-power-off"></i> Exit Console
             </button>
         </div>
     </nav>
@@ -301,26 +332,15 @@
 
         <!-- SECURE ADMIN CONTROL CONSOLE -->
         <section id="adminSection" class="hidden">
-            <div class="clean-card mb-2 flex-between" style="border-left: 4px solid var(--danger);">
+            <div class="clean-card mb-3 flex-between" style="border-left: 4px solid var(--danger);">
                 <div>
                     <h2><i class="fa-solid fa-shield-halved text-primary"></i> Secure Control Console</h2>
                     <p class="small-text">Authorized Role: <b id="adminRoleDisplay" class="text-primary">System Administrator</b></p>
                 </div>
-                <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <button type="button" id="masterDumpBtn" class="primary-btn sm-btn" style="background:#10B981;" onclick="downloadAdminMasterDatabase()"><i class="fa-solid fa-database"></i> Secure Vault Export</button>
-                    <button type="button" class="danger-btn sm-btn" onclick="exitAdminView()"><i class="fa-solid fa-power-off"></i> Exit Console</button>
-                </div>
+                <span class="badge light-green-bg live-pulse"><i class="fa-solid fa-lock"></i> Session Encrypted</span>
             </div>
 
-            <div class="auth-tabs mb-3" style="border: 1px solid var(--card-border);">
-                <button class="active" onclick="switchAdminSubTab('chatTab', this)"><i class="fa-solid fa-headset text-primary"></i> Inquiry Desk</button>
-                <button id="adminUsersTabBtn" onclick="switchAdminSubTab('usersTab', this)"><i class="fa-solid fa-users-gear text-primary"></i> Registered Accounts</button>
-                <button id="ownerStaffTabBtn" onclick="switchAdminSubTab('staffTab', this)"><i class="fa-solid fa-user-lock text-warning"></i> Access Roles</button>
-                <button id="ownerCmsTabBtn" onclick="switchAdminSubTab('cmsTab', this)"><i class="fa-solid fa-pen-to-square text-primary"></i> Portal CMS & FAQs</button>
-                <button id="adminErrorTabBtn" onclick="switchAdminSubTab('errorTab', this)"><i class="fa-solid fa-bug danger-text"></i> System Error Logs <span id="adminErrorCountBadge" class="badge light-red-bg">0</span></button>
-            </div>
-
-            <div id="adminChatSubPane" class="admin-sub-pane">
+            <div id="adminChatSubPane" class="admin-sub-pane active-feature">
                 <div class="clean-card p-0" style="overflow:hidden;">
                     <div class="admin-wa-container">
                         <div class="admin-wa-users-panel">
@@ -376,7 +396,7 @@
                     <div class="grid-3 mt-2 mb-2">
                         <input type="text" id="staffNewName" placeholder="Staff Full Name">
                         <input type="text" id="staffNewUser" placeholder="Username">
-                        <input type="password" id="staffNewPass" placeholder="Password (min 6 chars)">
+                        <input type="password" id="staffNewPass" placeholder="Enter Password">
                     </div>
                     <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:14px; font-size:0.84rem;">
                         <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="permManageUsers" checked style="width:auto;"> View Accounts</label>
@@ -605,7 +625,7 @@
                 </div>
             </div>
 
-            <!-- TAB 2: APPLIANCES (1. Add Form -> 2. List -> 3. Flowchart & Hackathon Graphs) -->
+            <!-- TAB 2: APPLIANCES -->
             <div id="appliances" class="feature-content hidden">
                 <div class="clean-card mb-3">
                     <h3><i class="fa-solid fa-plug-circle-plus text-primary hover-pop"></i> Appliance Setup & Profiler</h3>
@@ -739,7 +759,7 @@
             <div id="ocrScanner" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
                     <h3><i class="fa-solid fa-file-arrow-up text-primary hover-pop"></i> Electricity Bill OCR Scanner</h3>
-                    <p class="small-text mb-2">Upload a physical bill image (JPG/PNG/WebP under 4MB) to extract units automatically.</p>
+                    <p class="small-text mb-2">Upload a physical bill image to extract units automatically.</p>
                     <input type="file" id="billImageInput" accept="image/jpeg,image/png,image/webp" class="mb-2" style="padding: 6px;">
                     <button class="primary-btn" onclick="processBillOcr()"><i class="fa-solid fa-wand-magic-sparkles"></i> Scan Bill Image</button>
                     <div id="ocrLoader" class="hidden text-center mt-2"><i class="fa-solid fa-spinner fa-spin text-primary"></i> Processing secure image stream...</div>
@@ -754,7 +774,7 @@
             <div id="smartMeterCsv" class="feature-content hidden">
                 <div class="clean-card" style="max-width:700px; margin:0 auto;">
                     <h3><i class="fa-solid fa-file-csv green-text hover-pop"></i> Smart Meter CSV Analyzer</h3>
-                    <p class="small-text mb-2">Upload interval logs (.csv or .txt under 2MB) exported from utility smart meters.</p>
+                    <p class="small-text mb-2">Upload interval logs exported from utility smart meters.</p>
                     <input type="file" id="meterCsvInput" accept=".csv,.txt" onchange="handleSmartMeterCsv(event)" style="padding: 6px;">
                     <div id="csvSummaryBox" class="hidden mt-3 grid-3 text-center">
                         <div class="p-2 clean-card" style="animation: fadeUp 0.3s ease;"><p class="small-text">Total Consumption</p><h3 class="text-primary" id="csvTotalKwh">0 kWh</h3></div>
@@ -999,12 +1019,15 @@
             <form id="modalLoginForm" onsubmit="handleSecureLogin(event)" style="animation: fadeUp 0.3s ease;">
                 <div class="form-group">
                     <label>Mobile Number</label>
-                    <input type="tel" id="loginMobile" pattern="[0-9]{10}" placeholder="Enter Your Mobile Number" required>
+                    <div class="phone-input-group">
+                        <span class="phone-prefix">+91</span>
+                        <input type="tel" id="loginMobile" maxlength="10" pattern="[0-9]{10}" placeholder="Enter Your 10 Digit Mobile No" required>
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label>Security PIN (4-6 Digit) / Password (8-16 Char)</label>
+                    <label>PIN / Password</label>
                     <div style="position: relative; display: flex; align-items: center;">
-                        <input type="password" id="loginCredential" minlength="4" maxlength="16" placeholder="Enter Secure PIN or Password" required style="padding-right: 42px; width: 100%;">
+                        <input type="password" id="loginCredential" minlength="4" maxlength="16" placeholder="Enter PIN or Password" required style="padding-right: 42px; width: 100%;">
                         <button type="button" onclick="togglePasswordVisibility('loginCredential', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide">
                             <i class="fa-solid fa-eye"></i>
                         </button>
@@ -1013,26 +1036,29 @@
                 <button type="submit" class="primary-btn hover-pop">Authenticate & Sign In</button>
             </form>
 
-            <!-- Register Form (With Email & PIN/Password Toggle) -->
+            <!-- Register Form (Clean Labels + Silent Backend Security) -->
             <form id="modalRegisterForm" class="hidden" onsubmit="handleSecureRegister(event)" style="animation: fadeUp 0.3s ease;">
                 <input type="text" id="regHoneypot" name="_bot_honeypot" style="display:none;" tabindex="-1" autocomplete="off">
                 <div class="form-group"><label>Full Name</label><input type="text" id="regName" placeholder="Enter Your Full Name" required></div>
-                <div class="grid-2" style="gap:10px;">
-                    <div class="form-group"><label>Mobile Number</label><input type="tel" id="regMobile" pattern="[0-9]{10}" placeholder="10 Digits" required></div>
-                    <div class="form-group"><label>Consumer ID</label><input type="text" id="regConsumerId" minlength="12" maxlength="12" placeholder="12 Chars ID" style="text-transform:uppercase;" required></div>
-                </div>
                 <div class="form-group">
-                    <label>Verified Email Address (No Temp Mail Allowed)</label>
-                    <input type="email" id="regEmail" maxlength="100" placeholder="e.g. yourname@gmail.com" required>
+                    <label>Mobile Number</label>
+                    <div class="phone-input-group">
+                        <span class="phone-prefix">+91</span>
+                        <input type="tel" id="regMobile" maxlength="10" pattern="[0-9]{10}" placeholder="Enter Your 10 Digit Mobile No" required>
+                    </div>
+                </div>
+                <div class="grid-2" style="gap:10px;">
+                    <div class="form-group"><label>Consumer ID</label><input type="text" id="regConsumerId" minlength="12" maxlength="12" placeholder="Enter Consumer ID" style="text-transform:uppercase;" required></div>
+                    <div class="form-group"><label>Email Address</label><input type="email" id="regEmail" maxlength="100" placeholder="Enter Email Address" required></div>
                 </div>
                 <div class="form-group" style="background:var(--bg-color); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
                     <label style="margin-bottom:8px;">Choose Security Method</label>
                     <div style="display:flex; gap:15px; font-size:0.85rem; font-weight:500;">
-                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="regAuthType" value="pin" checked onchange="toggleRegAuthUI()" style="width:auto;"> 4-6 Digit PIN</label>
-                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="regAuthType" value="password" onchange="toggleRegAuthUI()" style="width:auto;"> 8-16 Char Password</label>
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="regAuthType" value="pin" checked onchange="toggleRegAuthUI()" style="width:auto;"> PIN</label>
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="regAuthType" value="password" onchange="toggleRegAuthUI()" style="width:auto;"> Password</label>
                     </div>
                     <div style="position: relative; display: flex; align-items: center; margin-top:10px;">
-                        <input type="password" id="regCredential" minlength="4" maxlength="6" pattern="[0-9]{4,6}" placeholder="Create 4 to 6 Digit PIN" required style="padding-right: 42px; width: 100%;">
+                        <input type="password" id="regCredential" minlength="4" maxlength="6" pattern="[0-9]{4,6}" placeholder="Enter PIN" required style="padding-right: 42px; width: 100%;">
                         <button type="button" onclick="togglePasswordVisibility('regCredential', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide">
                             <i class="fa-solid fa-eye"></i>
                         </button>
@@ -1047,13 +1073,17 @@
                 <button type="submit" class="primary-btn hover-pop">Create Secure Account</button>
             </form>
 
-            <!-- Forgot Credentials Form (With Consumer ID / Email Toggle & New PIN / Password Toggle) -->
+            <!-- Forgot Credentials Form -->
             <form id="modalForgotForm" class="hidden" onsubmit="handleForgotReset(event)" style="animation: fadeUp 0.3s ease;">
                 <p class="small-text mb-2 text-primary"><b>Account Recovery:</b> Verify identity using Consumer ID or Email ID.</p>
-                <div class="grid-2" style="gap:10px;">
-                    <div class="form-group"><label>Mobile Number</label><input type="tel" id="forgotMobile" placeholder="Registered Mobile" pattern="[0-9]{10}" required></div>
-                    <div class="form-group"><label>Full Name</label><input type="text" id="forgotName" placeholder="Registered Name" required></div>
+                <div class="form-group">
+                    <label>Mobile Number</label>
+                    <div class="phone-input-group">
+                        <span class="phone-prefix">+91</span>
+                        <input type="tel" id="forgotMobile" maxlength="10" pattern="[0-9]{10}" placeholder="Enter Your 10 Digit Mobile No" required>
+                    </div>
                 </div>
+                <div class="form-group"><label>Full Name</label><input type="text" id="forgotName" placeholder="Enter Registered Full Name" required></div>
 
                 <div class="form-group" style="background:var(--bg-color); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
                     <label style="margin-bottom:8px;">Recover Account Using:</label>
@@ -1061,17 +1091,17 @@
                         <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="recoveryType" value="cid" checked onchange="toggleForgotUI()" style="width:auto;"> Consumer ID</label>
                         <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="recoveryType" value="email" onchange="toggleForgotUI()" style="width:auto;"> Email ID</label>
                     </div>
-                    <input type="text" id="forgotRecoveryValue" placeholder="Enter 12-Char Consumer ID" minlength="12" maxlength="12" style="text-transform:uppercase;" required>
+                    <input type="text" id="forgotRecoveryValue" placeholder="Enter Consumer ID" minlength="12" maxlength="12" style="text-transform:uppercase;" required>
                 </div>
 
                 <div class="form-group" style="background:var(--bg-color); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
-                    <label style="margin-bottom:8px;">Set New Security Credential</label>
+                    <label style="margin-bottom:8px;">Set New Security Method</label>
                     <div style="display:flex; gap:15px; font-size:0.85rem; font-weight:500; margin-bottom:10px;">
-                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="forgotAuthType" value="pin" checked onchange="toggleForgotAuthUI()" style="width:auto;"> 4-6 Digit PIN</label>
-                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="forgotAuthType" value="password" onchange="toggleForgotAuthUI()" style="width:auto;"> 8-16 Char Password</label>
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="forgotAuthType" value="pin" checked onchange="toggleForgotAuthUI()" style="width:auto;"> PIN</label>
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="forgotAuthType" value="password" onchange="toggleForgotAuthUI()" style="width:auto;"> Password</label>
                     </div>
                     <div style="position: relative; display: flex; align-items: center;">
-                        <input type="password" id="forgotNewCredential" minlength="4" maxlength="6" pattern="[0-9]{4,6}" placeholder="Create 4 to 6 Digit PIN" required style="padding-right: 42px; width: 100%;">
+                        <input type="password" id="forgotNewCredential" minlength="4" maxlength="6" pattern="[0-9]{4,6}" placeholder="Enter New PIN" required style="padding-right: 42px; width: 100%;">
                         <button type="button" onclick="togglePasswordVisibility('forgotNewCredential', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide">
                             <i class="fa-solid fa-eye"></i>
                         </button>
