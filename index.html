@@ -58,7 +58,7 @@
             --shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
         }
 
-        /* 🌟 KEYFRAME ANIMATIONS (Hardware Accelerated) */
+        /* 🌟 KEYFRAME ANIMATIONS (Client GPU/RAM Accelerated - Zero Server Load) */
         @keyframes fadeUp {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -119,9 +119,8 @@
         .live-pulse { animation: livePulse 2s infinite; border-radius: 20px; }
         .hover-pop { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .hover-pop:hover { transform: scale(1.05); }
-        
         .active-feature { animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        
+
         .sidebar { width: var(--sidebar-width); background: var(--card-bg); border-right: 1px solid var(--card-border); padding: 1.25rem 0.9rem; display: flex; flex-direction: column; height: 100vh; position: fixed; left: 0; top: 0; z-index: 1000; transition: transform 0.3s ease, background-color 0.3s ease; }
         .sidebar-top { display: flex; justify-content: space-between; align-items: center; padding: 0 8px 12px 8px; }
         .logo-main { font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 8px; color: var(--text-color); }
@@ -188,7 +187,7 @@
         .popup-overlay:not(.hidden) { animation: overlayFade 0.3s ease forwards; }
         .popup-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 92%; max-width: 500px; max-height: 90vh; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; z-index: 9999; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.45); }
         .popup-modal:not(.hidden) { animation: modalPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        
+
         .chat-header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; }
         .close-btn { background: none; color: #fff; font-size: 1.3rem; width: auto; padding: 4px; transition: transform 0.2s ease; }
         .close-btn:hover { transform: rotate(90deg); }
@@ -213,11 +212,11 @@
         .admin-wa-user-item { padding: 10px 12px; border-bottom: 1px solid var(--card-border); cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background-color 0.2s ease; }
         .admin-wa-user-item:hover, .admin-wa-user-item.active { background: var(--accent-light); }
         .emcs-chat-body { height: 400px; background: var(--bg-color); padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
-        
+
         .emcs-bubble { max-width: 75%; padding: 12px 16px; border-radius: 14px; font-size: 0.9rem; line-height: 1.5; position: relative; word-wrap: break-word; box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
         .emcs-received { align-self: flex-start; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--card-border); border-bottom-left-radius: 2px; animation: bubbleSlideRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .emcs-sent { align-self: flex-end; background: var(--accent-light); color: var(--text-color); border: 1px solid rgba(99, 102, 241, 0.2); border-bottom-right-radius: 2px; animation: bubbleSlideLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        
+
         .emcs-input-bar { background: var(--card-bg); padding: 15px 20px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--card-border); }
         .emcs-send-btn { width: 45px; height: 45px; border-radius: 12px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.1rem; transition: transform 0.2s ease, box-shadow 0.2s ease; }
         .emcs-send-btn:hover { transform: scale(1.08); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); }
@@ -356,12 +355,15 @@
             <div id="adminUsersSubPane" class="admin-sub-pane hidden">
                 <div class="clean-card">
                     <div class="flex-between mb-2">
-                        <h3>Registered Accounts Registry</h3>
+                        <div>
+                            <h3>Registered Accounts Registry</h3>
+                            <p class="small-text">Click on any Consumer's Full Name to view full KYC, IP Forensics & 24-Month Billing Ledger.</p>
+                        </div>
                         <span class="badge light-green-bg live-pulse">Total Active: <b id="adminUserCount">0</b></span>
                     </div>
                     <div class="table-container">
                         <table>
-                            <thead><tr><th>Consumer ID</th><th>Full Name</th><th>Mobile</th><th>Sanctioned Load</th><th>Status</th></tr></thead>
+                            <thead><tr><th>Consumer ID</th><th>Full Name (Click for KYC)</th><th>Mobile</th><th>Sanctioned Load</th><th>Status</th></tr></thead>
                             <tbody id="adminUserListBody"></tbody>
                         </table>
                     </div>
@@ -553,17 +555,17 @@
                 </div>
 
                 <div class="grid-4 mb-3">
-                    <div class="clean-card p-2" style="animation-delay: 0.1s;">
+                    <div class="clean-card p-2">
                         <p class="card-label">Active Monthly Load</p>
                         <h2 id="dashLoadDisplay" class="text-primary">0.0 kWh</h2>
                         <span class="badge light-green-bg live-pulse mt-1">Live Draw: <b id="liveWattsDisplay">0 W</b></span>
                     </div>
-                    <div class="clean-card p-2" style="animation-delay: 0.2s;">
+                    <div class="clean-card p-2">
                         <p class="card-label">Efficiency Index</p>
                         <h2 id="ecoScoreDisplay" class="green-text">94%</h2>
                         <span class="badge light-green-bg mt-1">Optimized</span>
                     </div>
-                    <div class="clean-card p-2" style="border-left: 3px solid var(--danger); animation-delay: 0.3s;">
+                    <div class="clean-card p-2" style="border-left: 3px solid var(--danger);">
                         <p class="card-label">Estimated Monthly Bill</p>
                         <div class="flex-between">
                             <h2 id="dashBillDisplay" class="danger-text">₹0</h2>
@@ -571,14 +573,14 @@
                         </div>
                         <span class="badge light-red-bg mt-1">Slabs + Taxes</span>
                     </div>
-                    <div class="clean-card p-2" style="border-left: 3px solid var(--accent); animation-delay: 0.4s;">
+                    <div class="clean-card p-2" style="border-left: 3px solid var(--accent);">
                         <p class="card-label">Standby Waste</p>
                         <h2 id="vampireDisplay" class="text-accent">₹0</h2>
                         <span class="badge light-red-bg mt-1">Phantom Load</span>
                     </div>
                 </div>
 
-                <div class="clean-card mb-3" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05)); animation-delay: 0.5s;">
+                <div class="clean-card mb-3" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));">
                     <div class="flex-between">
                         <div>
                             <h4><i class="fa-solid fa-chart-line text-primary hover-pop"></i> Billing Forecast</h4>
@@ -591,7 +593,7 @@
                     </div>
                 </div>
 
-                <div class="clean-card" style="animation-delay: 0.6s;">
+                <div class="clean-card">
                     <div class="flex-between mb-2">
                         <h3><i class="fa-solid fa-chart-area text-primary hover-pop"></i> Daily Energy Consumption Trend</h3>
                         <div style="display:flex; gap:6px;">
@@ -979,7 +981,7 @@
         </div>
     </div>
 
-    <!-- 2. Auth Modal (Login / Register / Forgot PIN / Admin) -->
+    <!-- 2. Auth Modal (Login / Register / Forgot Access / Admin Console) -->
     <div id="loginModal" class="popup-modal hidden">
         <div class="chat-header">
             <h4 style="margin:0;"><i class="fa-solid fa-shield-halved"></i> Secure Access Portal</h4>
@@ -989,7 +991,7 @@
             <div class="auth-tabs mb-2" id="authTabButtons">
                 <button class="active" onclick="switchAuthTab('login', this)">Login</button>
                 <button onclick="switchAuthTab('register', this)">Register</button>
-                <button onclick="switchAuthTab('forgot', this)">Forgot PIN</button>
+                <button onclick="switchAuthTab('forgot', this)">Forgot Access</button>
                 <button onclick="switchAuthTab('admin', this)">Console</button>
             </div>
 
@@ -1000,10 +1002,10 @@
                     <input type="tel" id="loginMobile" pattern="[0-9]{10}" placeholder="Enter Your Mobile Number" required>
                 </div>
                 <div class="form-group">
-                    <label>4-Digit Security PIN</label>
+                    <label>Security PIN (4-6 Digit) / Password (8-16 Char)</label>
                     <div style="position: relative; display: flex; align-items: center;">
-                        <input type="password" id="loginPin" maxlength="4" pattern="[0-9]{4}" placeholder="Enter 4-Digit PIN" required style="padding-right: 42px; width: 100%;">
-                        <button type="button" onclick="togglePasswordVisibility('loginPin', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide PIN">
+                        <input type="password" id="loginCredential" minlength="4" maxlength="16" placeholder="Enter Secure PIN or Password" required style="padding-right: 42px; width: 100%;">
+                        <button type="button" onclick="togglePasswordVisibility('loginCredential', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
@@ -1011,23 +1013,27 @@
                 <button type="submit" class="primary-btn hover-pop">Authenticate & Sign In</button>
             </form>
 
-            <!-- Register Form -->
+            <!-- Register Form (With Email & PIN/Password Toggle) -->
             <form id="modalRegisterForm" class="hidden" onsubmit="handleSecureRegister(event)" style="animation: fadeUp 0.3s ease;">
                 <input type="text" id="regHoneypot" name="_bot_honeypot" style="display:none;" tabindex="-1" autocomplete="off">
                 <div class="form-group"><label>Full Name</label><input type="text" id="regName" placeholder="Enter Your Full Name" required></div>
-                <div class="form-group">
-                    <label>Mobile Number</label>
-                    <input type="tel" id="regMobile" pattern="[0-9]{10}" placeholder="Enter Your Mobile Number" required>
+                <div class="grid-2" style="gap:10px;">
+                    <div class="form-group"><label>Mobile Number</label><input type="tel" id="regMobile" pattern="[0-9]{10}" placeholder="10 Digits" required></div>
+                    <div class="form-group"><label>Consumer ID</label><input type="text" id="regConsumerId" minlength="12" maxlength="12" placeholder="12 Chars ID" style="text-transform:uppercase;" required></div>
                 </div>
                 <div class="form-group">
-                    <label>12-Character Consumer ID</label>
-                    <input type="text" id="regConsumerId" minlength="12" maxlength="12" placeholder="Enter 12-Character Consumer ID" style="text-transform:uppercase;" required>
+                    <label>Verified Email Address (No Temp Mail Allowed)</label>
+                    <input type="email" id="regEmail" maxlength="100" placeholder="e.g. yourname@gmail.com" required>
                 </div>
-                <div class="form-group">
-                    <label>4-Digit Security PIN</label>
-                    <div style="position: relative; display: flex; align-items: center;">
-                        <input type="password" id="regPin" maxlength="4" pattern="[0-9]{4}" placeholder="Create 4-Digit PIN" required style="padding-right: 42px; width: 100%;">
-                        <button type="button" onclick="togglePasswordVisibility('regPin', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide PIN">
+                <div class="form-group" style="background:var(--bg-color); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
+                    <label style="margin-bottom:8px;">Choose Security Method</label>
+                    <div style="display:flex; gap:15px; font-size:0.85rem; font-weight:500;">
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="regAuthType" value="pin" checked onchange="toggleRegAuthUI()" style="width:auto;"> 4-6 Digit PIN</label>
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="regAuthType" value="password" onchange="toggleRegAuthUI()" style="width:auto;"> 8-16 Char Password</label>
+                    </div>
+                    <div style="position: relative; display: flex; align-items: center; margin-top:10px;">
+                        <input type="password" id="regCredential" minlength="4" maxlength="6" pattern="[0-9]{4,6}" placeholder="Create 4 to 6 Digit PIN" required style="padding-right: 42px; width: 100%;">
+                        <button type="button" onclick="togglePasswordVisibility('regCredential', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
@@ -1041,25 +1047,37 @@
                 <button type="submit" class="primary-btn hover-pop">Create Secure Account</button>
             </form>
 
-            <!-- Forgot PIN Form -->
-            <form id="modalForgotForm" class="hidden" onsubmit="handleFreePinReset(event)" style="animation: fadeUp 0.3s ease;">
-                <p class="small-text mb-2 text-primary"><b>PIN Recovery:</b> Match registered details to re-secure your access.</p>
-                <div class="form-group">
-                    <label>Mobile Number</label>
-                    <input type="tel" id="forgotMobile" placeholder="Enter Your Mobile Number" pattern="[0-9]{10}" required>
+            <!-- Forgot Credentials Form (With Consumer ID / Email Toggle & New PIN / Password Toggle) -->
+            <form id="modalForgotForm" class="hidden" onsubmit="handleForgotReset(event)" style="animation: fadeUp 0.3s ease;">
+                <p class="small-text mb-2 text-primary"><b>Account Recovery:</b> Verify identity using Consumer ID or Email ID.</p>
+                <div class="grid-2" style="gap:10px;">
+                    <div class="form-group"><label>Mobile Number</label><input type="tel" id="forgotMobile" placeholder="Registered Mobile" pattern="[0-9]{10}" required></div>
+                    <div class="form-group"><label>Full Name</label><input type="text" id="forgotName" placeholder="Registered Name" required></div>
                 </div>
-                <div class="form-group"><label>Consumer ID</label><input type="text" id="forgotConsumerId" minlength="12" maxlength="12" placeholder="Enter 12-Character Consumer ID" style="text-transform:uppercase;" required></div>
-                <div class="form-group"><label>Registered Full Name</label><input type="text" id="forgotName" placeholder="Enter Registered Full Name" required></div>
-                <div class="form-group">
-                    <label>New 4-Digit PIN</label>
+
+                <div class="form-group" style="background:var(--bg-color); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
+                    <label style="margin-bottom:8px;">Recover Account Using:</label>
+                    <div style="display:flex; gap:15px; font-size:0.85rem; font-weight:500; margin-bottom:10px;">
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="recoveryType" value="cid" checked onchange="toggleForgotUI()" style="width:auto;"> Consumer ID</label>
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="recoveryType" value="email" onchange="toggleForgotUI()" style="width:auto;"> Email ID</label>
+                    </div>
+                    <input type="text" id="forgotRecoveryValue" placeholder="Enter 12-Char Consumer ID" minlength="12" maxlength="12" style="text-transform:uppercase;" required>
+                </div>
+
+                <div class="form-group" style="background:var(--bg-color); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
+                    <label style="margin-bottom:8px;">Set New Security Credential</label>
+                    <div style="display:flex; gap:15px; font-size:0.85rem; font-weight:500; margin-bottom:10px;">
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="forgotAuthType" value="pin" checked onchange="toggleForgotAuthUI()" style="width:auto;"> 4-6 Digit PIN</label>
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="forgotAuthType" value="password" onchange="toggleForgotAuthUI()" style="width:auto;"> 8-16 Char Password</label>
+                    </div>
                     <div style="position: relative; display: flex; align-items: center;">
-                        <input type="password" id="forgotNewPin" maxlength="4" pattern="[0-9]{4}" placeholder="Enter New 4-Digit PIN" required style="padding-right: 42px; width: 100%;">
-                        <button type="button" onclick="togglePasswordVisibility('forgotNewPin', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide PIN">
+                        <input type="password" id="forgotNewCredential" minlength="4" maxlength="6" pattern="[0-9]{4,6}" placeholder="Create 4 to 6 Digit PIN" required style="padding-right: 42px; width: 100%;">
+                        <button type="button" onclick="togglePasswordVisibility('forgotNewCredential', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
                 </div>
-                <button type="submit" class="primary-btn hover-pop">Reset PIN</button>
+                <button type="submit" class="primary-btn hover-pop">Verify & Reset Access</button>
             </form>
 
             <!-- Admin Login Form -->
@@ -1131,6 +1149,63 @@
             <button class="close-btn" onclick="closeAllPopups()"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="p-3" id="legalModalBody" style="line-height:1.6; overflow-y:auto; max-height:70vh;"></div>
+    </div>
+
+    <!-- 6. Admin User KYC, 24-Month Billing & IP Forensics Modal -->
+    <div id="adminUserKycModal" class="popup-modal hidden" style="max-width:620px;">
+        <div class="chat-header">
+            <h4 style="margin:0;"><i class="fa-solid fa-address-card"></i> Consumer KYC & Forensics</h4>
+            <button class="close-btn" onclick="closeAllPopups()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="p-3" style="overflow-y:auto; max-height:85vh;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;">
+                <div>
+                    <h2 id="kycName" class="text-primary" style="margin:0;">Consumer Name</h2>
+                    <p id="kycConsumerId" class="small-text">EM100XXXXXXX</p>
+                </div>
+                <span id="kycStatusBadge" class="badge light-green-bg">Active</span>
+            </div>
+
+            <div class="grid-2 mb-3">
+                <div class="p-2 clean-card"><p class="card-label">Registered Mobile</p><h4 id="kycMobile">--</h4></div>
+                <div class="p-2 clean-card"><p class="card-label">Registered Email</p><h4 id="kycEmail" style="font-size:0.9rem; word-break:break-all;">--</h4></div>
+                <div class="p-2 clean-card"><p class="card-label">Sanctioned Load / Joined</p><h4><span id="kycSanctioned">-- kW</span> • <small id="kycJoinDate" class="small-text">--</small></h4></div>
+                <div class="p-2 clean-card" style="border-left: 3px solid var(--accent);"><p class="card-label">Est. Lifetime Usage</p><h4 id="kycLifetimeUnits" class="text-accent">-- kWh</h4></div>
+            </div>
+
+            <!-- TABS FOR IP FORENSICS AND 24-MONTH BILLING -->
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <button type="button" class="sm-btn primary-btn w-100 hover-pop" onclick="document.getElementById('kycTabSessions').classList.remove('hidden'); document.getElementById('kycTabBilling').classList.add('hidden')"><i class="fa-solid fa-laptop-mobile"></i> IP & Device Logins</button>
+                <button type="button" class="sm-btn secondary-btn w-100 hover-pop" onclick="document.getElementById('kycTabBilling').classList.remove('hidden'); document.getElementById('kycTabSessions').classList.add('hidden')"><i class="fa-solid fa-file-invoice-dollar"></i> 24-Month Billing Ledger</button>
+            </div>
+
+            <!-- SESSIONS & IP TABLE -->
+            <div id="kycTabSessions" class="p-2 mb-2" style="background:var(--bg-color); border-radius:8px; border:1px solid var(--card-border);">
+                <div class="table-container" style="max-height:170px; overflow-y:auto;">
+                    <table>
+                        <thead><tr><th>Device OS / Browser</th><th>IP Address</th><th>Login Timestamp</th></tr></thead>
+                        <tbody id="kycSessionList"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 24-MONTH BILLING LEDGER TABLE -->
+            <div id="kycTabBilling" class="p-2 mb-2 hidden" style="background:var(--bg-color); border-radius:8px; border:1px solid var(--card-border);">
+                <div class="table-container" style="max-height:170px; overflow-y:auto;">
+                    <table>
+                        <thead><tr><th>Month</th><th>Txn ID</th><th>Units</th><th>Billed Amt</th><th>Status</th></tr></thead>
+                        <tbody id="kycBillingList"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="p-2" style="background:var(--bg-color); border-radius:8px; border:1px solid var(--card-border);">
+                <p class="card-label mb-1">Active Appliances (<span id="kycAppCount">0</span>)</p>
+                <div id="kycAppList" style="font-size:0.85rem; color:var(--text-color); max-height:100px; overflow-y:auto;">
+                    No appliances found.
+                </div>
+            </div>
+        </div>
     </div>
 
     <button id="floatingAIBtn" class="hover-pop" onclick="openAIModal()" title="EMCS Ai Assistant"><i class="fa-solid fa-robot"></i></button>
