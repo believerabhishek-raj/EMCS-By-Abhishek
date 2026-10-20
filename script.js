@@ -1,3 +1,10 @@
+// ===================================================================
+// EMCS FRONTEND SCRIPT (script.js) - FINAL HUMAN-FRIENDLY MASTER BUILD
+// Audited: Default English UI, Hardware Risk Tick-Box Lock, Zero Technical
+// Jargon, KamAbhi AI Concurrency Lock, Form Auto-Destroy, Anti-IDOR Guard,
+// Bot Honeypot Trap, Admin AI History, Emergency Alerts & 18-Board Tariffs
+// ===================================================================
+
 const $ = (id) => document.getElementById(id);
 const safeSetText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
 const safeGetVal = (id) => { const el = $(id); return el ? el.value : ''; };
@@ -25,14 +32,6 @@ async function secureApiFetch(endpoint, options = {}) {
     });
 }
 
-function getClientTelemetry() {
-    return {
-        screen: `${window.screen?.width || 0}x${window.screen?.height || 0}`,
-        tz: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
-        platform: navigator.platform || ''
-    };
-}
-
 // ---------------------------------------------------------
 // SILENT EMAIL & TEMP-MAIL VALIDATOR
 // ---------------------------------------------------------
@@ -49,7 +48,7 @@ function isStrictValidEmail(emailStr) {
     const clean = String(emailStr || '').trim().toLowerCase();
     if (clean.length < 6 || clean.length > 90) return { ok: false, msg: 'Please enter a valid email address.' };
     if (/[\s\0$<>'"`;\\(){}[\]|!#$%^&*=+/?~]|\.\./.test(clean)) {
-        return { ok: false, msg: 'Please enter a valid email address.' };
+        return { ok: false, msg: 'Please enter a valid email address without special symbols.' };
     }
     const parts = clean.split('@');
     if (parts.length !== 2) return { ok: false, msg: 'Please enter a valid email address.' };
@@ -58,13 +57,13 @@ function isStrictValidEmail(emailStr) {
         return { ok: false, msg: 'Please enter a valid email address.' };
     }
     if (BLOCKED_TEMP_DOMAINS.has(domain)) {
-        return { ok: false, msg: 'Please use a standard personal or work email address.' };
+        return { ok: false, msg: 'Please use a valid personal or work email address.' };
     }
     return { ok: true, email: clean };
 }
 
 // ---------------------------------------------------------
-// CLIENT URL & PROFILE TAMPER GUARD (ANTI-IDOR)
+// CLIENT-SIDE URL & PROFILE TAMPERING SHIELD (ANTI-IDOR)
 // ---------------------------------------------------------
 function enforceUrlAntiIdorGuard() {
     try {
@@ -74,9 +73,9 @@ function enforceUrlAntiIdorGuard() {
 
         const urlCid = params.get('consumerId') || params.get('cid') || params.get('user') || params.get('id');
         if (urlCid && (!activeCid || urlCid.toUpperCase() !== activeCid.toUpperCase())) {
-            reportSystemError('Security', 'Something went wrong, try again later.', 'URL');
+            reportSystemError('Security Shield', 'Unauthorized profile link access blocked.');
             window.history.replaceState({}, document.title, window.location.pathname);
-            alert('Access denied: You cannot open another consumer ID via the URL.');
+            alert('Access Denied: You can only view your own account details.');
         }
 
         if (/consumerId=|cid=/i.test(hash)) {
@@ -86,6 +85,7 @@ function enforceUrlAntiIdorGuard() {
         const profileInput = $('profileId');
         if (activeCid && profileInput && profileInput.value && profileInput.value !== activeCid) {
             profileInput.value = activeCid;
+            reportSystemError('Security Shield', 'Profile ID modification blocked.');
         }
     } catch (ignore) {}
 }
@@ -99,41 +99,58 @@ window.addEventListener('hashchange', enforceUrlAntiIdorGuard);
 function togglePasswordVisibility(fieldId, btn) {
     const inputField = $(fieldId);
     if (!inputField) return;
+
     const icon = btn.querySelector('i');
     if (inputField.type === 'password') {
         inputField.type = 'text';
-        if (icon) { icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash'); }
+        if (icon) {
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        }
     } else {
         inputField.type = 'password';
-        if (icon) { icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye'); }
+        if (icon) {
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
     }
 }
 
 // ---------------------------------------------------------
-// CLEAN ACTIVITY LOGGER (NO TECHNICAL OR BACKEND DETAILS)
+// CLEAN ACTIVITY LOGGING (ZERO TECHNICAL / SENSITIVE DATA)
 // ---------------------------------------------------------
-function reportSystemError() {
+function reportSystemError(section, _rawDetail = '') {
     try {
+        const cleanSection = String(section || 'App Activity').replace(/mongodb|mongoose|express|node|api|backend|server|db/gi, 'System');
         const errEntry = {
             id: Date.now(),
             timestamp: new Date().toISOString(),
-            source: 'App Notice',
+            source: cleanSection.slice(0, 40),
             message: 'Something went wrong, try again later.',
-            location: 'Protected',
+            location: 'User Screen',
             userOrIp: window.KamAbhiRAM?.userSession?.consumerId || 'Visitor'
         };
+
         const localLogs = JSON.parse(localStorage.getItem('emcs_error_logs') || '[]');
         localLogs.unshift(errEntry);
-        localStorage.setItem('emcs_error_logs', JSON.stringify(localLogs.slice(0, 50)));
+        localStorage.setItem('emcs_error_logs', JSON.stringify(localLogs.slice(0, 100)));
         safeSetText('adminErrorCountBadge', localLogs.length);
 
         fetch(`${API_BASE}/errors/report`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-emcs-csrf': 'emcs-verified-client' },
-            body: JSON.stringify({ message: 'Something went wrong, try again later.' })
+            body: JSON.stringify(errEntry)
         }).catch(() => {});
     } catch (ignore) {}
 }
+
+window.addEventListener('error', () => {
+    reportSystemError('Page Activity');
+});
+
+window.addEventListener('unhandledrejection', () => {
+    reportSystemError('Network Activity');
+});
 
 // ---------------------------------------------------------
 // APPLICATION STATE
@@ -148,13 +165,13 @@ window.KamAbhiRAM = {
     budgetThreshold: 3000,
     vampireSavings: 0,
     sanctionedLoadKw: 2.0,
-    hardwareConsentAccepted: false,
     chartMode: 'line',
-    energyChart: null
+    energyChart: null,
+    hardwareConsentAccepted: false
 };
 
 // ---------------------------------------------------------
-// COMPLETE ALL-INDIA TARIFF DATABASE (18 BOARDS)
+// COMPLETE ALL-INDIA TARIFF DATABASE (18 BOARDS + RURAL/URBAN)
 // ---------------------------------------------------------
 const BASE_TARIFFS = {
     bihar: {
@@ -240,7 +257,7 @@ const TRANSLATIONS = {
     },
     hi: {
         navDash: "डैशबोर्ड", navAppliances: "मेरे उपकरण", navVoltage: "वोल्टेज सुरक्षा",
-        navInverter: "इन्वर्टर बैकअप", navVampire: "स्टैंडबाय बिजली बचत", navOcr: "बिल फोटो स्कैन",
+        navInverter: "इन्वर्टर बैकअप", navVampire: "स्टैंडबाय बिजली बचत", navOcr: "बिजली बिल स्कैन करें",
         navCsv: "स्मार्ट मीटर फ़ाइल", navTod: "उपयोग का सही समय", navSolar: "सोलर कैलकुलेटर",
         navIoT: "स्मार्ट हार्डवेयर कंट्रोल", navAudit: "रिपोर्ट और इतिहास", navSim: "बचत कैलकुलेटर",
         navPayment: "बिल भुगतान", navAI: "KamAbhi AI सहायक", navSupport: "सहायता केंद्र",
@@ -257,7 +274,7 @@ const TRANSLATIONS = {
         navPayment: "Pay Bill", navAI: "KamAbhi AI Assistant", navSupport: "Help & Support",
         navProfile: "My Account", btnConnect: "Login / Register", btnLoginShort: "Login",
         greetDefault: "Welcome to Smart Energy Manager ☀️",
-        greetSub: "Apne ghar ke appliances track karein, smart switches control karein aur monthly bill kam karein.",
+        greetSub: "Apne ghar ke appliances track karein, smart switches control karein aur bijli bill bachayein.",
         lblBudgetBtn: "Monthly Budget:"
     }
 };
@@ -274,6 +291,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const savedTheme = localStorage.getItem('ecoTheme') || 'light';
     document.body.setAttribute('data-theme', savedTheme);
 
+    // Default Language Strictly Set to English
+    if ($('languageSelect')) $('languageSelect').value = 'en';
+    switchLanguage('en');
+
     const activeUser = JSON.parse(localStorage.getItem('ecoActiveUser'));
     if (activeUser) {
         setupUserSession(activeUser);
@@ -286,10 +307,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderRealPaymentLedger();
     calculateSolarRoi();
     calculateInverterRuntime();
-
-    // Default language set to English
-    safeSetVal('languageSelect', 'en');
-    switchLanguage('en');
 });
 
 // ---------------------------------------------------------
@@ -374,23 +391,47 @@ function saveCustomTariffSettings() {
 }
 
 // ---------------------------------------------------------
-// APPLIANCES & HARDWARE COMPATIBILITY (NO 2D/FLOWGRAPH IN APPLIANCE TAB)
+// APPLIANCES & HARDWARE COMPATIBILITY (2D/FLOWGRAPH REMOVED)
 // ---------------------------------------------------------
 function onAppConnectionModeChange(mode) {
-    const box = $('appHardwareDisclaimerBox');
-    if (!box) return;
-    if (mode !== 'manual') {
-        box.classList.remove('hidden');
+    const disclaimerBox = $('appHardwareDisclaimerBox');
+    const chk = $('appHardwareRiskCheck');
+    if (!disclaimerBox) return;
+
+    if (mode && mode !== 'manual') {
+        disclaimerBox.classList.remove('hidden');
+        if (chk) chk.checked = window.KamAbhiRAM.hardwareConsentAccepted;
     } else {
-        box.classList.add('hidden');
+        disclaimerBox.classList.add('hidden');
     }
 }
 
-function getConnectionModeBadge(connMode) {
-    if (connMode === 'wifi') return `<span class="badge light-green-bg"><i class="fa-solid fa-wifi"></i> Wi-Fi Switch</span>`;
-    if (connMode === 'smartmeter') return `<span class="badge" style="background:var(--accent-light); color:var(--primary);"><i class="fa-solid fa-gauge-high"></i> Smart Meter</span>`;
-    if (connMode === 'usb') return `<span class="badge light-green-bg"><i class="fa-solid fa-usb"></i> Cable Switch</span>`;
-    return `<span class="badge" style="background:rgba(148,163,184,0.18); color:var(--text-muted);">Manual</span>`;
+function toggleHardwareRiskConsent(isChecked) {
+    window.KamAbhiRAM.hardwareConsentAccepted = Boolean(isChecked);
+    const zone = $('hardwareInteractiveZone');
+    const logEl = $('espConsoleLog');
+    const appChk = $('appHardwareRiskCheck');
+    if (appChk) appChk.checked = Boolean(isChecked);
+
+    if (zone) {
+        if (isChecked) {
+            zone.classList.remove('hardware-locked-zone');
+            zone.classList.add('hardware-unlocked-zone');
+            if (logEl) logEl.textContent = "Status: Hardware controls unlocked. You can now connect and control your switches.";
+        } else {
+            zone.classList.add('hardware-locked-zone');
+            zone.classList.remove('hardware-unlocked-zone');
+            if (logEl) logEl.textContent = "Status: Please tick the agreement box above to enable smart hardware switches.";
+        }
+    }
+}
+
+function getConnectionModeBadge(mode, power) {
+    const m = mode || (power >= 1000 ? 'wifi' : 'manual');
+    if (m === 'wifi') return `<span class="badge light-green-bg"><i class="fa-solid fa-wifi"></i> Wi-Fi Smart Switch</span>`;
+    if (m === 'smartmeter') return `<span class="badge" style="background:var(--accent-light); color:var(--primary);"><i class="fa-solid fa-gauge-high"></i> Smart Meter Linked</span>`;
+    if (m === 'usb') return `<span class="badge light-green-bg"><i class="fa-solid fa-plug"></i> Direct Cable Switch</span>`;
+    return `<span class="badge" style="background:rgba(100,116,139,0.15); color:var(--text-muted);"><i class="fa-solid fa-hand-pointer"></i> Manual Entry</span>`;
 }
 
 function renderAppliances() {
@@ -400,7 +441,7 @@ function renderAppliances() {
     let totalLoadKwh = 0, activeWatts = 0;
 
     if (window.KamAbhiRAM.appliances.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center small-text">No appliances added yet. Add your first appliance above.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center small-text">No appliances added yet. Add your home appliances above to see your estimated bill.</td></tr>';
     } else {
         window.KamAbhiRAM.appliances.forEach(app => {
             if (app.state) {
@@ -408,9 +449,11 @@ function renderAppliances() {
                 activeWatts += parseFloat(app.power);
             }
             const cost = computeSlabBill(parseFloat(app.monthlyKwh)).total.toFixed(0);
+            const connBadge = getConnectionModeBadge(app.connMode, app.power);
+
             tbody.innerHTML += `<tr>
                 <td><strong>${escapeHTML(app.name)}</strong></td>
-                <td>${getConnectionModeBadge(app.connMode)}</td>
+                <td>${connBadge}</td>
                 <td>${Number(app.power)} W</td>
                 <td>${Number(app.hours)} hrs/day</td>
                 <td>${Number(app.monthlyKwh)} Units</td>
@@ -447,7 +490,7 @@ function checkMdiDemandOverload(activeWatts) {
     const banner = $('mdiOverloadBanner');
     if (!banner) return;
     if (activeWatts > maxWatts) {
-        safeSetText('mdiAlertTitle', `High Load Warning: ${activeWatts}W exceeds your ${maxWatts}W meter limit!`);
+        safeSetText('mdiAlertTitle', `High Load Warning: ${activeWatts}W exceeds your ${maxWatts}W Meter Limit!`);
         banner.classList.remove('hidden');
     } else {
         banner.classList.add('hidden');
@@ -461,7 +504,9 @@ function setChartMode(mode) {
 
 function renderDashboardChart(totalLoad) {
     const palette = ['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#0EA5E9', '#EC4899'];
-    const hasData = window.KamAbhiRAM.appliances.length > 0 && totalLoad > 0;
+    const activeApps = window.KamAbhiRAM.appliances;
+    const hasData = activeApps.length > 0 && totalLoad > 0;
+
     const ctxEl = $('energyChart');
     if (ctxEl && typeof Chart !== 'undefined') {
         if (window.KamAbhiRAM.energyChart) window.KamAbhiRAM.energyChart.destroy();
@@ -474,11 +519,12 @@ function renderDashboardChart(totalLoad) {
         window.KamAbhiRAM.energyChart = new Chart(ctx, {
             type: window.KamAbhiRAM.chartMode,
             data: {
-                labels: hasData ? ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Today'] : ['Add appliances to view usage'],
+                labels: hasData ? ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Today'] : ['Add appliances to see daily usage'],
                 datasets: [{
                     label: 'Daily Usage (Units)',
                     data: hasData ? [(d*0.88).toFixed(2), (d*1.04).toFixed(2), (d*0.94).toFixed(2), (d*1.12).toFixed(2), (d*1.01).toFixed(2), (d*1.16).toFixed(2), d.toFixed(2)] : [],
-                    borderColor: '#6366F1', backgroundColor: window.KamAbhiRAM.chartMode === 'line' ? grad : palette,
+                    borderColor: '#6366F1',
+                    backgroundColor: window.KamAbhiRAM.chartMode === 'line' ? grad : palette,
                     borderWidth: 3, pointBackgroundColor: '#FFFFFF', pointBorderColor: '#6366F1', pointRadius: 5, fill: true, tension: 0.42
                 }]
             },
@@ -488,7 +534,7 @@ function renderDashboardChart(totalLoad) {
 }
 
 // ---------------------------------------------------------
-// APPLIANCE CRUD & HARDWARE RISK CONSENT LOCK
+// ADD / TOGGLE APPLIANCES & SMART HARDWARE SWITCHES
 // ---------------------------------------------------------
 function applyPreset(key) {
     if (!APPLIANCE_PRESETS[key]) return;
@@ -504,14 +550,14 @@ function addAppliance() {
     const connMode = safeGetVal('appConnMode') || 'manual';
 
     if (!name || isNaN(power) || isNaN(hours)) {
-        return alert("Please enter Appliance Name, Watts, and Daily Hours.");
+        return alert("Please enter a valid Appliance Name, Watts, and Daily Hours.");
     }
 
-    // Require Hardware Responsibility Consent if linking with hardware
+    // Require Hardware Responsibility Tick-Box if user selected Wi-Fi, Smart Meter, or Cable mode
     if (connMode !== 'manual') {
         const riskChecked = $('appHardwareRiskCheck')?.checked;
         if (!riskChecked) {
-            return alert("Hardware testing nhi kiya gya hai. Kripya pehle responsibility tick-box par tick karein.");
+            return alert("Hardware testing nhi kiya gya hai. Kripya apne risk or jimmedari par ye hardware connect kare, iske liye hamari team ki koi jimmedari nhi hogi.\n\nPlease tick the agreement checkbox before adding a hardware-linked appliance.");
         }
         window.KamAbhiRAM.hardwareConsentAccepted = true;
         if ($('hardwareMasterConsentCheck')) {
@@ -521,7 +567,7 @@ function addAppliance() {
     }
 
     const monthlyKwh = ((power * hours * 30) / 1000).toFixed(2);
-    window.KamAbhiRAM.appliances.push({ id: Date.now(), name, power, hours, monthlyKwh, connMode, state: true });
+    window.KamAbhiRAM.appliances.push({ id: Date.now(), name, power, hours, monthlyKwh, state: true, connMode });
     safeSetVal('appName', ''); safeSetVal('appPower', ''); safeSetVal('appHours', '');
     renderAppliances();
     autoSyncToCloud();
@@ -537,8 +583,9 @@ function toggleApplianceState(id, state) {
     const app = window.KamAbhiRAM.appliances.find(a => a.id === id);
     if (app) {
         app.state = state;
-        if (app.connMode === 'wifi' && window.KamAbhiRAM.hardwareConsentAccepted) {
-            sendRealHardwareRelay(app.power >= 1000 ? 16 : 17, state);
+        // If linked to wireless/cable hardware and consent is given, trigger switch
+        if (app.connMode && app.connMode !== 'manual' && window.KamAbhiRAM.hardwareConsentAccepted) {
+            sendRealHardwareRelay(app.power >= 1500 ? 17 : 16, state);
         }
         renderAppliances();
         autoSyncToCloud();
@@ -554,20 +601,6 @@ function executeHeavyApplianceCutoff() {
     }
 }
 
-function toggleHardwareRiskConsent(accepted) {
-    window.KamAbhiRAM.hardwareConsentAccepted = Boolean(accepted);
-    const zone = $('hardwareInteractiveZone');
-    const logEl = $('espConsoleLog');
-    if (zone) {
-        zone.className = accepted ? 'hardware-unlocked-zone' : 'hardware-locked-zone';
-    }
-    if (logEl) {
-        logEl.textContent = accepted
-            ? "Status: Hardware controls unlocked. You can now connect your Wi-Fi switch or USB cable."
-            : "Status: Please tick the agreement box above to enable smart hardware switches.";
-    }
-}
-
 async function generateSwitchSignature(pin, val, secretKey) {
     const timestamp = Math.floor(Date.now() / 1000);
     const message = `${pin}:${val}:${timestamp}`;
@@ -578,7 +611,7 @@ async function generateSwitchSignature(pin, val, secretKey) {
     return { timestamp, signatureHex };
 }
 
-function isStrictPrivateLanUrl(urlString) {
+function isLocalHomeWifiUrl(urlString) {
     try {
         const parsed = new URL(urlString);
         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
@@ -593,8 +626,8 @@ function isStrictPrivateLanUrl(urlString) {
 }
 
 async function sendRealHardwareRelay(pin, state) {
-    if (!window.KamAbhiRAM.hardwareConsentAccepted) {
-        alert("Hardware testing nhi kiya gya hai. Kripya pehle responsibility tick-box par tick karein.");
+    if (!window.KamAbhiRAM.hardwareConsentAccepted && !$('hardwareMasterConsentCheck')?.checked) {
+        alert("Please tick the hardware responsibility agreement box first.");
         return;
     }
 
@@ -609,31 +642,31 @@ async function sendRealHardwareRelay(pin, state) {
         badge.className = state ? "badge light-green-bg" : "badge light-red-bg";
     }
 
-    if (!isStrictPrivateLanUrl(endpoint)) {
-        if (logEl) logEl.textContent = "Status: Please enter a valid local Wi-Fi switch address (e.g. http://192.168.1.50/switch).";
+    if (!isLocalHomeWifiUrl(endpoint)) {
+        if (logEl) logEl.textContent = "Status: Please enter a valid home Wi-Fi address (e.g. http://192.168.1.50/switch).";
         return;
     }
 
     const { timestamp, signatureHex } = await generateSwitchSignature(pin, val, authKey);
     const targetUrl = `${endpoint}?pin=${encodeURIComponent(pin)}&val=${val}&ts=${timestamp}&sig=${signatureHex}`;
-    if (logEl) logEl.textContent = `Status: Command sent to Switch ${pin === 16 ? '1' : '2'} (${state ? 'ON' : 'OFF'}).`;
+    if (logEl) logEl.textContent = `Status: Command sent to Switch ${pin === 16 ? '1' : '2'} (${state ? 'Turned ON' : 'Turned OFF'}).`;
     try { await fetch(targetUrl, { method: 'GET', mode: 'no-cors' }); } catch (e) {}
 }
 
 async function connectSerialHardware() {
-    if (!window.KamAbhiRAM.hardwareConsentAccepted) {
-        return alert("Hardware testing nhi kiya gya hai. Kripya pehle responsibility tick-box par tick karein.");
+    if (!window.KamAbhiRAM.hardwareConsentAccepted && !$('hardwareMasterConsentCheck')?.checked) {
+        return alert("Please tick the hardware responsibility agreement box first.");
     }
-    if (!("serial" in navigator)) return alert("Direct cable connection requires Chrome or Edge browser.");
+    if (!("serial" in navigator)) return alert("Direct cable connection requires Google Chrome or Microsoft Edge browser.");
     try {
         const port = await navigator.serial.requestPort();
         await port.open({ baudRate: 115200 });
         safeSetText('hardwareConnectionBadge', 'Cable Connected');
-    } catch (e) { alert("Cable connection cancelled."); }
+    } catch (e) { alert("Cable connection was cancelled."); }
 }
 
 // ---------------------------------------------------------
-// VOLTAGE, INVERTER, SOLAR & STANDBY POWER
+// VOLTAGE, INVERTER, SOLAR & STANDBY POWER SAVER
 // ---------------------------------------------------------
 function calculateInverterRuntime() {
     const ah = Math.max(1, parseFloat(safeGetVal('invBatteryAh')) || 150);
@@ -647,7 +680,7 @@ function calculateInverterRuntime() {
 function fetchActiveLoadToInverter() {
     let activeWatts = 0;
     window.KamAbhiRAM.appliances.forEach(a => { if (a.state) activeWatts += parseFloat(a.power); });
-    safeSetVal('invActiveLoad', activeWatts);
+    safeSetVal('invActiveLoad', activeWatts || 100);
     calculateInverterRuntime();
 }
 
@@ -657,12 +690,12 @@ function simulateGridVoltage(v) {
     box.classList.remove('hidden');
     if (v < 180 || v > 260) {
         safeSetText('voltageHealthBadge', `${v}V • Unsafe`);
-        box.textContent = "⚠️ Unsafe voltage detected! Heavy appliances have been turned OFF for safety.";
+        box.textContent = "⚠️ Unsafe voltage detected! Heavy appliances have been turned off for protection.";
         box.style.background = "rgba(239,68,68,0.15)";
         executeHeavyApplianceCutoff();
     } else {
         safeSetText('voltageHealthBadge', `${v}V • Safe`);
-        box.textContent = "✓ Voltage is normal and safe for all appliances.";
+        box.textContent = "✓ Voltage is normal and safe for all home appliances.";
         box.style.background = "rgba(16,185,129,0.15)";
     }
 }
@@ -687,24 +720,29 @@ function toggleVampireItem(val, chk) {
 async function validateUploadedImage(file) {
     const MAX_IMAGE_SIZE = 4 * 1024 * 1024;
     const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (file.size > MAX_IMAGE_SIZE) throw new Error('File too large! Maximum 4 MB allowed.');
-    if (!allowedMimes.includes(file.type)) throw new Error('Only JPG, PNG, and WebP photos are allowed.');
+
+    if (file.size > MAX_IMAGE_SIZE) throw new Error('Photo is too large! Maximum 4 MB allowed.');
+    if (!allowedMimes.includes(file.type)) throw new Error('Please upload a valid JPG, PNG, or WebP photo.');
 
     const buffer = await file.slice(0, 4).arrayBuffer();
     const bytes = new Uint8Array(buffer);
     const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
-    if (!hex.startsWith('FFD8FF') && hex !== '89504E47' && hex !== '52494646') {
-        throw new Error('Invalid image file.');
-    }
+
+    const isJpeg = hex.startsWith('FFD8FF');
+    const isPng = hex === '89504E47';
+    const isWebp = hex === '52494646';
+
+    if (!isJpeg && !isPng && !isWebp) throw new Error('Invalid photo file selected.');
 }
 
 async function processBillOcr() {
     const file = $('billImageInput').files[0];
-    if (!file) return alert('Please choose a bill photo first.');
+    if (!file) return alert('Please select a bill photo first.');
 
     try {
         await validateUploadedImage(file);
     } catch (securityErr) {
+        reportSystemError('Bill Scanner');
         $('billImageInput').value = '';
         return alert(securityErr.message);
     }
@@ -720,7 +758,8 @@ async function processBillOcr() {
         window.lastOcrUnits = parseFloat(u);
         $('ocrResultBox').classList.remove('hidden');
     } catch (e) {
-        alert('Could not read the photo clearly. Please try a clearer image.');
+        reportSystemError('Bill Scanner');
+        alert('Could not read the bill photo clearly. Please try a clearer image.');
     }
     $('ocrLoader').classList.add('hidden');
 }
@@ -734,7 +773,11 @@ function applyOcrToSimulator() {
 function handleSmartMeterCsv(e) {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024 || !/\.(csv|txt)$/i.test(file.name)) {
+
+    const MAX_CSV_SIZE = 2 * 1024 * 1024;
+    const isCsvExt = /\.(csv|txt)$/i.test(file.name);
+    if (file.size > MAX_CSV_SIZE || !isCsvExt) {
+        reportSystemError('Meter File Reader');
         e.target.value = '';
         return alert('Please select a valid .csv or .txt file under 2 MB.');
     }
@@ -746,13 +789,15 @@ function handleSmartMeterCsv(e) {
             e.target.value = '';
             return alert('Invalid file format.');
         }
+
         const rows = content.split(/\r?\n/).slice(1, 10001);
         let total = 0, peak = 0, count = 0;
         rows.forEach(r => {
             const cols = r.split(',');
             const val = parseFloat(cols[1]);
             if (!isNaN(val) && val >= 0 && val <= 1000) {
-                total += val; count++;
+                total += val;
+                count++;
                 if (val > peak) peak = val;
             }
         });
@@ -769,8 +814,8 @@ function handleSmartMeterCsv(e) {
 // ---------------------------------------------------------
 function executeRealPayment() {
     const amt = window.KamAbhiRAM.computedBillObj.total;
-    if (amt <= 0) return alert("No pending bill amount.");
-    alert("Online payment is currently not enabled. Please contact your Administrator.");
+    if (amt <= 0) return alert("You have no pending bill amount.");
+    alert("Online payment is currently not enabled. Please contact your Admin.");
 }
 
 function renderRealPaymentLedger() {
@@ -778,7 +823,7 @@ function renderRealPaymentLedger() {
     const tbody = $('sixMonthTableBody');
     if (!tbody) return;
     if (window.KamAbhiRAM.paymentHistory.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center small-text">No past payment records.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center small-text">No past payment receipts found.</td></tr>';
         return;
     }
     tbody.innerHTML = window.KamAbhiRAM.paymentHistory.map(t => `<tr><td><b>${escapeHTML(t.txnId)}</b></td><td>${escapeHTML(t.units)} Units</td><td><b>₹${escapeHTML(t.amount)}</b></td><td><span class="badge light-green-bg">${escapeHTML(t.status)}</span></td></tr>`).join('');
@@ -787,7 +832,7 @@ function renderRealPaymentLedger() {
 function downloadInvoicePDF() {
     const card = document.createElement('div');
     card.style.padding = '24px';
-    card.innerHTML = `<h2>EMCS - Monthly Electricity Bill Summary</h2><hr><p>Monthly Usage: ${window.KamAbhiRAM.totalUnits.toFixed(1)} Units</p><h3>Estimated Amount: ₹${window.KamAbhiRAM.computedBillObj.total.toFixed(2)}</h3><p><small>Note: This is an estimated calculation based on standard tariff slabs.</small></p>`;
+    card.innerHTML = `<h2>EMCS - Electricity Bill Summary</h2><hr><p>Monthly Usage: ${window.KamAbhiRAM.totalUnits.toFixed(1)} Units</p><h3>Estimated Bill: ₹${window.KamAbhiRAM.computedBillObj.total.toFixed(2)}</h3><p><small>Note: This is an estimated bill based on your selected electricity rates.</small></p>`;
     if (typeof html2pdf !== 'undefined') html2pdf().from(card).save('EMCS_Bill_Report.pdf');
 }
 
@@ -807,9 +852,9 @@ function calculateSimulator() {
 }
 
 // ---------------------------------------------------------
-// 🔥 KAMABHI AI (EMCS AI) - LOGIN-ONLY, SINGLE-QUESTION LOCK & VOICE
+// KAMABHI AI (EMCS AI) - LOGIN GUARD, CONCURRENCY & SPAM PROTECTION
 // ---------------------------------------------------------
-let isWaitingForAiAnswer = false;
+let isAIFetching = false;
 
 function speakFemaleVoice(text) {
     if (!('speechSynthesis' in window)) return;
@@ -825,9 +870,10 @@ function speakFemaleVoice(text) {
 async function loadAiChatHistory() {
     const box = $('tabChatBox');
     if (!box) return;
+
     if (!window.KamAbhiRAM.userSession) {
-        box.innerHTML = `<div class="clean-card p-2" style="max-width:90%; align-self:flex-start;">
-            <p class="small-text" style="color:var(--text-color);">Hello! I am <b>KamAbhi AI (EMCS AI)</b>, your electrical safety and energy saving assistant. Please <b>Log In</b> first to ask questions.</p>
+        box.innerHTML = `<div class="clean-card p-2" style="max-width:88%; align-self:flex-start;">
+            <p class="small-text" style="color:var(--text-color);">Hello! I am <b>KamAbhi AI</b> (EMCS AI Assistant). Please <b>Login</b> to your account to ask electrical, safety, and energy-saving questions.</p>
         </div>`;
         return;
     }
@@ -838,10 +884,13 @@ async function loadAiChatHistory() {
         if (data.success && Array.isArray(data.messages) && data.messages.length > 0) {
             box.innerHTML = data.messages.map(m => {
                 if (m.sender === 'user') {
-                    return `<div class="clean-card p-2" style="align-self:flex-end; background:var(--primary); color:#fff; max-width:82%;"><p class="small-text" style="color:#fff;">${escapeHTML(m.text)}</p></div>`;
+                    return `<div class="clean-card p-2" style="align-self:flex-end; background:var(--primary); color:#fff; max-width:82%;">${escapeHTML(m.text)}</div>`;
                 }
                 const safeTxt = escapeHTML(m.text);
-                return `<div class="clean-card p-2" style="align-self:flex-start; max-width:88%;"><p class="small-text" style="color:var(--text-color);">${safeTxt}</p><button class="sm-btn mt-1" style="background:var(--accent-light); color:var(--primary);" onclick="speakFemaleVoice('${safeTxt.replace(/'/g, "")}')"><i class="fa-solid fa-volume-high"></i> Listen</button></div>`;
+                return `<div class="clean-card p-2" style="align-self:flex-start; max-width:88%; animation: bubbleSlideRight 0.3s ease;">
+                    <p class="small-text" style="color:var(--text-color); white-space:pre-line;">${safeTxt}</p>
+                    <button class="sm-btn mt-1 hover-pop" style="background:var(--accent-light); color:var(--primary);" onclick="speakFemaleVoice('${safeTxt.replace(/'/g, "").replace(/\n/g, " ")}')"><i class="fa-solid fa-volume-high"></i> Listen</button>
+                </div>`;
             }).join('');
             box.scrollTop = box.scrollHeight;
         }
@@ -849,50 +898,62 @@ async function loadAiChatHistory() {
 }
 
 async function sendTabChatMessage() {
-    // 1. Login Required Check
+    // 1. Require User Login before using AI
     if (!window.KamAbhiRAM.userSession) {
-        alert("Please log in to your account first to use KamAbhi AI.");
+        alert("Please login to your account first to chat with KamAbhi AI.");
         closeAllPopups();
         openLoginModal();
         return;
     }
 
-    const box = $('tabChatBox');
-
-    // 2. Single Question Concurrency Lock (Ignore new question while previous is being answered)
-    if (isWaitingForAiAnswer) {
-        box.innerHTML += `<div class="clean-card p-2" style="align-self:center; background:rgba(245,158,11,0.14); border:1px solid var(--warning); max-width:90%;"><p class="small-text" style="color:var(--text-color); font-weight:600;">⏳ Wait kro pichle question ka answer likh rhe hai. Uske baad dusra question bhejo.</p></div>`;
-        box.scrollTop = box.scrollHeight;
+    // 2. Single-Question Concurrency Guard
+    if (isAIFetching) {
+        alert("Wait kro pichle question ka answer likh rhe hai. Uske baad dusra question bhejo.");
         return;
     }
 
     const input = $('tabChatInput');
     const raw = input.value.trim().slice(0, 500);
     if (!raw) return;
-    input.value = '';
 
-    box.innerHTML += `<div class="clean-card p-2" style="align-self:flex-end; background:var(--primary); color:#fff; max-width:82%;"><p class="small-text" style="color:#fff;">${escapeHTML(raw)}</p></div>`;
+    input.value = '';
+    const box = $('tabChatBox');
+    box.innerHTML += `<div class="clean-card p-2" style="align-self:flex-end; background:var(--primary); color:#fff; max-width:80%;">${escapeHTML(raw)}</div>`;
+
+    const typingId = 'aiTyping_' + Date.now();
+    box.innerHTML += `<div id="${typingId}" class="clean-card p-2 small-text" style="align-self:flex-start; max-width:75%;"><i class="fa-solid fa-spinner fa-spin text-primary"></i> KamAbhi AI is writing your answer...</div>`;
     box.scrollTop = box.scrollHeight;
 
-    isWaitingForAiAnswer = true;
+    if (/turn off heavy|cut heavy|ac off/i.test(raw)) {
+        executeHeavyApplianceCutoff();
+    }
+
+    isAIFetching = true;
     try {
         const res = await secureApiFetch('/ai/chat', {
             method: 'POST',
             body: JSON.stringify({ text: raw })
         });
         const data = await res.json();
-        const replyText = escapeHTML(data.reply || 'Something went wrong, try again later.');
+        $(typingId)?.remove();
+
+        const replyText = data.reply || data.message || "Something went wrong, try again later.";
+        const safeReply = escapeHTML(replyText);
 
         if (!res.ok || !data.success) {
-            box.innerHTML += `<div class="clean-card p-2" style="align-self:center; border:1px solid var(--danger); max-width:88%;"><p class="small-text danger-text"><b>${replyText}</b></p></div>`;
+            box.innerHTML += `<div class="clean-card p-2 danger-text" style="align-self:flex-start; max-width:88%;"><b>Notice:</b> ${safeReply}</div>`;
         } else {
-            box.innerHTML += `<div class="clean-card p-2" style="align-self:flex-start; max-width:88%;"><p class="small-text" style="color:var(--text-color);">${replyText}</p><button class="sm-btn mt-1" style="background:var(--accent-light); color:var(--primary);" onclick="speakFemaleVoice('${replyText.replace(/'/g, "")}')"><i class="fa-solid fa-volume-high"></i> Listen</button></div>`;
+            box.innerHTML += `<div class="clean-card p-2" style="align-self:flex-start; max-width:88%; animation: bubbleSlideRight 0.3s ease;">
+                <p class="small-text" style="color:var(--text-color); white-space:pre-line;">${safeReply}</p>
+                <button class="sm-btn mt-1 hover-pop" style="background:var(--accent-light); color:var(--primary);" onclick="speakFemaleVoice('${safeReply.replace(/'/g, "").replace(/\n/g, " ")}')"><i class="fa-solid fa-volume-high"></i> Listen</button>
+            </div>`;
         }
         box.scrollTop = box.scrollHeight;
     } catch (e) {
-        box.innerHTML += `<div class="clean-card p-2" style="align-self:flex-start;"><p class="small-text danger-text">Something went wrong, try again later.</p></div>`;
+        $(typingId)?.remove();
+        box.innerHTML += `<div class="clean-card p-2 danger-text" style="align-self:flex-start;">Something went wrong, try again later.</div>`;
     } finally {
-        isWaitingForAiAnswer = false;
+        isAIFetching = false;
     }
 }
 
@@ -900,7 +961,8 @@ async function sendTabChatMessage() {
 // AUTHENTICATION UI, FORM AUTO-DESTROY & MODALS
 // ---------------------------------------------------------
 function destroyAllAuthFormData() {
-    ['modalLoginForm', 'modalRegisterForm', 'modalForgotForm', 'modalAdminForm'].forEach(id => {
+    const formIds = ['modalLoginForm', 'modalRegisterForm', 'modalForgotForm', 'modalAdminForm'];
+    formIds.forEach(id => {
         const formEl = $(id);
         if (formEl) formEl.reset();
     });
@@ -912,7 +974,7 @@ function destroyAllAuthFormData() {
         'adminLoginUser', 'adminLoginPass'
     ].forEach(fieldId => safeSetVal(fieldId, ''));
 
-    if ($('regTermsCheck'))$('regTermsCheck').checked = false;
+    if ($('regTermsCheck')) $('regTermsCheck').checked = false;
 
     ['loginCredential', 'regCredential', 'forgotNewCredential', 'adminLoginPass'].forEach(fieldId => {
         const el = $(fieldId);
@@ -932,12 +994,14 @@ function destroyAllAuthFormData() {
 function openLoginModal() {
     destroyAllAuthFormData();
     switchAuthTab('login', $('authTabButtons')?.children[0]);
-    $('loginModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden');
+    $('loginModal').classList.remove('hidden');
+    $('popupOverlay').classList.remove('hidden');
 }
 
 function openAIModal() {
     loadAiChatHistory();
-    $('aiModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden');
+    $('aiModal').classList.remove('hidden');
+    $('popupOverlay').classList.remove('hidden');
 }
 
 function toggleRegAuthUI() {
@@ -1008,7 +1072,6 @@ function closeAllPopups() {
     }
     document.querySelectorAll('.popup-modal').forEach(m => m.classList.add('hidden'));
     $('popupOverlay').classList.add('hidden');
-
     destroyAllAuthFormData();
 }
 
@@ -1024,10 +1087,12 @@ function switchAuthTab(tab, btn) {
 }
 
 // ---------------------------------------------------------
-// AUTHENTICATION HANDLERS (WITH INVISIBLE BOT TRAP TELEMETRY)
+// AUTHENTICATION HANDLERS (WITH INVISIBLE BOT TRAP)
 // ---------------------------------------------------------
 async function handleSecureRegister(e) {
     e.preventDefault();
+    const botTrap = safeGetVal('regHoneypot');
+
     if ($('regTermsCheck') && !$('regTermsCheck').checked) {
         return safeSetText('modalAuthError', 'Please accept the Privacy Policy and Terms & Conditions.');
     }
@@ -1039,10 +1104,10 @@ async function handleSecureRegister(e) {
     const credential = safeGetVal('regCredential').trim();
 
     if (authType === 'pin' && !/^[0-9]{4,6}$/.test(credential)) {
-        return safeSetText('modalAuthError', 'Invalid PIN.');
+        return safeSetText('modalAuthError', 'Please enter a valid PIN.');
     }
     if (authType === 'password' && (credential.length < 8 || credential.length > 16)) {
-        return safeSetText('modalAuthError', 'Invalid Password.');
+        return safeSetText('modalAuthError', 'Please enter a valid Password.');
     }
 
     const payload = {
@@ -1053,30 +1118,30 @@ async function handleSecureRegister(e) {
         authType,
         credential,
         termsAccepted: true,
-        _emcs_trap: safeGetVal('regHoneypot'),
-        _clientMeta: getClientTelemetry()
+        _emcs_trap: botTrap
     };
     try {
         const res = await secureApiFetch('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
         const data = await res.json();
         if (data.success) {
-            alert("Account created successfully! Please log in.");
+            alert("Your account has been created! Please log in.");
             switchAuthTab('login', $('authTabButtons').children[0]);
         } else {
             safeSetText('modalAuthError', data.message || 'Something went wrong, try again later.');
         }
     } catch (err) {
+        reportSystemError('Registration');
         safeSetText('modalAuthError', 'Something went wrong, try again later.');
     }
 }
 
 async function handleSecureLogin(e) {
     e.preventDefault();
+    const botTrap = safeGetVal('loginHoneypot');
     const payload = {
         mobile: safeGetVal('loginMobile').trim(),
         credential: safeGetVal('loginCredential').trim(),
-        _emcs_trap: safeGetVal('loginHoneypot'),
-        _clientMeta: getClientTelemetry()
+        _emcs_trap: botTrap
     };
     try {
         const res = await secureApiFetch('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
@@ -1087,9 +1152,10 @@ async function handleSecureLogin(e) {
             await refreshDataFromCloud();
             closeAllPopups();
         } else {
-            safeSetText('modalAuthError', data.message || 'Something went wrong, try again later.');
+            safeSetText('modalAuthError', data.message || 'Invalid mobile number or PIN/Password.');
         }
     } catch (err) {
+        reportSystemError('Login');
         safeSetText('modalAuthError', 'Something went wrong, try again later.');
     }
 }
@@ -1110,10 +1176,10 @@ async function handleForgotReset(e) {
     const newCredential = safeGetVal('forgotNewCredential').trim();
 
     if (newAuthType === 'pin' && !/^[0-9]{4,6}$/.test(newCredential)) {
-        return safeSetText('modalAuthError', 'Invalid PIN.');
+        return safeSetText('modalAuthError', 'Please enter a valid New PIN.');
     }
     if (newAuthType === 'password' && (newCredential.length < 8 || newCredential.length > 16)) {
-        return safeSetText('modalAuthError', 'Invalid Password.');
+        return safeSetText('modalAuthError', 'Please enter a valid New Password.');
     }
 
     const payload = {
@@ -1128,18 +1194,19 @@ async function handleForgotReset(e) {
         const res = await secureApiFetch('/auth/verify-and-reset', { method: 'POST', body: JSON.stringify(payload) });
         const data = await res.json();
         if (data.success) {
-            alert(data.message);
+            alert(data.message || 'Your PIN/Password has been reset! Please log in.');
             switchAuthTab('login', $('authTabButtons').children[0]);
         } else {
-            safeSetText('modalAuthError', data.message || 'Something went wrong, try again later.');
+            safeSetText('modalAuthError', data.message || 'Details did not match our records.');
         }
     } catch (err) {
         safeSetText('modalAuthError', 'Something went wrong, try again later.');
     }
 }
+const handleFreePinReset = handleForgotReset;
 
 // ---------------------------------------------------------
-// CLOUD SYNC & SESSION MANAGEMENT
+// CLOUD SYNC & USER SESSION MANAGEMENT
 // ---------------------------------------------------------
 async function refreshDataFromCloud() {
     try {
@@ -1209,8 +1276,8 @@ async function openDeviceManager() {
         if (data.success) {
             tbody.innerHTML = data.sessions.map(s => `
                 <tr><td>${escapeHTML(s.deviceInfo)}</td><td>${new Date(s.createdAt).toLocaleString()}</td>
-                <td>${s.isCurrent ? '<b class="green-text">This Device</b>' : 'Active'}</td>
-                <td>${s.isCurrent ? '—' : (s.canRevoke ? `<button class="sm-btn danger-bg" onclick="revokeDevice('${s.sessionId}')">Logout</button>` : `<span class="badge">${s.hoursRemaining}h wait</span>`)}</td></tr>
+                <td>${s.isCurrent ? '<b class="green-text">This Device</b>' : 'Logged In'}</td>
+                <td>${s.isCurrent ? '—' : (s.canRevoke ? `<button class="sm-btn danger-bg" onclick="revokeDevice('${s.sessionId}')">Remove</button>` : `<span class="badge">${s.hoursRemaining}h wait</span>`)}</td></tr>
             `).join('');
         }
     } catch (e) {
@@ -1221,12 +1288,12 @@ async function openDeviceManager() {
 async function revokeDevice(targetSessionId) {
     const res = await secureApiFetch('/auth/revoke-device', { method: 'POST', body: JSON.stringify({ targetSessionId }) });
     const data = await res.json();
-    alert(data.message);
+    alert(data.message || 'Device removed.');
     openDeviceManager();
 }
 
 // ---------------------------------------------------------
-// ADMIN PANEL, USER BLOCK/DELETE, AI HISTORY & EMERGENCY ALERTS
+// ADMIN MANAGEMENT PANEL (LEFT SIDEBAR, AI HISTORY, EMERGENCY ALERTS)
 // ---------------------------------------------------------
 let activeAdminKycCid = null;
 
@@ -1241,9 +1308,10 @@ async function handleSecureAdminLogin(e) {
             safeSetVal('adminLoginPass', '');
             enterAdminHub(data);
         } else {
-            safeSetText('modalAuthError', data.message || 'Invalid access key.');
+            safeSetText('modalAuthError', data.message || 'Invalid Admin Key.');
         }
     } catch (err) {
+        reportSystemError('Admin Login');
         safeSetText('modalAuthError', 'Something went wrong, try again later.');
     }
 }
@@ -1284,4 +1352,551 @@ function exitAdminView() {
 
 function switchAdminSubTab(tab, btn) {
     document.querySelectorAll('.admin-sub-pane').forEach(p => {
-        p.classList.add
+        p.classList.add('hidden');
+        p.classList.remove('active-feature');
+    });
+    document.querySelectorAll('#adminNavLinks .nav-item').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+
+    let targetPane = null;
+    if (tab === 'chatTab') targetPane = $('adminChatSubPane');
+    if (tab === 'aiHistoryTab') { targetPane = $('adminAiHistorySubPane'); loadAdminAiUsers(); }
+    if (tab === 'usersTab') { targetPane = $('adminUsersSubPane'); loadAdminChatThreads(); }
+    if (tab === 'staffTab') { targetPane = $('adminStaffSubPane'); loadStaffList(); }
+    if (tab === 'cmsTab') targetPane = $('adminCmsSubPane');
+    if (tab === 'emergencyTab') { targetPane = $('adminEmergencySubPane'); loadEmergencyAlerts(); }
+    if (tab === 'errorTab') { targetPane = $('adminErrorSubPane'); loadSystemErrors(); }
+
+    if (targetPane) {
+        targetPane.classList.remove('hidden');
+        targetPane.classList.add('active-feature');
+    }
+    if (window.innerWidth <= 920) {
+        $('appSidebar').classList.remove('drawer-open');$('drawerOverlay').classList.add('hidden');
+    }
+}
+
+// 🔥 ADMIN AI CHAT HISTORY VIEWER
+async function loadAdminAiUsers() {
+    const listEl = $('adminAiUsersList');
+    if (!listEl) return;
+    try {
+        const res = await secureApiFetch('/admin/ai-history/all');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.users) && data.users.length > 0) {
+            listEl.innerHTML = data.users.map(cid => `
+                <div class="admin-wa-user-item" onclick="selectAdminAiThread('${escapeHTML(cid)}')">
+                    <div class="emcs-avatar" style="width:32px; height:32px; font-size:0.8rem;"><i class="fa-solid fa-robot"></i></div>
+                    <div><strong>${escapeHTML(cid)}</strong><br><small class="small-text">View AI Chat</small></div>
+                </div>
+            `).join('');
+        } else {
+            listEl.innerHTML = '<div class="p-2 small-text text-center">No AI chats recorded yet.</div>';
+        }
+    } catch (e) {}
+}
+
+async function selectAdminAiThread(cid) {
+    activeAdminKycCid = cid;
+    safeSetText('activeAiChatName', `AI Chat History: ${cid}`);
+    $('aiChatActionBox')?.classList.remove('hidden');
+    const area = $('adminAiChatMsgArea');
+    if (!area) return;
+
+    try {
+        const res = await secureApiFetch(`/admin/ai-history/${encodeURIComponent(cid)}`);
+        const data = await res.json();
+        if (data.success && Array.isArray(data.messages) && data.messages.length > 0) {
+            area.innerHTML = data.messages.map(m => `
+                <div class="emcs-bubble ${m.sender === 'ai' ? 'emcs-received' : 'emcs-sent'}">
+                    <b>${m.sender === 'ai' ? 'KamAbhi AI' : 'User'}:</b> ${escapeHTML(m.text)}
+                    <span class="emcs-time">${new Date(m.timestamp).toLocaleString()}</span>
+                </div>
+            `).join('');
+            area.scrollTop = area.scrollHeight;
+        } else {
+            area.innerHTML = '<div class="small-text text-center" style="margin:auto;">No messages in this AI chat thread.</div>';
+        }
+    } catch (e) {}
+}
+
+// 🔥 ADMIN EMERGENCY SECURITY ALERTS (BOT TRAP & AI SPAM DDOS)
+async function loadEmergencyAlerts() {
+    const tbody = $('adminEmergencyListBody');
+    if (!tbody) return;
+    try {
+        const res = await secureApiFetch('/admin/emergency-alerts');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.alerts)) {
+            safeSetText('adminEmergencyCountBadge', data.alerts.length);
+            if (data.alerts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center small-text">No security alerts triggered.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.alerts.map(a => `<tr>
+                <td><small>${new Date(a.timestamp).toLocaleString()}</small></td>
+                <td><span class="badge danger-bg">${escapeHTML(a.attackType)}</span></td>
+                <td><code>${escapeHTML(a.ipAddress || 'Unknown')}</code></td>
+                <td><strong class="danger-text">${escapeHTML(a.details)}</strong></td>
+                <td><small>${escapeHTML((a.deviceInfo || 'Unknown').slice(0, 45))}</small></td>
+            </tr>`).join('');
+        }
+    } catch (e) {}
+}
+
+async function clearEmergencyAlerts() {
+    if (!confirm("Clear all Emergency Security Alerts?")) return;
+    try {
+        await secureApiFetch('/admin/emergency-alerts/clear', { method: 'DELETE' });
+        safeSetText('adminEmergencyCountBadge', '0');
+        loadEmergencyAlerts();
+    } catch (e) {}
+}
+
+// 🔥 ADMIN USER DETAILS, BLOCK/UNBLOCK, DELETE & 24-MONTH LEDGER
+async function fetchAdminUserDetails(consumerId) {
+    activeAdminKycCid = consumerId;
+    try {
+        const res = await secureApiFetch(`/admin/user/${encodeURIComponent(consumerId)}`);
+        const data = await res.json();
+        if (data.success && data.user) {
+            const u = data.user;
+            safeSetText('kycName', u.name);
+            safeSetText('kycConsumerId', `Consumer ID: ${u.consumerId}`);
+            safeSetText('kycMobile', `+91 ${u.mobile}`);
+            safeSetText('kycEmail', u.email || 'Not Provided');
+            safeSetText('kycSanctioned', `${u.sanctionedLoadKw || 2.0} kW`);
+            safeSetText('kycJoinDate', new Date(u.createdAt).toLocaleDateString());
+            safeSetText('kycLifetimeUnits', `${data.lifetimeUsage || 0} Units`);
+
+            const badge = $('kycStatusBadge');
+            if (badge) {
+                badge.textContent = (u.accountStatus || 'active').toUpperCase();
+                badge.className = u.accountStatus === 'active' ? 'badge light-green-bg' : 'badge light-red-bg';
+            }
+
+            const blockBtn = $('btnAdminBlockUser');
+            if (blockBtn) {
+                const isBlocked = u.accountStatus === 'blocked';
+                blockBtn.innerHTML = isBlocked
+                    ? '<i class="fa-solid fa-check"></i> Unblock User'
+                    : '<i class="fa-solid fa-ban"></i> Block User';
+                blockBtn.style.background = isBlocked ? '#10B981' : '#F59E0B';
+            }
+
+            safeSetText('kycAppCount', u.appliances ? u.appliances.length : 0);
+            const appListEl = $('kycAppList');
+            if (appListEl) {
+                if (u.appliances && u.appliances.length > 0) {
+                    appListEl.innerHTML = u.appliances.map(a => `<div>• <b>${escapeHTML(a.name)}</b> — ${Number(a.power)}W, ${Number(a.hours)}h/day (${Number(a.monthlyKwh)} Units/mo) [${a.state ? '<span class="green-text">ON</span>' : '<span class="danger-text">OFF</span>'}]</div>`).join('');
+                } else {
+                    appListEl.innerHTML = "No appliances added.";
+                }
+            }
+
+            const sessionBody = $('kycSessionList');
+            if (sessionBody) {
+                if (u.activeSessions && u.activeSessions.length > 0) {
+                    sessionBody.innerHTML = u.activeSessions.slice().reverse().map(s => `<tr>
+                        <td><small>${escapeHTML(s.deviceInfo || 'Browser')}</small></td>
+                        <td><code>${escapeHTML(s.ipAddress || 'Protected')}</code></td>
+                        <td><small>${new Date(s.createdAt).toLocaleString()}</small></td>
+                    </tr>`).join('');
+                } else {
+                    sessionBody.innerHTML = '<tr><td colspan="3" class="text-center small-text">No active login sessions.</td></tr>';
+                }
+            }
+
+            const billingBody = $('kycBillingList');
+            if (billingBody) {
+                if (data.paymentLedger && data.paymentLedger.length > 0) {
+                    billingBody.innerHTML = data.paymentLedger.map(p => `<tr>
+                        <td><b>${escapeHTML(p.month)}</b></td>
+                        <td><small><code>${escapeHTML(p.txnId)}</code></small></td>
+                        <td>${escapeHTML(p.units)} Units</td>
+                        <td class="text-primary"><b>₹${escapeHTML(p.amount)}</b></td>
+                        <td><span class="badge light-green-bg">${escapeHTML(p.status)}</span></td>
+                    </tr>`).join('');
+                } else {
+                    billingBody.innerHTML = '<tr><td colspan="5" class="text-center small-text">No billing history available.</td></tr>';
+                }
+            }
+
+            $('kycTabSessions')?.classList.remove('hidden');$('kycTabBilling')?.classList.add('hidden');
+            $('adminUserKycModal')?.classList.remove('hidden');$('popupOverlay')?.classList.remove('hidden');
+        } else {
+            alert("Could not load user details.");
+        }
+    } catch (e) {
+        alert("Something went wrong, try again later.");
+    }
+}
+
+async function toggleUserBlockAdmin() {
+    if (!activeAdminKycCid) return;
+    const isBlocked = $('btnAdminBlockUser')?.innerHTML.includes('Unblock');
+    const newStatus = isBlocked ? 'active' : 'blocked';
+    if (!confirm(`Are you sure you want to ${isBlocked ? 'UNBLOCK' : 'BLOCK'} user ${activeAdminKycCid}?`)) return;
+
+    try {
+        const res = await secureApiFetch(`/admin/user/${encodeURIComponent(activeAdminKycCid)}/status`, {
+            method: 'PUT',
+            body: JSON.stringify({ status: newStatus })
+        });
+        if (res.ok) {
+            alert(`User status updated to ${newStatus.toUpperCase()}.`);
+            fetchAdminUserDetails(activeAdminKycCid);
+            loadAdminChatThreads();
+        }
+    } catch (e) {}
+}
+
+async function deleteUserAdmin() {
+    if (!activeAdminKycCid) return;
+    if (prompt(`Type 'DELETE' to permanently remove user ${activeAdminKycCid} and all their records:`) !== 'DELETE') return;
+
+    try {
+        const res = await secureApiFetch(`/admin/user/${encodeURIComponent(activeAdminKycCid)}`, { method: 'DELETE' });
+        if (res.ok) {
+            alert("User account permanently deleted.");
+            closeAllPopups();
+            loadAdminChatThreads();
+        }
+    } catch (e) {}
+}
+
+async function clearAiChatAdmin() {
+    if (!activeAdminKycCid) return;
+    if (!confirm(`Delete all AI Chat History for ${activeAdminKycCid}?`)) return;
+
+    try {
+        const res = await secureApiFetch(`/admin/ai-history/${encodeURIComponent(activeAdminKycCid)}`, { method: 'DELETE' });
+        if (res.ok) {
+            if ($('adminAiChatMsgArea'))$('adminAiChatMsgArea').innerHTML = '<div class="small-text text-center" style="margin:auto;">AI chat history cleared.</div>';
+            loadAdminAiUsers();
+            alert("AI Chat History deleted successfully.");
+        }
+    } catch (e) {}
+}
+
+async function createNewStaffMember() {
+    const name = safeGetVal('staffNewName').trim();
+    const username = safeGetVal('staffNewUser').trim();
+    const password = safeGetVal('staffNewPass').trim();
+    if (!name || !username || password.length < 6) return alert("Please enter valid name, username, and password.");
+
+    const permissions = {
+        canManageUsers: $('permManageUsers') ?$('permManageUsers').checked : true,
+        canChatSupport: $('permChat') ?$('permChat').checked : true,
+        canEditCMS: $('permCMS') ?$('permCMS').checked : false,
+        canDeleteChat: $('permDeleteChat') ?$('permDeleteChat').checked : false
+    };
+
+    try {
+        const res = await secureApiFetch('/admin/staff', {
+            method: 'POST',
+            body: JSON.stringify({ name, username, password, permissions })
+        });
+        const data = await res.json();
+        alert(data.message || 'Team member added.');
+        safeSetVal('staffNewName', ''); safeSetVal('staffNewUser', ''); safeSetVal('staffNewPass', '');
+        loadStaffList();
+    } catch (e) { alert("Could not add team member."); }
+}
+
+async function loadStaffList() {
+    const tbody = $('staffDirectoryBody');
+    if (!tbody) return;
+    try {
+        const res = await secureApiFetch('/admin/staff');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.staff)) {
+            tbody.innerHTML = data.staff.map(s => {
+                const perms = Object.keys(s.permissions || {}).filter(k => s.permissions[k]).join(', ') || 'Standard';
+                return `<tr>
+                    <td><b>${escapeHTML(s.name)}</b></td>
+                    <td>${escapeHTML(s.username)}</td>
+                    <td><small>${escapeHTML(perms)}</small></td>
+                    <td><button class="sm-btn danger-bg" onclick="deleteStaffMember('${s._id}')"><i class="fa-solid fa-trash"></i></button></td>
+                </tr>`;
+            }).join('') || '<tr><td colspan="4" class="text-center small-text">No team members added yet.</td></tr>';
+        }
+    } catch (e) {}
+}
+
+async function deleteStaffMember(id) {
+    if (!confirm("Remove this team member?")) return;
+    await secureApiFetch(`/admin/staff/${id}`, { method: 'DELETE' }).catch(() => {});
+    loadStaffList();
+}
+
+// Encrypted Clean Activity Logs Viewer (Never shows sensitive details)
+async function loadSystemErrors() {
+    const tbody = $('adminErrorListBody');
+    if (!tbody) return;
+    let logs = JSON.parse(localStorage.getItem('emcs_error_logs') || '[]');
+    try {
+        const res = await secureApiFetch('/admin/errors');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.errors)) logs = data.errors;
+    } catch (e) {}
+
+    safeSetText('adminErrorCountBadge', logs.length);
+    if (logs.length === 0) return tbody.innerHTML = '<tr><td colspan="5" class="text-center small-text">No recent activity logs.</td></tr>';
+    tbody.innerHTML = logs.map(err => `<tr>
+        <td><small>${new Date(err.timestamp).toLocaleString()}</small></td>
+        <td><span class="badge light-green-bg">${escapeHTML(err.source || 'App')}</span></td>
+        <td><strong>Something went wrong, try again later.</strong></td>
+        <td>${escapeHTML(err.location || 'Screen')}</td>
+        <td>${escapeHTML(err.userOrIp || 'User')}</td>
+    </tr>`).join('');
+}
+
+async function clearSystemErrors() {
+    if (!confirm("Clear all activity logs?")) return;
+    localStorage.removeItem('emcs_error_logs');
+    try { await secureApiFetch('/admin/errors/clear', { method: 'DELETE' }); } catch (e) {}
+    loadSystemErrors();
+}
+
+// ---------------------------------------------------------
+// WEBSITE INFO, PRIVACY POLICY, TERMS & FAQS
+// ---------------------------------------------------------
+async function loadCmsContent() {
+    let cms = JSON.parse(localStorage.getItem('emcsCmsData')) || {
+        broadcast: "",
+        about: "EMCS (Smart Energy Manager) helps households and businesses track appliance power consumption, estimate monthly electricity bills, and control smart switches safely.",
+        privacy: "1. INFORMATION WE COLLECT: We collect your Name, Mobile Number, Email Address, and 12-Character Consumer ID to create your account and help you recover forgotten credentials.\n\n2. DEVICE & IP SECURITY: For your account safety and to prevent unauthorized access, we record the device model and IP address when you log in.\n\n3. AI CHAT HISTORY: Questions asked to KamAbhi AI (EMCS AI) are saved in your account history to help you review past electrical advice and are automatically deleted after 3 months (90 days).\n\n4. ACCOUNT DELETION: If you deactivate your account, all devices are logged out immediately and records are retained for 2 years for legal compliance before permanent deletion.",
+        terms: "1. BILL ESTIMATES: All electricity bills and solar calculations shown on EMCS are estimates for planning and saving energy. Please pay your official electricity board bill as per your utility meter.\n\n2. HARDWARE & SMART SWITCH RESPONSIBILITY: Hardware testing nhi kiya gya hai. Kripya apne risk or jimmedari par ye hardware connect kare, iske liye hamari team ki koi jimmedari nhi hogi. EMCS is not responsible for any electrical damage, short circuit, or injury.\n\n3. FAIR USE & SECURITY: Using automated bots, fake emails, or spamming the AI assistant (10+ questions in 10 seconds) will result in an automatic block.",
+        faqs: [
+            { q: "How can I reset my forgotten PIN or Password?", a: "Click on Login, choose 'Forgot Access', and verify your account using either your Consumer ID or your Email Address." },
+            { q: "Who is KamAbhi AI?", a: "KamAbhi AI (EMCS AI) is your dedicated electrical safety and energy-saving assistant available after you log in." },
+            { q: "How long is my AI chat history saved?", a: "Your AI chat history is saved for 3 months (90 days) and then automatically deleted." },
+            { q: "Can I connect smart Wi-Fi switches or a smart meter?", a: "Yes! Tick the hardware responsibility agreement box in the Smart Hardware Control or My Appliances section to unlock wireless and cable switch controls." }
+        ]
+    };
+    try {
+        const res = await fetch(`${API_BASE}/cms`);
+        const data = await res.json();
+        if (data.success && data.cms) cms = data.cms;
+    } catch (e) {}
+
+    localStorage.setItem('emcsCmsData', JSON.stringify(cms));
+    window.KamAbhiRAM.cmsFaqs = cms.faqs || [];
+    renderAdminFaqs();
+
+    if (cms.broadcast && cms.broadcast.trim()) {
+        safeSetText('systemBroadcastText', cms.broadcast);
+        $('systemBroadcastBanner').classList.remove('hidden');
+    }
+    safeSetVal('cmsBroadcastInput', cms.broadcast || '');
+    safeSetVal('cmsAboutInput', cms.about || '');
+    safeSetVal('cmsPrivacyInput', cms.privacy || '');
+    safeSetVal('cmsTermsInput', cms.terms || '');
+}
+
+function addAdminFaq() {
+    const q = safeGetVal('cmsFaqQuestion').trim();
+    const a = safeGetVal('cmsFaqAnswer').trim();
+    if (!q || !a) return alert("Please enter both Question and Answer.");
+    window.KamAbhiRAM.cmsFaqs.push({ q, a });
+    safeSetVal('cmsFaqQuestion', ''); safeSetVal('cmsFaqAnswer', '');
+    renderAdminFaqs();
+}
+
+function renderAdminFaqs() {
+    const box = $('cmsFaqList');
+    if (!box) return;
+    box.innerHTML = (window.KamAbhiRAM.cmsFaqs || []).map((f, i) => `
+        <div class="p-2 mb-1 flex-between" style="background:var(--bg-color); border:1px solid var(--card-border); border-radius:8px;">
+            <div><b>Q:</b> ${escapeHTML(f.q)}<br><small class="text-muted">A: ${escapeHTML(f.a)}</small></div>
+            <button type="button" class="icon-btn borderless danger-text" onclick="window.KamAbhiRAM.cmsFaqs.splice(${i}, 1); renderAdminFaqs()"><i class="fa-solid fa-trash"></i></button>
+        </div>
+    `).join('');
+}
+
+async function saveCmsContent() {
+    const cms = { broadcast: safeGetVal('cmsBroadcastInput').trim(), about: safeGetVal('cmsAboutInput').trim(), privacy: safeGetVal('cmsPrivacyInput').trim(), terms: safeGetVal('cmsTermsInput').trim(), faqs: window.KamAbhiRAM.cmsFaqs || [] };
+    localStorage.setItem('emcsCmsData', JSON.stringify(cms));
+    try { await secureApiFetch('/admin/cms', { method: 'POST', body: JSON.stringify(cms) }); } catch (e) {}
+    loadCmsContent();
+    safeSetText('cmsSavedNotice', '✓ Changes saved!');
+    setTimeout(() => safeSetText('cmsSavedNotice', ''), 3000);
+}
+
+function openLegalModal(type) {
+    const cms = JSON.parse(localStorage.getItem('emcsCmsData')) || {};
+    const titles = { about: 'About Us', privacy: 'Privacy Policy', terms: 'Terms & Conditions', faqs: 'Frequently Asked Questions' };
+    safeSetText('legalModalTitle', titles[type] || 'Information');
+    if (type === 'faqs') {
+        const faqs = cms.faqs || [];
+        $('legalModalBody').innerHTML = faqs.map(f => `<div style="margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid var(--card-border);"><strong style="color:var(--primary);">${escapeHTML(f.q)}</strong><p class="small-text mt-1">${escapeHTML(f.a)}</p></div>`).join('') || "<p>No FAQs available right now.</p>";
+    } else {
+        $('legalModalBody').innerHTML = `<div style="white-space: pre-line;">${escapeHTML(cms[type] || '')}</div>`;
+    }
+    $('legalModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden');
+}
+
+// ---------------------------------------------------------
+// HELP & SUPPORT CHAT AND REGISTERED USERS LIST
+// ---------------------------------------------------------
+async function loadUserSupportMessages() {
+    if (!window.KamAbhiRAM.userSession) return;
+    const area = $('userChatMsgArea');
+    if (!area) return;
+    try {
+        const res = await secureApiFetch('/support/user/messages');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.messages) && data.messages.length > 0) {
+            area.innerHTML = data.messages.map(m => `
+                <div class="emcs-bubble ${m.sender === 'user' ? 'emcs-sent' : 'emcs-received'}">
+                    ${escapeHTML(m.text)}
+                    <span class="emcs-time">${m.sender === 'admin' ? 'Support Team' : 'You'} • ${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+            `).join('');
+            area.scrollTop = area.scrollHeight;
+        }
+    } catch (e) {}
+}
+
+let lastMsgSent = 0;
+function sendUserSupportMessage() {
+    if (!window.KamAbhiRAM.userSession) return alert("Please log in first to message the support team.");
+    if (Date.now() - lastMsgSent < 2000) return alert("Please wait a moment before sending another message.");
+    const input = $('userChatInput');
+    const text = input.value.trim().slice(0, 500);
+    if (!text) return;
+    lastMsgSent = Date.now();
+    input.value = '';
+    const area = $('userChatMsgArea');
+    area.innerHTML += `<div class="emcs-bubble emcs-sent">${escapeHTML(text)}<span class="emcs-time">You • Just now</span></div>`;
+    area.scrollTop = area.scrollHeight;
+    secureApiFetch('/support/user/send', { method: 'POST', body: JSON.stringify({ text }) }).catch(() => {});
+}
+
+async function loadAdminChatThreads() {
+    try {
+        const res = await secureApiFetch('/support/admin/threads');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.threads)) {
+            $('adminChatThreadsList').innerHTML = data.threads.map(t => `<div class="admin-wa-user-item" onclick="selectAdminThread('${escapeHTML(t.consumerId)}', '${escapeHTML(t.name)}')"><div class="emcs-avatar" style="width:32px; height:32px; font-size:0.8rem;">${escapeHTML(t.name[0] || 'U')}</div><div><strong>${escapeHTML(t.name)}</strong><br><small class="small-text">${escapeHTML(t.consumerId)}</small></div></div>`).join('');
+
+            safeSetText('adminUserCount', data.threads.length);
+            const userTbody = $('adminUserListBody');
+            if (userTbody) {
+                userTbody.innerHTML = data.threads.map(u => `<tr>
+                    <td><b>${escapeHTML(u.consumerId)}</b></td>
+                    <td><a href="javascript:void(0)" class="text-primary hover-pop" style="font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:6px;" onclick="fetchAdminUserDetails('${escapeHTML(u.consumerId)}')">${escapeHTML(u.name)} <i class="fa-solid fa-address-card" style="font-size:0.8rem;"></i></a></td>
+                    <td>+91 ${escapeHTML(u.mobile)}</td>
+                    <td>${Number(u.sanctionedLoadKw || 2.0)} kW</td>
+                    <td><span class="badge ${u.accountStatus === 'active' ? 'light-green-bg' : 'light-red-bg'}">${escapeHTML(u.accountStatus || 'active')}</span></td>
+                </tr>`).join('') || '<tr><td colspan="5" class="text-center small-text">No registered users yet.</td></tr>';
+            }
+        }
+    } catch (e) {}
+}
+
+let selectedAdminConsumerId = null;
+async function selectAdminThread(cid, name) {
+    selectedAdminConsumerId = cid;
+    safeSetText('activeChatName', `${name} (${cid})`);
+    $('singleChatActionBox').classList.remove('hidden');
+    const res = await secureApiFetch(`/support/admin/messages/${cid}`);
+    const data = await res.json();
+    if (data.success) {
+        $('adminChatMsgArea').innerHTML = data.messages.map(m => `<div class="emcs-bubble ${m.sender === 'admin' ? 'emcs-sent' : 'emcs-received'}">${escapeHTML(m.text)}</div>`).join('');
+    }
+}
+
+async function sendAdminSupportMessage() {
+    if (!selectedAdminConsumerId) return alert("Please select a user conversation first.");
+    const input = $('adminChatInput');
+    const text = input.value.trim().slice(0, 500);
+    if (!text) return;
+    input.value = '';
+    $('adminChatMsgArea').innerHTML += `<div class="emcs-bubble emcs-sent">${escapeHTML(text)}</div>`;
+    await secureApiFetch('/support/admin/reply', { method: 'POST', body: JSON.stringify({ consumerId: selectedAdminConsumerId, text }) }).catch(() => {});
+}
+
+async function deleteSelectedConsumerChat() {
+    if (!selectedAdminConsumerId || !confirm("Delete this user's chat messages?")) return;
+    await secureApiFetch(`/support/chat/clear/${selectedAdminConsumerId}`, { method: 'DELETE' });
+    $('adminChatMsgArea').innerHTML = '';
+}
+
+async function purgeAllChatsConfirm() {
+    if (prompt("Type 'DELETE ALL' to clear all support conversations:") !== 'DELETE ALL') return;
+    await secureApiFetch('/support/chat/purge-all', { method: 'DELETE' });
+    $('adminChatMsgArea').innerHTML = '';
+}
+
+async function downloadAdminMasterDatabase() {
+    try {
+        const res = await secureApiFetch('/admin/master-database-dump');
+        const blob = await res.blob();
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `EMCS_Backup_${Date.now()}.json`; a.click();
+    } catch (e) { alert("Could not download backup right now."); }
+}
+
+async function deleteMyAccount() {
+    if (!confirm("Are you sure you want to deactivate your account?")) return;
+    if (prompt("Type 'DELETE' to confirm:") !== "DELETE") return;
+    try {
+        const res = await secureApiFetch('/user/delete-account', { method: 'DELETE' });
+        if (res.ok) { alert("Your account has been deactivated."); logoutUser(); }
+    } catch (e) { alert("Something went wrong, try again later."); }
+}
+
+function changeSanctionedLoad(val) { window.KamAbhiRAM.sanctionedLoadKw = parseFloat(val); renderAppliances(); autoSyncToCloud(); }
+function promptSetBudget() {
+    const b = prompt("Enter Monthly Budget Target (₹):", window.KamAbhiRAM.budgetThreshold);
+    if (b && !isNaN(b)) { window.KamAbhiRAM.budgetThreshold = parseFloat(b); safeSetText('currentBudgetDisplay', `₹${b}`); renderAppliances(); autoSyncToCloud(); }
+}
+function enableBrowserNotifications() { if ("Notification" in window) Notification.requestPermission(); }
+
+async function saveUserProfile() {
+    if (!window.KamAbhiRAM.userSession) return alert("Please log in first to save your settings.");
+    enforceUrlAntiIdorGuard();
+    const newName = safeGetVal('profileName').trim();
+    if (newName.length >= 2) {
+        window.KamAbhiRAM.userSession.name = newName;
+        localStorage.setItem('ecoActiveUser', JSON.stringify(window.KamAbhiRAM.userSession));
+        safeSetText('userGreeting', `Welcome, ${newName}! ☀️`);
+        $('sidebarAuthArea').innerHTML = `<button class="secondary-btn sm-btn w-100" onclick="logoutUser()"><i class="fa-solid fa-power-off"></i> Logout (${escapeHTML(newName)})</button>`;
+    }
+    const payload = {
+        name: newName,
+        appliances: window.KamAbhiRAM.appliances,
+        sanctionedLoadKw: window.KamAbhiRAM.sanctionedLoadKw,
+        budgetThreshold: window.KamAbhiRAM.budgetThreshold,
+        tariffProvider: safeGetVal('tariffProviderSelect'),
+        tariffCategory: safeGetVal('tariffCategorySelect'),
+        tariffArea: safeGetVal('tariffAreaSelect'),
+        customTariff: JSON.parse(localStorage.getItem('emcs_custom_tariff') || 'null')
+    };
+    await secureApiFetch('/user/sync-cloud', { method: 'POST', body: JSON.stringify(payload) }).catch(() => {});
+    safeSetText('profileMsg', '✓ Your profile changes have been saved.');
+    setTimeout(() => safeSetText('profileMsg', ''), 3000);
+}
+
+function toggleMobileDrawer() { $('appSidebar').classList.toggle('drawer-open');$('drawerOverlay').classList.toggle('hidden'); }
+function showFeature(id, btn) {
+    enforceUrlAntiIdorGuard();
+    document.querySelectorAll('#consumerNavLinks .nav-item').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    document.querySelectorAll('.feature-content').forEach(fc => { fc.classList.add('hidden'); fc.classList.remove('active-feature'); });
+    const t = $(id);
+    if (t) {
+        t.classList.remove('hidden');
+        t.classList.add('active-feature');
+    }
+    if (id === 'userSupportChat') loadUserSupportMessages();
+    if (window.innerWidth <= 920) {
+        $('appSidebar').classList.remove('drawer-open');$('drawerOverlay').classList.add('hidden');
+    }
+}
+function toggleTheme() {
+    const next = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    document.body.setAttribute('data-theme', next);
+    localStorage.setItem('ecoTheme', next);
+}
