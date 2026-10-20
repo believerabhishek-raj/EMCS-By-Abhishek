@@ -25,8 +25,16 @@ async function secureApiFetch(endpoint, options = {}) {
     });
 }
 
+function getClientTelemetry() {
+    return {
+        screen: `${window.screen?.width || 0}x${window.screen?.height || 0}`,
+        tz: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+        platform: navigator.platform || ''
+    };
+}
+
 // ---------------------------------------------------------
-// SILENT EMAIL & TEMP-MAIL VALIDATOR (SECURITY GUARD)
+// SILENT EMAIL & TEMP-MAIL VALIDATOR
 // ---------------------------------------------------------
 const BLOCKED_TEMP_DOMAINS = new Set([
     'mailinator.com', 'yopmail.com', '10minutemail.com', 'guerrillamail.com',
@@ -41,7 +49,7 @@ function isStrictValidEmail(emailStr) {
     const clean = String(emailStr || '').trim().toLowerCase();
     if (clean.length < 6 || clean.length > 90) return { ok: false, msg: 'Please enter a valid email address.' };
     if (/[\s\0$<>'"`;\\(){}[\]|!#$%^&*=+/?~]|\.\./.test(clean)) {
-        return { ok: false, msg: 'Invalid characters in email address.' };
+        return { ok: false, msg: 'Please enter a valid email address.' };
     }
     const parts = clean.split('@');
     if (parts.length !== 2) return { ok: false, msg: 'Please enter a valid email address.' };
@@ -56,7 +64,7 @@ function isStrictValidEmail(emailStr) {
 }
 
 // ---------------------------------------------------------
-// CLIENT-SIDE URL & DOM TAMPERING SHIELD (ANTI-IDOR)
+// CLIENT URL & PROFILE TAMPER GUARD (ANTI-IDOR)
 // ---------------------------------------------------------
 function enforceUrlAntiIdorGuard() {
     try {
@@ -66,9 +74,9 @@ function enforceUrlAntiIdorGuard() {
 
         const urlCid = params.get('consumerId') || params.get('cid') || params.get('user') || params.get('id');
         if (urlCid && (!activeCid || urlCid.toUpperCase() !== activeCid.toUpperCase())) {
-            reportSystemError('Client Anti-IDOR Guard', `Blocked URL parameter tampering: ${urlCid}`, window.location.href);
+            reportSystemError('Security', 'Something went wrong, try again later.', 'URL');
             window.history.replaceState({}, document.title, window.location.pathname);
-            alert('Security Block: Unauthorized Consumer ID parameter in URL was blocked.');
+            alert('Access denied: You cannot open another consumer ID via the URL.');
         }
 
         if (/consumerId=|cid=/i.test(hash)) {
@@ -78,7 +86,6 @@ function enforceUrlAntiIdorGuard() {
         const profileInput = $('profileId');
         if (activeCid && profileInput && profileInput.value && profileInput.value !== activeCid) {
             profileInput.value = activeCid;
-            reportSystemError('Client Anti-IDOR Guard', 'Blocked DOM manipulation on #profileId', 'Profile Tab');
         }
     } catch (ignore) {}
 }
@@ -92,63 +99,44 @@ window.addEventListener('hashchange', enforceUrlAntiIdorGuard);
 function togglePasswordVisibility(fieldId, btn) {
     const inputField = $(fieldId);
     if (!inputField) return;
-
     const icon = btn.querySelector('i');
     if (inputField.type === 'password') {
         inputField.type = 'text';
-        if (icon) {
-            icon.classList.remove('fa-eye');
-            icon.classList.add('fa-eye-slash');
-        }
+        if (icon) { icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash'); }
     } else {
         inputField.type = 'password';
-        if (icon) {
-            icon.classList.remove('fa-eye-slash');
-            icon.classList.add('fa-eye');
-        }
+        if (icon) { icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye'); }
     }
 }
 
 // ---------------------------------------------------------
-// AUTOMATED ERROR TELEMETRY (TECHNICAL NAMES MASKED)
+// CLEAN ACTIVITY LOGGER (NO TECHNICAL OR BACKEND DETAILS)
 // ---------------------------------------------------------
-function reportSystemError(source, message, location = '') {
+function reportSystemError() {
     try {
-        const maskedSource = (source || 'Client App').replace(/mongodb|mongoose|express|node/gi, 'Secure Storage Layer');
         const errEntry = {
             id: Date.now(),
             timestamp: new Date().toISOString(),
-            source: maskedSource,
-            message: String(message || 'Unknown Exception').slice(0, 300),
-            location: String(location || window.location.pathname).slice(0, 150),
-            userOrIp: window.KamAbhiRAM?.userSession?.consumerId || 'Secured Client'
+            source: 'App Notice',
+            message: 'Something went wrong, try again later.',
+            location: 'Protected',
+            userOrIp: window.KamAbhiRAM?.userSession?.consumerId || 'Visitor'
         };
-
         const localLogs = JSON.parse(localStorage.getItem('emcs_error_logs') || '[]');
         localLogs.unshift(errEntry);
-        localStorage.setItem('emcs_error_logs', JSON.stringify(localLogs.slice(0, 100)));
+        localStorage.setItem('emcs_error_logs', JSON.stringify(localLogs.slice(0, 50)));
         safeSetText('adminErrorCountBadge', localLogs.length);
 
         fetch(`${API_BASE}/errors/report`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-emcs-csrf': 'emcs-verified-client' },
-            body: JSON.stringify(errEntry)
+            body: JSON.stringify({ message: 'Something went wrong, try again later.' })
         }).catch(() => {});
     } catch (ignore) {}
 }
 
-window.addEventListener('error', (event) => {
-    const loc = event.filename ? `${event.filename.split('/').pop()}:${event.lineno}` : 'Runtime UI';
-    reportSystemError('Client Component', event.message, loc);
-});
-
-window.addEventListener('unhandledrejection', (event) => {
-    const reason = event.reason ? (event.reason.message || String(event.reason)) : 'Async Promise Rejection';
-    reportSystemError('Async Gateway', reason, 'Promise Handling');
-});
-
 // ---------------------------------------------------------
-// APPLICATION STATE (ZERO DUMMY DATA)
+// APPLICATION STATE
 // ---------------------------------------------------------
 window.KamAbhiRAM = {
     userSession: null,
@@ -160,15 +148,13 @@ window.KamAbhiRAM = {
     budgetThreshold: 3000,
     vampireSavings: 0,
     sanctionedLoadKw: 2.0,
+    hardwareConsentAccepted: false,
     chartMode: 'line',
-    appChartMode: 'line',
-    energyChart: null,
-    pieChart: null,
-    appCompChart: null
+    energyChart: null
 };
 
 // ---------------------------------------------------------
-// COMPLETE ALL-INDIA TARIFF DATABASE (18 BOARDS + RURAL/URBAN)
+// COMPLETE ALL-INDIA TARIFF DATABASE (18 BOARDS)
 // ---------------------------------------------------------
 const BASE_TARIFFS = {
     bihar: {
@@ -229,52 +215,55 @@ const ALL_INDIA_TARIFFS = {
 const APPLIANCE_PRESETS = {
     ac15: { name: "1.5 Ton Split AC", power: 1400, hours: 8 },
     ac10: { name: "1.0 Ton Inverter AC", power: 1000, hours: 8 },
-    fridge: { name: "Double Door Refrigerator", power: 180, hours: 24 },
+    fridge: { name: "Double Door Fridge", power: 180, hours: 24 },
     fan: { name: "BLDC Ceiling Fan", power: 35, hours: 14 },
-    oldfan: { name: "Standard Ceiling Fan", power: 75, hours: 14 },
+    oldfan: { name: "Regular Ceiling Fan", power: 75, hours: 14 },
     geyser: { name: "Water Geyser", power: 2000, hours: 1.5 },
     pc: { name: "Desktop Computer", power: 350, hours: 6 },
     wm: { name: "Washing Machine", power: 450, hours: 1 }
 };
 
 // ---------------------------------------------------------
-// COMPLETE 3-LANGUAGE DICTIONARY (EN / HI / HINGLISH)
+// HUMAN-FRIENDLY 3-LANGUAGE DICTIONARY (DEFAULT: ENGLISH)
 // ---------------------------------------------------------
 const TRANSLATIONS = {
     en: {
-        navDash: "Dashboard", navAppliances: "Appliances & Flowgraph", navVoltage: "Voltage & Surge Guard",
-        navInverter: "Inverter Backup", navVampire: "Vampire Audit", navOcr: "Bill OCR Scanner",
-        navCsv: "Smart Meter CSV", navTod: "ToD Tariff Saver", navSolar: "Solar Rooftop ROI",
-        navIoT: "Hardware Relay Control", navAudit: "Insights & Ledger", navSim: "Savings Simulator",
-        navPayment: "Bill Settlement", navAI: "EMCS Ai Assistant", navSupport: "Help & Support Desk",
-        navProfile: "Account & Security", btnConnect: "Login / Connect", btnLoginShort: "Login",
-        greetDefault: "Energy Analytics Overview ☀️", greetSub: "Monitor and optimize your daily energy consumption securely.",
-        lblBudgetBtn: "Budget:"
+        navDash: "Dashboard", navAppliances: "My Appliances", navVoltage: "Voltage Safety",
+        navInverter: "Inverter Backup", navVampire: "Standby Power Saver", navOcr: "Scan Electricity Bill",
+        navCsv: "Smart Meter File", navTod: "Best Time to Use", navSolar: "Solar Calculator",
+        navIoT: "Smart Hardware Control", navAudit: "Reports & History", navSim: "Savings Calculator",
+        navPayment: "Pay Bill", navAI: "KamAbhi AI Assistant", navSupport: "Help & Support",
+        navProfile: "My Account", btnConnect: "Login / Register", btnLoginShort: "Login",
+        greetDefault: "Welcome to Smart Energy Manager ☀️",
+        greetSub: "Track your home appliances, control smart switches, and reduce your monthly electricity bill.",
+        lblBudgetBtn: "Monthly Budget:"
     },
     hi: {
-        navDash: "डैशबोर्ड", navAppliances: "उपकरण और फ्लोग्राफ", navVoltage: "वोल्टेज और सर्ज गार्ड",
-        navInverter: "इन्वर्टर बैकअप", navVampire: "वैम्पायर ऑडिट", navOcr: "बिल OCR स्कैनर",
-        navCsv: "स्मार्ट मीटर CSV", navTod: "ToD टैरिफ सेवर", navSolar: "सोलर रूफटॉप ROI",
-        navIoT: "हार्डवेयर रिले कंट्रोल", navAudit: "इनसाइट्स और खाता", navSim: "बचत सिम्युलेटर",
-        navPayment: "बिल भुगतान", navAI: "EMCS AI सहायक", navSupport: "सहायता डेस्क",
-        navProfile: "खाता और सुरक्षा", btnConnect: "लॉगिन / जुड़ें", btnLoginShort: "लॉगिन",
-        greetDefault: "ऊर्जा विश्लेषिकी अवलोकन ☀️", greetSub: "अपने दैनिक बिजली उपभोग की सुरक्षित रूप से निगरानी और अनुकूलन करें।",
-        lblBudgetBtn: "बजट:"
+        navDash: "डैशबोर्ड", navAppliances: "मेरे उपकरण", navVoltage: "वोल्टेज सुरक्षा",
+        navInverter: "इन्वर्टर बैकअप", navVampire: "स्टैंडबाय बिजली बचत", navOcr: "बिल फोटो स्कैन",
+        navCsv: "स्मार्ट मीटर फ़ाइल", navTod: "उपयोग का सही समय", navSolar: "सोलर कैलकुलेटर",
+        navIoT: "स्मार्ट हार्डवेयर कंट्रोल", navAudit: "रिपोर्ट और इतिहास", navSim: "बचत कैलकुलेटर",
+        navPayment: "बिल भुगतान", navAI: "KamAbhi AI सहायक", navSupport: "सहायता केंद्र",
+        navProfile: "मेरा खाता", btnConnect: "लॉगिन / रजिस्टर", btnLoginShort: "लॉगिन",
+        greetDefault: "स्मार्ट एनर्जी मैनेजर में आपका स्वागत है ☀️",
+        greetSub: "अपने घर के उपकरणों को ट्रैक करें, स्मार्ट स्विच नियंत्रित करें और बिजली बिल कम करें।",
+        lblBudgetBtn: "मासिक बजट:"
     },
     hinglish: {
-        navDash: "Dashboard", navAppliances: "Appliances & Flowgraph", navVoltage: "Voltage & Surge Guard",
-        navInverter: "Inverter Backup", navVampire: "Vampire Audit", navOcr: "Bill OCR Scanner",
-        navCsv: "Smart Meter CSV", navTod: "ToD Tariff Saver", navSolar: "Solar Rooftop ROI",
-        navIoT: "Hardware Relay Control", navAudit: "Insights & Ledger", navSim: "Savings Simulator",
-        navPayment: "Bill Settlement", navAI: "EMCS Ai Assistant", navSupport: "Help & Support Desk",
-        navProfile: "Account & Security", btnConnect: "Login / Connect", btnLoginShort: "Login",
-        greetDefault: "Energy Analytics Overview ☀️", greetSub: "Apne daily electricity consumption ko securely monitor aur optimize karein.",
-        lblBudgetBtn: "Budget:"
+        navDash: "Dashboard", navAppliances: "My Appliances", navVoltage: "Voltage Safety",
+        navInverter: "Inverter Backup", navVampire: "Standby Power Saver", navOcr: "Scan Electricity Bill",
+        navCsv: "Smart Meter File", navTod: "Best Time to Use", navSolar: "Solar Calculator",
+        navIoT: "Smart Hardware Control", navAudit: "Reports & History", navSim: "Savings Calculator",
+        navPayment: "Pay Bill", navAI: "KamAbhi AI Assistant", navSupport: "Help & Support",
+        navProfile: "My Account", btnConnect: "Login / Register", btnLoginShort: "Login",
+        greetDefault: "Welcome to Smart Energy Manager ☀️",
+        greetSub: "Apne ghar ke appliances track karein, smart switches control karein aur monthly bill kam karein.",
+        lblBudgetBtn: "Monthly Budget:"
     }
 };
 
 function switchLanguage(lang) {
-    const dict = TRANSLATIONS[lang] || TRANSLATIONS.hinglish;
+    const dict = TRANSLATIONS[lang] || TRANSLATIONS.en;
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const k = el.getAttribute('data-i18n');
         if (dict[k]) el.textContent = dict[k];
@@ -297,7 +286,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderRealPaymentLedger();
     calculateSolarRoi();
     calculateInverterRuntime();
-    switchLanguage('hinglish');
+
+    // Default language set to English
+    safeSetVal('languageSelect', 'en');
+    switchLanguage('en');
 });
 
 // ---------------------------------------------------------
@@ -378,12 +370,29 @@ function saveCustomTariffSettings() {
     toggleCustomTariffModal();
     renderAppliances();
     autoSyncToCloud();
-    alert("✓ Custom Tariff Rates saved successfully!");
+    alert("✓ Your custom electricity rates have been saved!");
 }
 
 // ---------------------------------------------------------
-// HACKATHON LIVE FLOWCHART & GRAPHS
+// APPLIANCES & HARDWARE COMPATIBILITY (NO 2D/FLOWGRAPH IN APPLIANCE TAB)
 // ---------------------------------------------------------
+function onAppConnectionModeChange(mode) {
+    const box = $('appHardwareDisclaimerBox');
+    if (!box) return;
+    if (mode !== 'manual') {
+        box.classList.remove('hidden');
+    } else {
+        box.classList.add('hidden');
+    }
+}
+
+function getConnectionModeBadge(connMode) {
+    if (connMode === 'wifi') return `<span class="badge light-green-bg"><i class="fa-solid fa-wifi"></i> Wi-Fi Switch</span>`;
+    if (connMode === 'smartmeter') return `<span class="badge" style="background:var(--accent-light); color:var(--primary);"><i class="fa-solid fa-gauge-high"></i> Smart Meter</span>`;
+    if (connMode === 'usb') return `<span class="badge light-green-bg"><i class="fa-solid fa-usb"></i> Cable Switch</span>`;
+    return `<span class="badge" style="background:rgba(148,163,184,0.18); color:var(--text-muted);">Manual</span>`;
+}
+
 function renderAppliances() {
     const tbody = $('applianceList');
     if (!tbody) return;
@@ -391,7 +400,7 @@ function renderAppliances() {
     let totalLoadKwh = 0, activeWatts = 0;
 
     if (window.KamAbhiRAM.appliances.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center small-text">No appliances connected. Add a device above to generate live flowchart & graphs.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center small-text">No appliances added yet. Add your first appliance above.</td></tr>';
     } else {
         window.KamAbhiRAM.appliances.forEach(app => {
             if (app.state) {
@@ -401,9 +410,10 @@ function renderAppliances() {
             const cost = computeSlabBill(parseFloat(app.monthlyKwh)).total.toFixed(0);
             tbody.innerHTML += `<tr>
                 <td><strong>${escapeHTML(app.name)}</strong></td>
+                <td>${getConnectionModeBadge(app.connMode)}</td>
                 <td>${Number(app.power)} W</td>
                 <td>${Number(app.hours)} hrs/day</td>
-                <td>${Number(app.monthlyKwh)} kWh</td>
+                <td>${Number(app.monthlyKwh)} Units</td>
                 <td><label class="switch"><input type="checkbox" ${app.state ? 'checked' : ''} onchange="toggleApplianceState(${app.id}, this.checked)"><span class="slider"></span></label></td>
                 <td class="text-primary"><b>₹${cost}</b></td>
                 <td><button class="sm-btn danger-bg" onclick="deleteAppliance(${app.id})"><i class="fa-solid fa-trash"></i></button></td>
@@ -415,22 +425,21 @@ function renderAppliances() {
     const billObj = totalLoadKwh > 0 ? computeSlabBill(totalLoadKwh) : { total: 0 };
     window.KamAbhiRAM.computedBillObj = billObj;
 
-    safeSetText('dashLoadDisplay', `${totalLoadKwh.toFixed(1)} kWh`);
+    safeSetText('dashLoadDisplay', `${totalLoadKwh.toFixed(1)} Units`);
     safeSetText('dashBillDisplay', `₹${billObj.total.toFixed(0)}`);
     safeSetText('paymentTabAmount', `₹${billObj.total.toFixed(2)}`);
     safeSetText('vampireDisplay', `₹${(billObj.total * 0.10).toFixed(0)}`);
     safeSetText('forecastBillDisplay', `₹${(totalLoadKwh > 0 ? computeSlabBill(totalLoadKwh * 1.12).total : 0).toFixed(0)}`);
     safeSetText('liveWattsDisplay', `${activeWatts} W`);
-    safeSetText('flowTotalWattsBadge', `Active Draw: ${activeWatts} W (${totalLoadKwh.toFixed(1)} kWh/mo)`);
-    safeSetText('autoAuditUnits', `${totalLoadKwh.toFixed(1)} kWh`);
+    safeSetText('flowTotalWattsBadge', `Running Load: ${activeWatts} W (${totalLoadKwh.toFixed(1)} Units/mo)`);
+    safeSetText('autoAuditUnits', `${totalLoadKwh.toFixed(1)} Units`);
     safeSetText('autoAuditBill', `₹${billObj.total.toFixed(2)}`);
     safeSetText('autoAuditCarbon', `${(totalLoadKwh * 0.70).toFixed(1)} kg CO2`);
 
     checkMdiDemandOverload(activeWatts);
     $('budgetAlertBanner')?.classList.toggle('hidden', billObj.total <= window.KamAbhiRAM.budgetThreshold);
 
-    renderApplianceFlowchart(activeWatts, totalLoadKwh);
-    renderDynamicCharts(totalLoadKwh);
+    renderDashboardChart(totalLoadKwh);
 }
 
 function checkMdiDemandOverload(activeWatts) {
@@ -438,65 +447,21 @@ function checkMdiDemandOverload(activeWatts) {
     const banner = $('mdiOverloadBanner');
     if (!banner) return;
     if (activeWatts > maxWatts) {
-        safeSetText('mdiAlertTitle', `Demand Overload: ${activeWatts}W exceeds ${maxWatts}W Sanctioned Limit!`);
+        safeSetText('mdiAlertTitle', `High Load Warning: ${activeWatts}W exceeds your ${maxWatts}W meter limit!`);
         banner.classList.remove('hidden');
     } else {
         banner.classList.add('hidden');
     }
 }
 
-function renderApplianceFlowchart(activeWatts, totalKwh) {
-    const box = $('applianceFlowchartContainer');
-    if (!box) return;
-
-    const apps = window.KamAbhiRAM.appliances;
-    if (apps.length === 0) {
-        box.innerHTML = `<div class="text-center small-text" style="padding: 16px;"><i class="fa-solid fa-diagram-project text-primary" style="font-size:1.6rem; opacity:0.6; margin-bottom:6px; display:block;"></i>No active load nodes. Add an appliance above to view real-time power distribution flowchart.</div>`;
-        return;
-    }
-
-    const maxWatts = window.KamAbhiRAM.sanctionedLoadKw * 1000;
-    const isOverload = activeWatts > maxWatts;
-    const meterColor = isOverload ? 'var(--danger)' : 'var(--primary)';
-
-    const nodesHtml = apps.map(app => {
-        const sharePct = totalKwh > 0 && app.state ? Math.round((parseFloat(app.monthlyKwh) / totalKwh) * 100) : 0;
-        const borderCol = app.state ? '#10B981' : '#94A3B8';
-        const statusBadge = app.state
-            ? `<span class="badge light-green-bg" style="font-size:0.68rem;">ON • ${sharePct}% Share</span>`
-            : `<span class="badge" style="background:rgba(148,163,184,0.2); color:var(--text-muted); font-size:0.68rem;">STANDBY / OFF</span>`;
-        return `<div style="min-width: 155px; background: var(--card-bg); border: 2px solid ${borderCol}; border-radius: 12px; padding: 10px 12px; text-align: center; box-shadow: var(--shadow);">
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px;"><i class="fa-solid fa-bolt" style="color:${borderCol};"></i> Node</div>
-            <div style="font-weight: 700; font-size: 0.88rem; margin-bottom: 4px; color: var(--text-color);">${escapeHTML(app.name)}</div>
-            <div style="font-size: 0.8rem; font-weight: 600; color: var(--primary); margin-bottom: 6px;">${Number(app.power)} W • ${Number(app.monthlyKwh)} kWh</div>
-            ${statusBadge}
-        </div>`;
-    }).join('<div style="align-self:center; color:var(--primary); font-weight:bold;">➔</div>');
-
-    box.innerHTML = `<div style="display: flex; flex-direction: column; align-items: center; gap: 14px;">
-        <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
-            <div style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #fff; padding: 10px 18px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;"><i class="fa-solid fa-tower-observation"></i> Utility Grid (228V AC)</div>
-            <div style="color: var(--primary); font-weight: bold;">━━►</div>
-            <div style="background: var(--card-bg); border: 2px solid ${meterColor}; padding: 10px 18px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;">Meter Gateway: <span style="color:${meterColor};">${activeWatts}W / ${maxWatts}W</span></div>
-        </div>
-        <div style="color: var(--primary); font-size: 1.1rem; line-height: 1;">▼</div>
-        <div style="display: flex; align-items: stretch; justify-content: center; gap: 10px; flex-wrap: wrap; width: 100%;">${nodesHtml}</div>
-    </div>`;
+function setChartMode(mode) {
+    window.KamAbhiRAM.chartMode = mode;
+    renderDashboardChart(window.KamAbhiRAM.totalUnits);
 }
 
-function setChartMode(mode) { window.KamAbhiRAM.chartMode = mode; renderDynamicCharts(window.KamAbhiRAM.totalUnits); }
-function setAppChartMode(mode) {
-    window.KamAbhiRAM.appChartMode = mode;
-    if ($('appFlowBtn')) $('appFlowBtn').style.background = mode === 'line' ? 'var(--primary)' : '#64748B';
-    if ($('appBarBtn')) $('appBarBtn').style.background = mode === 'bar' ? 'var(--primary)' : '#64748B';
-    renderDynamicCharts(window.KamAbhiRAM.totalUnits);
-}
-
-function renderDynamicCharts(totalLoad) {
-    const palette = ['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#0EA5E9', '#EC4899', '#14B8A6'];
-    const activeApps = window.KamAbhiRAM.appliances;
-    const hasData = activeApps.length > 0 && totalLoad > 0;
-
+function renderDashboardChart(totalLoad) {
+    const palette = ['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#0EA5E9', '#EC4899'];
+    const hasData = window.KamAbhiRAM.appliances.length > 0 && totalLoad > 0;
     const ctxEl = $('energyChart');
     if (ctxEl && typeof Chart !== 'undefined') {
         if (window.KamAbhiRAM.energyChart) window.KamAbhiRAM.energyChart.destroy();
@@ -509,9 +474,9 @@ function renderDynamicCharts(totalLoad) {
         window.KamAbhiRAM.energyChart = new Chart(ctx, {
             type: window.KamAbhiRAM.chartMode,
             data: {
-                labels: hasData ? ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Today'] : ['No Appliances Connected'],
+                labels: hasData ? ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Today'] : ['Add appliances to view usage'],
                 datasets: [{
-                    label: 'Daily Energy Flow (kWh)',
+                    label: 'Daily Usage (Units)',
                     data: hasData ? [(d*0.88).toFixed(2), (d*1.04).toFixed(2), (d*0.94).toFixed(2), (d*1.12).toFixed(2), (d*1.01).toFixed(2), (d*1.16).toFixed(2), d.toFixed(2)] : [],
                     borderColor: '#6366F1', backgroundColor: window.KamAbhiRAM.chartMode === 'line' ? grad : palette,
                     borderWidth: 3, pointBackgroundColor: '#FFFFFF', pointBorderColor: '#6366F1', pointRadius: 5, fill: true, tension: 0.42
@@ -520,57 +485,10 @@ function renderDynamicCharts(totalLoad) {
             options: { responsive: true, maintainAspectRatio: false }
         });
     }
-
-    const pieEl = $('pieChart');
-    if (pieEl && typeof Chart !== 'undefined') {
-        if (window.KamAbhiRAM.pieChart) window.KamAbhiRAM.pieChart.destroy();
-        window.KamAbhiRAM.pieChart = new Chart(pieEl.getContext('2d'), {
-            type: 'doughnut',
-            data: { labels: activeApps.map(a => a.name), datasets: [{ data: activeApps.map(a => a.state ? a.monthlyKwh : 0), backgroundColor: palette }] },
-            options: { responsive: true, maintainAspectRatio: false, cutout: '64%' }
-        });
-    }
-
-    const compEl = $('applianceCompChart');
-    if (compEl && typeof Chart !== 'undefined') {
-        if (window.KamAbhiRAM.appCompChart) window.KamAbhiRAM.appCompChart.destroy();
-        const ctx2 = compEl.getContext('2d');
-        const isLine = window.KamAbhiRAM.appChartMode === 'line';
-
-        const gradPrimary = ctx2.createLinearGradient(0, 0, 0, 260);
-        gradPrimary.addColorStop(0, 'rgba(99, 102, 241, 0.45)');
-        gradPrimary.addColorStop(1, 'rgba(99, 102, 241, 0.02)');
-
-        const gradSecondary = ctx2.createLinearGradient(0, 0, 0, 260);
-        gradSecondary.addColorStop(0, 'rgba(16, 185, 129, 0.38)');
-        gradSecondary.addColorStop(1, 'rgba(16, 185, 129, 0.02)');
-
-        window.KamAbhiRAM.appCompChart = new Chart(ctx2, {
-            type: window.KamAbhiRAM.appChartMode,
-            data: {
-                labels: activeApps.map(a => a.name),
-                datasets: [
-                    {
-                        label: 'Monthly Consumption (kWh)',
-                        data: activeApps.map(a => a.state ? a.monthlyKwh : 0),
-                        borderColor: isLine ? '#6366F1' : palette, backgroundColor: isLine ? gradPrimary : palette,
-                        borderWidth: 3, pointBackgroundColor: '#FFFFFF', pointBorderColor: '#6366F1', pointRadius: 5, fill: isLine, tension: 0.42
-                    },
-                    {
-                        label: 'Power Rating (Watts ÷ 10)',
-                        data: activeApps.map(a => a.state ? (a.power / 10).toFixed(1) : 0),
-                        borderColor: '#10B981', backgroundColor: isLine ? gradSecondary : 'rgba(16, 185, 129, 0.78)',
-                        borderWidth: 2.5, pointBackgroundColor: '#FFFFFF', pointBorderColor: '#10B981', pointRadius: 4, fill: isLine, tension: 0.42
-                    }
-                ]
-            },
-            options: { responsive: true, maintainAspectRatio: false }
-        });
-    }
 }
 
 // ---------------------------------------------------------
-// CRUD OPERATIONS & HARDWARE RELAY (HMAC-SHA256)
+// APPLIANCE CRUD & HARDWARE RISK CONSENT LOCK
 // ---------------------------------------------------------
 function applyPreset(key) {
     if (!APPLIANCE_PRESETS[key]) return;
@@ -583,9 +501,27 @@ function addAppliance() {
     const name = safeGetVal('appName').trim();
     const power = Math.min(50000, Math.max(1, parseFloat(safeGetVal('appPower'))));
     const hours = Math.min(24, Math.max(0.1, parseFloat(safeGetVal('appHours'))));
-    if (!name || isNaN(power) || isNaN(hours)) return alert("Enter valid appliance details.");
+    const connMode = safeGetVal('appConnMode') || 'manual';
+
+    if (!name || isNaN(power) || isNaN(hours)) {
+        return alert("Please enter Appliance Name, Watts, and Daily Hours.");
+    }
+
+    // Require Hardware Responsibility Consent if linking with hardware
+    if (connMode !== 'manual') {
+        const riskChecked = $('appHardwareRiskCheck')?.checked;
+        if (!riskChecked) {
+            return alert("Hardware testing nhi kiya gya hai. Kripya pehle responsibility tick-box par tick karein.");
+        }
+        window.KamAbhiRAM.hardwareConsentAccepted = true;
+        if ($('hardwareMasterConsentCheck')) {
+            $('hardwareMasterConsentCheck').checked = true;
+            toggleHardwareRiskConsent(true);
+        }
+    }
+
     const monthlyKwh = ((power * hours * 30) / 1000).toFixed(2);
-    window.KamAbhiRAM.appliances.push({ id: Date.now(), name, power, hours, monthlyKwh, state: true });
+    window.KamAbhiRAM.appliances.push({ id: Date.now(), name, power, hours, monthlyKwh, connMode, state: true });
     safeSetVal('appName', ''); safeSetVal('appPower', ''); safeSetVal('appHours', '');
     renderAppliances();
     autoSyncToCloud();
@@ -599,17 +535,40 @@ function deleteAppliance(id) {
 
 function toggleApplianceState(id, state) {
     const app = window.KamAbhiRAM.appliances.find(a => a.id === id);
-    if (app) { app.state = state; renderAppliances(); autoSyncToCloud(); }
+    if (app) {
+        app.state = state;
+        if (app.connMode === 'wifi' && window.KamAbhiRAM.hardwareConsentAccepted) {
+            sendRealHardwareRelay(app.power >= 1000 ? 16 : 17, state);
+        }
+        renderAppliances();
+        autoSyncToCloud();
+    }
 }
 
 function executeHeavyApplianceCutoff() {
     window.KamAbhiRAM.appliances.forEach(a => { if (a.power >= 1000) a.state = false; });
     renderAppliances();
-    sendRealHardwareRelay(16, false);
-    sendRealHardwareRelay(17, false);
+    if (window.KamAbhiRAM.hardwareConsentAccepted) {
+        sendRealHardwareRelay(16, false);
+        sendRealHardwareRelay(17, false);
+    }
 }
 
-async function generateIoTMac(pin, val, secretKey) {
+function toggleHardwareRiskConsent(accepted) {
+    window.KamAbhiRAM.hardwareConsentAccepted = Boolean(accepted);
+    const zone = $('hardwareInteractiveZone');
+    const logEl = $('espConsoleLog');
+    if (zone) {
+        zone.className = accepted ? 'hardware-unlocked-zone' : 'hardware-locked-zone';
+    }
+    if (logEl) {
+        logEl.textContent = accepted
+            ? "Status: Hardware controls unlocked. You can now connect your Wi-Fi switch or USB cable."
+            : "Status: Please tick the agreement box above to enable smart hardware switches.";
+    }
+}
+
+async function generateSwitchSignature(pin, val, secretKey) {
     const timestamp = Math.floor(Date.now() / 1000);
     const message = `${pin}:${val}:${timestamp}`;
     const encoder = new TextEncoder();
@@ -634,6 +593,11 @@ function isStrictPrivateLanUrl(urlString) {
 }
 
 async function sendRealHardwareRelay(pin, state) {
+    if (!window.KamAbhiRAM.hardwareConsentAccepted) {
+        alert("Hardware testing nhi kiya gya hai. Kripya pehle responsibility tick-box par tick karein.");
+        return;
+    }
+
     const endpoint = safeGetVal('iotCutoffEndpoint').trim();
     const authKey = safeGetVal('espAuthToken').trim();
     const badge = $(`gpio${pin}Status`);
@@ -641,40 +605,43 @@ async function sendRealHardwareRelay(pin, state) {
     const val = state ? 1 : 0;
 
     if (badge) {
-        badge.textContent = state ? "ACTIVE / ON" : "CUT OFF";
+        badge.textContent = state ? "ON" : "OFF";
         badge.className = state ? "badge light-green-bg" : "badge light-red-bg";
     }
 
     if (!isStrictPrivateLanUrl(endpoint)) {
-        if (logEl) logEl.textContent = "[SECURITY BARRIER]: Target is not a verified local private IP.";
+        if (logEl) logEl.textContent = "Status: Please enter a valid local Wi-Fi switch address (e.g. http://192.168.1.50/switch).";
         return;
     }
 
-    const { timestamp, signatureHex } = await generateIoTMac(pin, val, authKey);
+    const { timestamp, signatureHex } = await generateSwitchSignature(pin, val, authKey);
     const targetUrl = `${endpoint}?pin=${encodeURIComponent(pin)}&val=${val}&ts=${timestamp}&sig=${signatureHex}`;
-    if (logEl) logEl.textContent = `[SECURE LAN DISPATCH]: Sent time-stamped trigger (GPIO ${pin}). Sig: ${signatureHex.substring(0,8)}...`;
+    if (logEl) logEl.textContent = `Status: Command sent to Switch ${pin === 16 ? '1' : '2'} (${state ? 'ON' : 'OFF'}).`;
     try { await fetch(targetUrl, { method: 'GET', mode: 'no-cors' }); } catch (e) {}
 }
 
 async function connectSerialHardware() {
-    if (!("serial" in navigator)) return alert("Web Serial API requires Chrome or Edge browser.");
+    if (!window.KamAbhiRAM.hardwareConsentAccepted) {
+        return alert("Hardware testing nhi kiya gya hai. Kripya pehle responsibility tick-box par tick karein.");
+    }
+    if (!("serial" in navigator)) return alert("Direct cable connection requires Chrome or Edge browser.");
     try {
         const port = await navigator.serial.requestPort();
         await port.open({ baudRate: 115200 });
-        safeSetText('hardwareConnectionBadge', 'USB Connected');
-    } catch (e) { alert("Serial connection cancelled."); }
+        safeSetText('hardwareConnectionBadge', 'Cable Connected');
+    } catch (e) { alert("Cable connection cancelled."); }
 }
 
 // ---------------------------------------------------------
-// VOLTAGE, INVERTER, SOLAR & VAMPIRE
+// VOLTAGE, INVERTER, SOLAR & STANDBY POWER
 // ---------------------------------------------------------
 function calculateInverterRuntime() {
     const ah = Math.max(1, parseFloat(safeGetVal('invBatteryAh')) || 150);
     const volts = parseFloat(safeGetVal('invVoltage')) || 12;
     const watts = Math.max(0, parseFloat(safeGetVal('invActiveLoad')) || 0);
-    if (watts <= 0) return safeSetText('inverterRuntimeOutput', 'Standby');
+    if (watts <= 0) return safeSetText('inverterRuntimeOutput', 'No Load');
     const hours = (ah * volts * 0.85) / watts;
-    safeSetText('inverterRuntimeOutput', `${Math.floor(hours)}h ${Math.round((hours%1)*60)}m`);
+    safeSetText('inverterRuntimeOutput', `${Math.floor(hours)} Hrs ${Math.round((hours%1)*60)} Min`);
 }
 
 function fetchActiveLoadToInverter() {
@@ -689,13 +656,13 @@ function simulateGridVoltage(v) {
     const box = $('voltageAlertBox');
     box.classList.remove('hidden');
     if (v < 180 || v > 260) {
-        safeSetText('voltageHealthBadge', `${v}V • Alert`);
-        box.textContent = "⚠️ Voltage anomaly detected. Heavy circuits isolated.";
+        safeSetText('voltageHealthBadge', `${v}V • Unsafe`);
+        box.textContent = "⚠️ Unsafe voltage detected! Heavy appliances have been turned OFF for safety.";
         box.style.background = "rgba(239,68,68,0.15)";
         executeHeavyApplianceCutoff();
     } else {
-        safeSetText('voltageHealthBadge', `${v}V • Normal`);
-        box.textContent = "✓ Voltage within secure tolerances.";
+        safeSetText('voltageHealthBadge', `${v}V • Safe`);
+        box.textContent = "✓ Voltage is normal and safe for all appliances.";
         box.style.background = "rgba(16,185,129,0.15)";
     }
 }
@@ -711,38 +678,33 @@ function calculateSolarRoi() {
 
 function toggleVampireItem(val, chk) {
     window.KamAbhiRAM.vampireSavings += chk.checked ? val : -val;
-    safeSetText('vampireTotalSavedBadge', `Saved: ₹${window.KamAbhiRAM.vampireSavings}/mo`);
+    safeSetText('vampireTotalSavedBadge', `Saved: ₹${window.KamAbhiRAM.vampireSavings}/month`);
 }
 
 // ---------------------------------------------------------
-// FILE UPLOAD SECURITY (MAGIC BYTES & SIZE LIMIT)
+// BILL PHOTO SCANNER & SMART METER FILE READER
 // ---------------------------------------------------------
 async function validateUploadedImage(file) {
     const MAX_IMAGE_SIZE = 4 * 1024 * 1024;
     const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
-
-    if (file.size > MAX_IMAGE_SIZE) throw new Error('File too large! Max 4 MB allowed.');
-    if (!allowedMimes.includes(file.type)) throw new Error('Invalid file type! Only JPG, PNG, and WebP allowed.');
+    if (file.size > MAX_IMAGE_SIZE) throw new Error('File too large! Maximum 4 MB allowed.');
+    if (!allowedMimes.includes(file.type)) throw new Error('Only JPG, PNG, and WebP photos are allowed.');
 
     const buffer = await file.slice(0, 4).arrayBuffer();
     const bytes = new Uint8Array(buffer);
     const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
-
-    const isJpeg = hex.startsWith('FFD8FF');
-    const isPng = hex === '89504E47';
-    const isWebp = hex === '52494646';
-
-    if (!isJpeg && !isPng && !isWebp) throw new Error('Security Block: Invalid file signature.');
+    if (!hex.startsWith('FFD8FF') && hex !== '89504E47' && hex !== '52494646') {
+        throw new Error('Invalid image file.');
+    }
 }
 
 async function processBillOcr() {
     const file = $('billImageInput').files[0];
-    if (!file) return alert('Please select a bill image first.');
+    if (!file) return alert('Please choose a bill photo first.');
 
     try {
         await validateUploadedImage(file);
     } catch (securityErr) {
-        reportSystemError('File Security Module', securityErr.message, 'processBillOcr');
         $('billImageInput').value = '';
         return alert(securityErr.message);
     }
@@ -752,14 +714,13 @@ async function processBillOcr() {
         const { data: { text } } = await Tesseract.recognize(file, 'eng');
         const unitsMatch = text.match(/(?:units?|kwh)[\s\-:]*([0-9]{1,5})/i);
         const u = unitsMatch ? unitsMatch[1] : '250';
-        safeSetText('ocrConsumerId', window.KamAbhiRAM?.userSession?.consumerId || 'VERIFIED');
+        safeSetText('ocrConsumerId', window.KamAbhiRAM?.userSession?.consumerId || 'Verified');
         safeSetText('ocrUnits', u);
         safeSetText('ocrAmount', `₹${computeSlabBill(parseFloat(u)).total.toFixed(0)}`);
         window.lastOcrUnits = parseFloat(u);
         $('ocrResultBox').classList.remove('hidden');
     } catch (e) {
-        reportSystemError('OCR Scanner', e.message, 'processBillOcr');
-        alert('Could not parse text. Please upload a clear photo.');
+        alert('Could not read the photo clearly. Please try a clearer image.');
     }
     $('ocrLoader').classList.add('hidden');
 }
@@ -773,13 +734,9 @@ function applyOcrToSimulator() {
 function handleSmartMeterCsv(e) {
     const file = e.target.files[0];
     if (!file) return;
-
-    const MAX_CSV_SIZE = 2 * 1024 * 1024;
-    const isCsvExt = /\.(csv|txt)$/i.test(file.name);
-    if (file.size > MAX_CSV_SIZE || !isCsvExt) {
-        reportSystemError('File Security Module', `Rejected upload: ${file.name}`, 'handleSmartMeterCsv');
+    if (file.size > 2 * 1024 * 1024 || !/\.(csv|txt)$/i.test(file.name)) {
         e.target.value = '';
-        return alert('Security Block: Only valid .csv or .txt files under 2 MB allowed.');
+        return alert('Please select a valid .csv or .txt file under 2 MB.');
     }
 
     const reader = new FileReader();
@@ -787,35 +744,33 @@ function handleSmartMeterCsv(e) {
         const content = String(ev.target.result || '');
         if (content.includes('\0')) {
             e.target.value = '';
-            return alert('Security Block: Corrupted binary file detected.');
+            return alert('Invalid file format.');
         }
-
         const rows = content.split(/\r?\n/).slice(1, 10001);
         let total = 0, peak = 0, count = 0;
         rows.forEach(r => {
             const cols = r.split(',');
             const val = parseFloat(cols[1]);
             if (!isNaN(val) && val >= 0 && val <= 1000) {
-                total += val;
-                count++;
+                total += val; count++;
                 if (val > peak) peak = val;
             }
         });
         $('csvSummaryBox').classList.remove('hidden');
-        safeSetText('csvTotalKwh', `${total.toFixed(1)} kWh`);
-        safeSetText('csvPeakHour', `${peak.toFixed(2)} kWh`);
-        safeSetText('csvAvgDaily', `${(total / Math.max(1, count / 24)).toFixed(1)} kWh/d`);
+        safeSetText('csvTotalKwh', `${total.toFixed(1)} Units`);
+        safeSetText('csvPeakHour', `${peak.toFixed(2)} Units`);
+        safeSetText('csvAvgDaily', `${(total / Math.max(1, count / 24)).toFixed(1)} Units/day`);
     };
     reader.readAsText(file);
 }
 
 // ---------------------------------------------------------
-// PAYMENT, AUDIT & SIMULATOR
+// PAYMENT, REPORTS & SAVINGS CALCULATOR
 // ---------------------------------------------------------
 function executeRealPayment() {
     const amt = window.KamAbhiRAM.computedBillObj.total;
-    if (amt <= 0) return alert("No active dues.");
-    alert("Payment setup abhi nhi kiya gya hai kripya apne Admin se contact kare.");
+    if (amt <= 0) return alert("No pending bill amount.");
+    alert("Online payment is currently not enabled. Please contact your Administrator.");
 }
 
 function renderRealPaymentLedger() {
@@ -823,23 +778,23 @@ function renderRealPaymentLedger() {
     const tbody = $('sixMonthTableBody');
     if (!tbody) return;
     if (window.KamAbhiRAM.paymentHistory.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center small-text">No recorded receipts.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center small-text">No past payment records.</td></tr>';
         return;
     }
-    tbody.innerHTML = window.KamAbhiRAM.paymentHistory.map(t => `<tr><td><b>${escapeHTML(t.txnId)}</b></td><td>${escapeHTML(t.units)} kWh</td><td><b>₹${escapeHTML(t.amount)}</b></td><td><span class="badge light-green-bg">${escapeHTML(t.status)}</span></td></tr>`).join('');
+    tbody.innerHTML = window.KamAbhiRAM.paymentHistory.map(t => `<tr><td><b>${escapeHTML(t.txnId)}</b></td><td>${escapeHTML(t.units)} Units</td><td><b>₹${escapeHTML(t.amount)}</b></td><td><span class="badge light-green-bg">${escapeHTML(t.status)}</span></td></tr>`).join('');
 }
 
 function downloadInvoicePDF() {
     const card = document.createElement('div');
     card.style.padding = '24px';
-    card.innerHTML = `<h2>EMCS - Secured Energy Bill Summary</h2><hr><p>Consumption: ${window.KamAbhiRAM.totalUnits.toFixed(1)} kWh</p><h3>Estimated Amount: ₹${window.KamAbhiRAM.computedBillObj.total.toFixed(2)}</h3><p><small>Disclaimer: Estimate only based on standard utility slabs.</small></p>`;
-    if (typeof html2pdf !== 'undefined') html2pdf().from(card).save('EMCS_Summary.pdf');
+    card.innerHTML = `<h2>EMCS - Monthly Electricity Bill Summary</h2><hr><p>Monthly Usage: ${window.KamAbhiRAM.totalUnits.toFixed(1)} Units</p><h3>Estimated Amount: ₹${window.KamAbhiRAM.computedBillObj.total.toFixed(2)}</h3><p><small>Note: This is an estimated calculation based on standard tariff slabs.</small></p>`;
+    if (typeof html2pdf !== 'undefined') html2pdf().from(card).save('EMCS_Bill_Report.pdf');
 }
 
 function exportYearlyExcel() {
-    let csv = "Appliance,Watts,Daily_Hours,Monthly_kWh\n";
-    window.KamAbhiRAM.appliances.forEach(a => { csv += `"${a.name}",${a.power},${a.hours},${a.monthlyKwh}\n`; });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'EMCS_Audit.csv'; a.click();
+    let csv = "Appliance,Connection_Mode,Watts,Daily_Hours,Monthly_Units\n";
+    window.KamAbhiRAM.appliances.forEach(a => { csv += `"${a.name}","${a.connMode || 'manual'}",${a.power},${a.hours},${a.monthlyKwh}\n`; });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'EMCS_Appliances_Report.csv'; a.click();
 }
 
 function calculateSimulator() {
@@ -847,13 +802,15 @@ function calculateSimulator() {
     const r = parseFloat(safeGetVal('simUserRate')) || 7.5;
     const p = parseFloat(safeGetVal('simSlider')) || 15;
     safeSetText('simPctVal', p);
-    safeSetText('simUnitsResult', `${(u * p / 100).toFixed(1)} kWh`);
+    safeSetText('simUnitsResult', `${(u * p / 100).toFixed(1)} Units`);
     safeSetText('simSavingsResult', `₹${(u * p / 100 * r).toFixed(0)}`);
 }
 
 // ---------------------------------------------------------
-// VOICE ASSISTANT & CHAT
+// 🔥 KAMABHI AI (EMCS AI) - LOGIN-ONLY, SINGLE-QUESTION LOCK & VOICE
 // ---------------------------------------------------------
+let isWaitingForAiAnswer = false;
+
 function speakFemaleVoice(text) {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
@@ -865,42 +822,98 @@ function speakFemaleVoice(text) {
     window.speechSynthesis.speak(utter);
 }
 
-function sendTabChatMessage() {
+async function loadAiChatHistory() {
+    const box = $('tabChatBox');
+    if (!box) return;
+    if (!window.KamAbhiRAM.userSession) {
+        box.innerHTML = `<div class="clean-card p-2" style="max-width:90%; align-self:flex-start;">
+            <p class="small-text" style="color:var(--text-color);">Hello! I am <b>KamAbhi AI (EMCS AI)</b>, your electrical safety and energy saving assistant. Please <b>Log In</b> first to ask questions.</p>
+        </div>`;
+        return;
+    }
+
+    try {
+        const res = await secureApiFetch('/ai/history');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.messages) && data.messages.length > 0) {
+            box.innerHTML = data.messages.map(m => {
+                if (m.sender === 'user') {
+                    return `<div class="clean-card p-2" style="align-self:flex-end; background:var(--primary); color:#fff; max-width:82%;"><p class="small-text" style="color:#fff;">${escapeHTML(m.text)}</p></div>`;
+                }
+                const safeTxt = escapeHTML(m.text);
+                return `<div class="clean-card p-2" style="align-self:flex-start; max-width:88%;"><p class="small-text" style="color:var(--text-color);">${safeTxt}</p><button class="sm-btn mt-1" style="background:var(--accent-light); color:var(--primary);" onclick="speakFemaleVoice('${safeTxt.replace(/'/g, "")}')"><i class="fa-solid fa-volume-high"></i> Listen</button></div>`;
+            }).join('');
+            box.scrollTop = box.scrollHeight;
+        }
+    } catch (e) {}
+}
+
+async function sendTabChatMessage() {
+    // 1. Login Required Check
+    if (!window.KamAbhiRAM.userSession) {
+        alert("Please log in to your account first to use KamAbhi AI.");
+        closeAllPopups();
+        openLoginModal();
+        return;
+    }
+
+    const box = $('tabChatBox');
+
+    // 2. Single Question Concurrency Lock (Ignore new question while previous is being answered)
+    if (isWaitingForAiAnswer) {
+        box.innerHTML += `<div class="clean-card p-2" style="align-self:center; background:rgba(245,158,11,0.14); border:1px solid var(--warning); max-width:90%;"><p class="small-text" style="color:var(--text-color); font-weight:600;">⏳ Wait kro pichle question ka answer likh rhe hai. Uske baad dusra question bhejo.</p></div>`;
+        box.scrollTop = box.scrollHeight;
+        return;
+    }
+
     const input = $('tabChatInput');
     const raw = input.value.trim().slice(0, 500);
     if (!raw) return;
     input.value = '';
-    const box = $('tabChatBox');
-    box.innerHTML += `<div class="clean-card p-2" style="align-self:flex-end; background:var(--primary); color:#fff; max-width:80%;">${escapeHTML(raw)}</div>`;
 
-    let reply = "Optimizing appliance schedules and maintaining AC thermostat at 24°C will minimize monthly billing tiers.";
-    if (/turn off heavy|cut heavy|ac off/i.test(raw)) {
-        executeHeavyApplianceCutoff();
-        reply = "Automated Command: Heavy appliances (>1000W) and GPIO relays have been switched off.";
-    }
-    const safeReply = escapeHTML(reply);
-    setTimeout(() => {
-        box.innerHTML += `<div class="clean-card p-2" style="align-self:flex-start; max-width:85%;"><p>${safeReply}</p><button class="sm-btn mt-1" style="background:var(--accent-light); color:var(--primary);" onclick="speakFemaleVoice('${safeReply.replace(/'/g, "")}')"><i class="fa-solid fa-volume-high"></i> Listen</button></div>`;
+    box.innerHTML += `<div class="clean-card p-2" style="align-self:flex-end; background:var(--primary); color:#fff; max-width:82%;"><p class="small-text" style="color:#fff;">${escapeHTML(raw)}</p></div>`;
+    box.scrollTop = box.scrollHeight;
+
+    isWaitingForAiAnswer = true;
+    try {
+        const res = await secureApiFetch('/ai/chat', {
+            method: 'POST',
+            body: JSON.stringify({ text: raw })
+        });
+        const data = await res.json();
+        const replyText = escapeHTML(data.reply || 'Something went wrong, try again later.');
+
+        if (!res.ok || !data.success) {
+            box.innerHTML += `<div class="clean-card p-2" style="align-self:center; border:1px solid var(--danger); max-width:88%;"><p class="small-text danger-text"><b>${replyText}</b></p></div>`;
+        } else {
+            box.innerHTML += `<div class="clean-card p-2" style="align-self:flex-start; max-width:88%;"><p class="small-text" style="color:var(--text-color);">${replyText}</p><button class="sm-btn mt-1" style="background:var(--accent-light); color:var(--primary);" onclick="speakFemaleVoice('${replyText.replace(/'/g, "")}')"><i class="fa-solid fa-volume-high"></i> Listen</button></div>`;
+        }
         box.scrollTop = box.scrollHeight;
-    }, 250);
+    } catch (e) {
+        box.innerHTML += `<div class="clean-card p-2" style="align-self:flex-start;"><p class="small-text danger-text">Something went wrong, try again later.</p></div>`;
+    } finally {
+        isWaitingForAiAnswer = false;
+    }
 }
 
 // ---------------------------------------------------------
 // AUTHENTICATION UI, FORM AUTO-DESTROY & MODALS
 // ---------------------------------------------------------
-// 🔥 MASTER CLEANUP: Destroys all half-filled inputs & resets toggles when popups are closed
 function destroyAllAuthFormData() {
-    const formIds = ['modalLoginForm', 'modalRegisterForm', 'modalForgotForm', 'modalAdminForm'];
-    formIds.forEach(id => {
+    ['modalLoginForm', 'modalRegisterForm', 'modalForgotForm', 'modalAdminForm'].forEach(id => {
         const formEl = $(id);
         if (formEl) formEl.reset();
     });
 
-    ['loginMobile', 'loginCredential', 'regName', 'regMobile', 'regConsumerId', 'regEmail', 'regCredential', 'regHoneypot', 'forgotMobile', 'forgotName', 'forgotRecoveryValue', 'forgotNewCredential', 'adminLoginUser', 'adminLoginPass'].forEach(fieldId => safeSetVal(fieldId, ''));
+    [
+        'loginMobile', 'loginCredential', 'loginHoneypot',
+        'regName', 'regMobile', 'regConsumerId', 'regEmail', 'regCredential', 'regHoneypot',
+        'forgotMobile', 'forgotName', 'forgotRecoveryValue', 'forgotNewCredential',
+        'adminLoginUser', 'adminLoginPass'
+    ].forEach(fieldId => safeSetVal(fieldId, ''));
 
-    if ($('regTermsCheck')) $('regTermsCheck').checked = false;
+    if ($('regTermsCheck'))$('regTermsCheck').checked = false;
 
-    // Reset password fields and eye icons
     ['loginCredential', 'regCredential', 'forgotNewCredential', 'adminLoginPass'].forEach(fieldId => {
         const el = $(fieldId);
         if (el) el.type = 'password';
@@ -916,13 +929,16 @@ function destroyAllAuthFormData() {
     safeSetText('modalAuthError', '');
 }
 
-function openLoginModal() { 
+function openLoginModal() {
     destroyAllAuthFormData();
     switchAuthTab('login', $('authTabButtons')?.children[0]);
-    $('loginModal').classList.remove('hidden'); 
-    $('popupOverlay').classList.remove('hidden'); 
+    $('loginModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden');
 }
-function openAIModal() { $('aiModal').classList.remove('hidden'); $('popupOverlay').classList.remove('hidden'); }
+
+function openAIModal() {
+    loadAiChatHistory();
+    $('aiModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden');
+}
 
 function toggleRegAuthUI() {
     const checked = document.querySelector('input[name="regAuthType"]:checked');
@@ -959,7 +975,7 @@ function toggleForgotUI() {
         input.type = 'email';
         input.removeAttribute('minlength');
         input.setAttribute('maxlength', '100');
-        input.placeholder = 'Enter Registered Email ID';
+        input.placeholder = 'Enter Email Address';
         input.style.textTransform = 'none';
     }
 }
@@ -993,7 +1009,6 @@ function closeAllPopups() {
     document.querySelectorAll('.popup-modal').forEach(m => m.classList.add('hidden'));
     $('popupOverlay').classList.add('hidden');
 
-    // Destroy all auth data when modal closes
     destroyAllAuthFormData();
 }
 
@@ -1009,13 +1024,12 @@ function switchAuthTab(tab, btn) {
 }
 
 // ---------------------------------------------------------
-// AUTHENTICATION HANDLERS
+// AUTHENTICATION HANDLERS (WITH INVISIBLE BOT TRAP TELEMETRY)
 // ---------------------------------------------------------
 async function handleSecureRegister(e) {
     e.preventDefault();
-    if ($('regHoneypot') && $('regHoneypot').value) return;
     if ($('regTermsCheck') && !$('regTermsCheck').checked) {
-        return safeSetText('modalAuthError', 'Acceptance of Privacy Policy and Terms is required.');
+        return safeSetText('modalAuthError', 'Please accept the Privacy Policy and Terms & Conditions.');
     }
 
     const emailCheck = isStrictValidEmail(safeGetVal('regEmail'));
@@ -1025,10 +1039,10 @@ async function handleSecureRegister(e) {
     const credential = safeGetVal('regCredential').trim();
 
     if (authType === 'pin' && !/^[0-9]{4,6}$/.test(credential)) {
-        return safeSetText('modalAuthError', 'Invalid PIN format.');
+        return safeSetText('modalAuthError', 'Invalid PIN.');
     }
     if (authType === 'password' && (credential.length < 8 || credential.length > 16)) {
-        return safeSetText('modalAuthError', 'Invalid Password length.');
+        return safeSetText('modalAuthError', 'Invalid Password.');
     }
 
     const payload = {
@@ -1038,20 +1052,21 @@ async function handleSecureRegister(e) {
         consumerId: safeGetVal('regConsumerId').trim().toUpperCase(),
         authType,
         credential,
-        termsAccepted: true
+        termsAccepted: true,
+        _emcs_trap: safeGetVal('regHoneypot'),
+        _clientMeta: getClientTelemetry()
     };
     try {
         const res = await secureApiFetch('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
         const data = await res.json();
         if (data.success) {
-            alert("Account registered securely! Please log in.");
+            alert("Account created successfully! Please log in.");
             switchAuthTab('login', $('authTabButtons').children[0]);
         } else {
-            safeSetText('modalAuthError', data.message);
+            safeSetText('modalAuthError', data.message || 'Something went wrong, try again later.');
         }
     } catch (err) {
-        reportSystemError('Auth Register API', err.message, '/api/auth/register');
-        safeSetText('modalAuthError', 'Network error or server unreachable. Try again later.');
+        safeSetText('modalAuthError', 'Something went wrong, try again later.');
     }
 }
 
@@ -1059,7 +1074,9 @@ async function handleSecureLogin(e) {
     e.preventDefault();
     const payload = {
         mobile: safeGetVal('loginMobile').trim(),
-        credential: safeGetVal('loginCredential').trim()
+        credential: safeGetVal('loginCredential').trim(),
+        _emcs_trap: safeGetVal('loginHoneypot'),
+        _clientMeta: getClientTelemetry()
     };
     try {
         const res = await secureApiFetch('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
@@ -1070,11 +1087,10 @@ async function handleSecureLogin(e) {
             await refreshDataFromCloud();
             closeAllPopups();
         } else {
-            safeSetText('modalAuthError', data.message);
+            safeSetText('modalAuthError', data.message || 'Something went wrong, try again later.');
         }
     } catch (err) {
-        reportSystemError('Auth Login API', err.message, '/api/auth/login');
-        safeSetText('modalAuthError', 'Network error or server unreachable. Try again later.');
+        safeSetText('modalAuthError', 'Something went wrong, try again later.');
     }
 }
 
@@ -1094,10 +1110,10 @@ async function handleForgotReset(e) {
     const newCredential = safeGetVal('forgotNewCredential').trim();
 
     if (newAuthType === 'pin' && !/^[0-9]{4,6}$/.test(newCredential)) {
-        return safeSetText('modalAuthError', 'Invalid PIN format.');
+        return safeSetText('modalAuthError', 'Invalid PIN.');
     }
     if (newAuthType === 'password' && (newCredential.length < 8 || newCredential.length > 16)) {
-        return safeSetText('modalAuthError', 'Invalid Password length.');
+        return safeSetText('modalAuthError', 'Invalid Password.');
     }
 
     const payload = {
@@ -1115,13 +1131,12 @@ async function handleForgotReset(e) {
             alert(data.message);
             switchAuthTab('login', $('authTabButtons').children[0]);
         } else {
-            safeSetText('modalAuthError', data.message);
+            safeSetText('modalAuthError', data.message || 'Something went wrong, try again later.');
         }
     } catch (err) {
-        safeSetText('modalAuthError', 'Something went wrong. Please try again later.');
+        safeSetText('modalAuthError', 'Something went wrong, try again later.');
     }
 }
-const handleFreePinReset = handleForgotReset;
 
 // ---------------------------------------------------------
 // CLOUD SYNC & SESSION MANAGEMENT
@@ -1187,19 +1202,19 @@ function logoutUser() {
 async function openDeviceManager() {
     $('deviceManagerModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden');
     const tbody = $('deviceSessionList');
-    tbody.innerHTML = '<tr><td colspan="4">Loading authorized endpoints...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4">Loading logged-in devices...</td></tr>';
     try {
         const res = await secureApiFetch('/auth/devices');
         const data = await res.json();
         if (data.success) {
             tbody.innerHTML = data.sessions.map(s => `
                 <tr><td>${escapeHTML(s.deviceInfo)}</td><td>${new Date(s.createdAt).toLocaleString()}</td>
-                <td>${s.isCurrent ? '<b class="green-text">Current</b>' : 'Active'}</td>
-                <td>${s.isCurrent ? '—' : (s.canRevoke ? `<button class="sm-btn danger-bg" onclick="revokeDevice('${s.sessionId}')">Revoke</button>` : `<span class="badge">${s.hoursRemaining}h lock</span>`)}</td></tr>
+                <td>${s.isCurrent ? '<b class="green-text">This Device</b>' : 'Active'}</td>
+                <td>${s.isCurrent ? '—' : (s.canRevoke ? `<button class="sm-btn danger-bg" onclick="revokeDevice('${s.sessionId}')">Logout</button>` : `<span class="badge">${s.hoursRemaining}h wait</span>`)}</td></tr>
             `).join('');
         }
     } catch (e) {
-        tbody.innerHTML = `<tr><td>Secured Endpoint (${escapeHTML(navigator.userAgent.slice(0, 25))}...)</td><td>Active Now</td><td><b class="green-text">Current</b></td><td>—</td></tr>`;
+        tbody.innerHTML = `<tr><td>Current Browser</td><td>Active Now</td><td><b class="green-text">This Device</b></td><td>—</td></tr>`;
     }
 }
 
@@ -1211,8 +1226,10 @@ async function revokeDevice(targetSessionId) {
 }
 
 // ---------------------------------------------------------
-// SECURE ADMIN CONSOLE (LEFT SIDEBAR NAVIGATION), KYC & CMS
+// ADMIN PANEL, USER BLOCK/DELETE, AI HISTORY & EMERGENCY ALERTS
 // ---------------------------------------------------------
+let activeAdminKycCid = null;
+
 async function handleSecureAdminLogin(e) {
     e.preventDefault();
     const username = safeGetVal('adminLoginUser').trim();
@@ -1224,11 +1241,10 @@ async function handleSecureAdminLogin(e) {
             safeSetVal('adminLoginPass', '');
             enterAdminHub(data);
         } else {
-            safeSetText('modalAuthError', data.message || 'Invalid authorization key.');
+            safeSetText('modalAuthError', data.message || 'Invalid access key.');
         }
     } catch (err) {
-        reportSystemError('Admin Auth API', err.message, '/api/admin/login');
-        safeSetText('modalAuthError', 'Something went wrong. Please try again later.');
+        safeSetText('modalAuthError', 'Something went wrong, try again later.');
     }
 }
 
@@ -1239,7 +1255,7 @@ function enterAdminHub(data) {
     $('appSidebar').classList.remove('hidden');
     $('consumerNavLinks')?.classList.add('hidden');$('sidebarAuthArea')?.classList.add('hidden');
     $('adminNavLinks')?.classList.remove('hidden');$('adminSidebarFooter')?.classList.remove('hidden');
-    safeSetText('sidebarSubTitle', 'Admin Control Console');
+    safeSetText('sidebarSubTitle', 'Admin Management Panel');
 
     safeSetText('adminRoleDisplay', `${data.name} (${data.role.toUpperCase()})`);
     $('ownerStaffTabBtn')?.classList.toggle('hidden', data.role !== 'owner');
@@ -1250,6 +1266,7 @@ function enterAdminHub(data) {
     switchAdminSubTab('chatTab', firstAdminItem);
     loadAdminChatThreads();
     loadStaffList();
+    loadEmergencyAlerts();
     loadSystemErrors();
 }
 
@@ -1259,7 +1276,7 @@ function exitAdminView() {
 
     $('adminNavLinks')?.classList.add('hidden');$('adminSidebarFooter')?.classList.add('hidden');
     $('consumerNavLinks')?.classList.remove('hidden');$('sidebarAuthArea')?.classList.remove('hidden');
-    safeSetText('sidebarSubTitle', 'Energy Management System');
+    safeSetText('sidebarSubTitle', 'Smart Energy Manager');
 
     safeSetVal('adminLoginUser', '');
     safeSetVal('adminLoginPass', '');
@@ -1267,409 +1284,4 @@ function exitAdminView() {
 
 function switchAdminSubTab(tab, btn) {
     document.querySelectorAll('.admin-sub-pane').forEach(p => {
-        p.classList.add('hidden');
-        p.classList.remove('active-feature');
-    });
-    document.querySelectorAll('#adminNavLinks .nav-item').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
-
-    let targetPane = null;
-    if (tab === 'chatTab') targetPane = $('adminChatSubPane');
-    if (tab === 'usersTab') { targetPane = $('adminUsersSubPane'); loadAdminChatThreads(); }
-    if (tab === 'staffTab') { targetPane = $('adminStaffSubPane'); loadStaffList(); }
-    if (tab === 'cmsTab') targetPane = $('adminCmsSubPane');
-    if (tab === 'errorTab') { targetPane = $('adminErrorSubPane'); loadSystemErrors(); }
-
-    if (targetPane) {
-        targetPane.classList.remove('hidden');
-        targetPane.classList.add('active-feature');
-    }
-    if (window.innerWidth <= 920) {
-        $('appSidebar').classList.remove('drawer-open');$('drawerOverlay').classList.add('hidden');
-    }
-}
-
-// 🔥 FETCH & RENDER CONSUMER KYC, IP LOGS & 24-MONTH BILLING LEDGER
-async function fetchAdminUserDetails(consumerId) {
-    try {
-        const res = await secureApiFetch(`/admin/user/${encodeURIComponent(consumerId)}`);
-        const data = await res.json();
-        if (data.success && data.user) {
-            const u = data.user;
-            safeSetText('kycName', u.name);
-            safeSetText('kycConsumerId', `Consumer ID: ${u.consumerId} (${(u.authType || 'pin').toUpperCase()} Auth)`);
-            safeSetText('kycMobile', `+91 ${u.mobile}`);
-            safeSetText('kycEmail', u.email || 'Not Provided');
-            safeSetText('kycSanctioned', `${u.sanctionedLoadKw || 2.0} kW`);
-            safeSetText('kycJoinDate', new Date(u.createdAt).toLocaleDateString());
-            safeSetText('kycLifetimeUnits', `${data.lifetimeUsage || 0} kWh`);
-
-            const badge = $('kycStatusBadge');
-            if (badge) {
-                badge.textContent = (u.accountStatus || 'active').toUpperCase();
-                badge.className = u.accountStatus === 'active' ? 'badge light-green-bg' : 'badge light-red-bg';
-            }
-
-            safeSetText('kycAppCount', u.appliances ? u.appliances.length : 0);
-            const appListEl = $('kycAppList');
-            if (appListEl) {
-                if (u.appliances && u.appliances.length > 0) {
-                    appListEl.innerHTML = u.appliances.map(a => `<div>• <b>${escapeHTML(a.name)}</b> — ${Number(a.power)}W, ${Number(a.hours)}h/day (${Number(a.monthlyKwh)} kWh/mo) [${a.state ? '<span class="green-text">ON</span>' : '<span class="danger-text">OFF</span>'}]</div>`).join('');
-                } else {
-                    appListEl.innerHTML = "No appliances registered.";
-                }
-            }
-
-            const sessionBody = $('kycSessionList');
-            if (sessionBody) {
-                if (u.activeSessions && u.activeSessions.length > 0) {
-                    sessionBody.innerHTML = u.activeSessions.slice().reverse().map(s => `<tr>
-                        <td><small>${escapeHTML(s.deviceInfo || 'Browser Client')}</small></td>
-                        <td><code>${escapeHTML(s.ipAddress || 'Secured IP')}</code></td>
-                        <td><small>${new Date(s.createdAt).toLocaleString()}</small></td>
-                    </tr>`).join('');
-                } else {
-                    sessionBody.innerHTML = '<tr><td colspan="3" class="text-center small-text">No active session logs available.</td></tr>';
-                }
-            }
-
-            const billingBody = $('kycBillingList');
-            if (billingBody) {
-                if (data.paymentLedger && data.paymentLedger.length > 0) {
-                    billingBody.innerHTML = data.paymentLedger.map(p => `<tr>
-                        <td><b>${escapeHTML(p.month)}</b></td>
-                        <td><small><code>${escapeHTML(p.txnId)}</code></small></td>
-                        <td>${escapeHTML(p.units)} kWh</td>
-                        <td class="text-primary"><b>₹${escapeHTML(p.amount)}</b></td>
-                        <td><span class="badge light-green-bg">${escapeHTML(p.status)}</span></td>
-                    </tr>`).join('');
-                } else {
-                    billingBody.innerHTML = '<tr><td colspan="5" class="text-center small-text">No billing records found.</td></tr>';
-                }
-            }
-
-            $('kycTabSessions')?.classList.remove('hidden');$('kycTabBilling')?.classList.add('hidden');
-            $('adminUserKycModal')?.classList.remove('hidden');$('popupOverlay')?.classList.remove('hidden');
-        } else {
-            alert(data.message || "Could not fetch consumer KYC details.");
-        }
-    } catch (e) {
-        alert("Server error while fetching KYC details.");
-    }
-}
-
-async function createNewStaffMember() {
-    const name = safeGetVal('staffNewName').trim();
-    const username = safeGetVal('staffNewUser').trim();
-    const password = safeGetVal('staffNewPass').trim();
-    if (!name || !username || password.length < 6) return alert("Enter valid staff name, username, and password.");
-
-    const permissions = {
-        canManageUsers: $('permManageUsers') ?$('permManageUsers').checked : true,
-        canChatSupport: $('permChat') ?$('permChat').checked : true,
-        canEditCMS: $('permCMS') ?$('permCMS').checked : false,
-        canDeleteChat: $('permDeleteChat') ?$('permDeleteChat').checked : false
-    };
-
-    try {
-        const res = await secureApiFetch('/admin/staff', {
-            method: 'POST',
-            body: JSON.stringify({ name, username, password, permissions })
-        });
-        const data = await res.json();
-        alert(data.message || 'Staff role provisioned.');
-        safeSetVal('staffNewName', ''); safeSetVal('staffNewUser', ''); safeSetVal('staffNewPass', '');
-        loadStaffList();
-    } catch (e) { alert("Failed to create staff member."); }
-}
-
-async function loadStaffList() {
-    const tbody = $('staffDirectoryBody');
-    if (!tbody) return;
-    try {
-        const res = await secureApiFetch('/admin/staff');
-        const data = await res.json();
-        if (data.success && Array.isArray(data.staff)) {
-            tbody.innerHTML = data.staff.map(s => {
-                const perms = Object.keys(s.permissions || {}).filter(k => s.permissions[k]).join(', ') || 'Basic';
-                return `<tr>
-                    <td><b>${escapeHTML(s.name)}</b></td>
-                    <td>${escapeHTML(s.username)}</td>
-                    <td><small>${escapeHTML(perms)}</small></td>
-                    <td><button class="sm-btn danger-bg" onclick="deleteStaffMember('${s._id}')"><i class="fa-solid fa-trash"></i></button></td>
-                </tr>`;
-            }).join('') || '<tr><td colspan="4" class="text-center small-text">No staff members added yet.</td></tr>';
-        }
-    } catch (e) {}
-}
-
-async function deleteStaffMember(id) {
-    if (!confirm("Remove this staff account?")) return;
-    await secureApiFetch(`/admin/staff/${id}`, { method: 'DELETE' }).catch(() => {});
-    loadStaffList();
-}
-
-async function loadSystemErrors() {
-    const tbody = $('adminErrorListBody');
-    if (!tbody) return;
-    let logs = JSON.parse(localStorage.getItem('emcs_error_logs') || '[]');
-    try {
-        const res = await secureApiFetch('/admin/errors');
-        const data = await res.json();
-        if (data.success && Array.isArray(data.errors)) logs = data.errors;
-    } catch (e) {}
-
-    safeSetText('adminErrorCountBadge', logs.length);
-    if (logs.length === 0) return tbody.innerHTML = '<tr><td colspan="5" class="text-center small-text">No recorded system exceptions.</td></tr>';
-    tbody.innerHTML = logs.map(err => {
-        const isServer = /backend|server|db|storage|idor/i.test(err.source);
-        return `<tr><td><small>${new Date(err.timestamp).toLocaleString()}</small></td><td><span class="badge ${isServer ? 'light-red-bg' : 'light-green-bg'}">${escapeHTML(err.source)}</span></td><td><strong class="danger-text">${escapeHTML(err.message)}</strong></td><td><code>${escapeHTML(err.location || 'N/A')}</code></td><td>${escapeHTML(err.userOrIp || 'System')}</td></tr>`;
-    }).join('');
-}
-
-async function clearSystemErrors() {
-    if (!confirm("Clear all recorded error logs?")) return;
-    localStorage.removeItem('emcs_error_logs');
-    try { await secureApiFetch('/admin/errors/clear', { method: 'DELETE' }); } catch (e) {}
-    loadSystemErrors();
-}
-
-async function loadCmsContent() {
-    let cms = JSON.parse(localStorage.getItem('emcsCmsData')) || {
-        broadcast: "",
-        about: "EMCS (Energy Management Control System) is an intelligent energy monitoring, tariff estimation, and load automation platform.",
-        privacy: "1. DATA COLLECTION & SECURITY (DPDP Act 2023 Compliance): We collect minimal data (Mobile, Verified Email ID, Consumer ID, Name) strictly for authentication, account recovery, and load monitoring. FOR SECURITY & ANTI-FRAUD PURPOSES, we explicitly log your Device Models (OS/Browser) and IP Addresses during login to prevent unauthorized cross-account access (Anti-IDOR) and secure active sessions.\n\n2. OCR & FILE UPLOADS: Bill images uploaded for OCR and CSV files are processed securely in memory. We do not permanently store images of your physical electricity bills.\n\n3. DATA RETENTION & ERASURE: Upon account deactivation, all sessions are revoked immediately, and records enter a secured 2-year retention archive for compliance before automatic permanent erasure.\n\n4. COOKIES: We use HTTP-only cookies strictly for session authorization.",
-        terms: "1. ACCEPTANCE OF TERMS: By using EMCS, you agree to these legal terms.\n\n2. NO FINANCIAL LIABILITY: The electricity bills, solar ROI, and tariff calculations provided by EMCS are 'Estimates' based on standard utility slabs. EMCS is not an official billing authority. You must pay your actual utility provider based on their official meter readings.\n\n3. ACCOUNT & EMAIL SECURITY: Users must register with a valid, non-disposable email address. Attempting to manipulate URLs, Consumer IDs, or API payloads to access another consumer's profile is a strict security violation and will result in immediate session termination and IP logging.\n\n4. HARDWARE & IOT SAFETY WAIVER: The hardware relay control, voltage surge guard, and IoT features are provided 'AS IS'. EMCS and its developers are NOT liable for any electrical damage, short circuits, hardware failure, fire hazards, or personal injury resulting from automated appliance switching. Use IoT features at your own risk.\n\n5. PAYMENTS: EMCS provides a simulated 24-month settlement ledger. No real financial transactions are processed on this platform.",
-        faqs: [
-            { q: "How can I reset my forgotten PIN or Password?", a: "Open the Login modal, select 'Forgot Access', and verify your identity using either your 12-Character Consumer ID OR your Registered Email ID to set a new PIN or Password." },
-            { q: "Why does EMCS log my Device Model and IP Address?", a: "For your account security. Logging device models and IP addresses allows you and system administrators to detect suspicious logins, block cross-account (IDOR) tampering, and revoke unauthorized sessions." },
-            { q: "Are temporary or disposable email addresses allowed?", a: "No. To protect the platform from automated bots and ensure reliable account recovery, disposable email domains are strictly blocked." },
-            { q: "Are the electricity bills shown here official?", a: "No. All bills and solar ROI figures are estimates calculated using state/private DISCOM tariff slabs for planning and energy-saving purposes." },
-            { q: "How does the 2-year account deletion policy work?", a: "When you deactivate your account, all active devices are logged out immediately and your records are automatically erased after 2 years." }
-        ]
-    };
-    try {
-        const res = await fetch(`${API_BASE}/cms`);
-        const data = await res.json();
-        if (data.success && data.cms) cms = data.cms;
-    } catch (e) {}
-
-    localStorage.setItem('emcsCmsData', JSON.stringify(cms));
-    window.KamAbhiRAM.cmsFaqs = cms.faqs || [];
-    renderAdminFaqs();
-
-    if (cms.broadcast && cms.broadcast.trim()) {
-        safeSetText('systemBroadcastText', cms.broadcast);
-        $('systemBroadcastBanner').classList.remove('hidden');
-    }
-    safeSetVal('cmsBroadcastInput', cms.broadcast || '');
-    safeSetVal('cmsAboutInput', cms.about || '');
-    safeSetVal('cmsPrivacyInput', cms.privacy || '');
-    safeSetVal('cmsTermsInput', cms.terms || '');
-}
-
-function addAdminFaq() {
-    const q = safeGetVal('cmsFaqQuestion').trim();
-    const a = safeGetVal('cmsFaqAnswer').trim();
-    if (!q || !a) return alert("Enter both question and answer.");
-    window.KamAbhiRAM.cmsFaqs.push({ q, a });
-    safeSetVal('cmsFaqQuestion', ''); safeSetVal('cmsFaqAnswer', '');
-    renderAdminFaqs();
-}
-
-function renderAdminFaqs() {
-    const box = $('cmsFaqList');
-    if (!box) return;
-    box.innerHTML = (window.KamAbhiRAM.cmsFaqs || []).map((f, i) => `
-        <div class="p-2 mb-1 flex-between" style="background:var(--bg-color); border:1px solid var(--card-border); border-radius:8px;">
-            <div><b>Q:</b> ${escapeHTML(f.q)}<br><small class="text-muted">A: ${escapeHTML(f.a)}</small></div>
-            <button type="button" class="icon-btn borderless danger-text" onclick="window.KamAbhiRAM.cmsFaqs.splice(${i}, 1); renderAdminFaqs()"><i class="fa-solid fa-trash"></i></button>
-        </div>
-    `).join('');
-}
-
-async function saveCmsContent() {
-    const cms = { broadcast: safeGetVal('cmsBroadcastInput').trim(), about: safeGetVal('cmsAboutInput').trim(), privacy: safeGetVal('cmsPrivacyInput').trim(), terms: safeGetVal('cmsTermsInput').trim(), faqs: window.KamAbhiRAM.cmsFaqs || [] };
-    localStorage.setItem('emcsCmsData', JSON.stringify(cms));
-    try { await secureApiFetch('/admin/cms', { method: 'POST', body: JSON.stringify(cms) }); } catch (e) {}
-    loadCmsContent();
-    safeSetText('cmsSavedNotice', '✓ Published successfully!');
-    setTimeout(() => safeSetText('cmsSavedNotice', ''), 3000);
-}
-
-function openLegalModal(type) {
-    const cms = JSON.parse(localStorage.getItem('emcsCmsData')) || {};
-    const titles = { about: 'About Us', privacy: 'Privacy Policy', terms: 'Terms & Conditions', faqs: 'Frequently Asked Questions' };
-    safeSetText('legalModalTitle', titles[type] || 'Information');
-    if (type === 'faqs') {
-        const faqs = cms.faqs || [];
-        $('legalModalBody').innerHTML = faqs.map(f => `<div style="margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid var(--card-border);"><strong style="color:var(--primary);">${escapeHTML(f.q)}</strong><p class="small-text mt-1">${escapeHTML(f.a)}</p></div>`).join('') || "<p>No FAQs available right now.</p>";
-    } else {
-        $('legalModalBody').innerHTML = `<div style="white-space: pre-line;">${escapeHTML(cms[type] || '')}</div>`;
-    }
-    $('legalModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden');
-}
-
-// ---------------------------------------------------------
-// TWO-WAY SUPPORT CHAT & CLICKABLE KYC REGISTRY TABLE
-// ---------------------------------------------------------
-async function loadUserSupportMessages() {
-    if (!window.KamAbhiRAM.userSession) return;
-    const area = $('userChatMsgArea');
-    if (!area) return;
-    try {
-        const res = await secureApiFetch('/support/user/messages');
-        const data = await res.json();
-        if (data.success && Array.isArray(data.messages) && data.messages.length > 0) {
-            area.innerHTML = data.messages.map(m => `
-                <div class="emcs-bubble ${m.sender === 'user' ? 'emcs-sent' : 'emcs-received'}">
-                    ${escapeHTML(m.text)}
-                    <span class="emcs-time">${m.sender === 'admin' ? 'EMCS Support Desk' : 'You'} • ${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                </div>
-            `).join('');
-            area.scrollTop = area.scrollHeight;
-        }
-    } catch (e) {}
-}
-
-let lastMsgSent = 0;
-function sendUserSupportMessage() {
-    if (!window.KamAbhiRAM.userSession) return alert("Please log in to send support messages.");
-    if (Date.now() - lastMsgSent < 2000) return alert("Please wait between messages.");
-    const input = $('userChatInput');
-    const text = input.value.trim().slice(0, 500);
-    if (!text) return;
-    lastMsgSent = Date.now();
-    input.value = '';
-    const area = $('userChatMsgArea');
-    area.innerHTML += `<div class="emcs-bubble emcs-sent">${escapeHTML(text)}<span class="emcs-time">You • Just now</span></div>`;
-    area.scrollTop = area.scrollHeight;
-    secureApiFetch('/support/user/send', { method: 'POST', body: JSON.stringify({ text }) }).catch(() => {});
-}
-
-async function loadAdminChatThreads() {
-    try {
-        const res = await secureApiFetch('/support/admin/threads');
-        const data = await res.json();
-        if (data.success && Array.isArray(data.threads)) {
-            $('adminChatThreadsList').innerHTML = data.threads.map(t => `<div class="admin-wa-user-item" onclick="selectAdminThread('${escapeHTML(t.consumerId)}', '${escapeHTML(t.name)}')"><div class="emcs-avatar" style="width:32px; height:32px; font-size:0.8rem;">${escapeHTML(t.name[0] || 'U')}</div><div><strong>${escapeHTML(t.name)}</strong><br><small class="small-text">${escapeHTML(t.consumerId)}</small></div></div>`).join('');
-
-            safeSetText('adminUserCount', data.threads.length);
-            const userTbody = $('adminUserListBody');
-            if (userTbody) {
-                userTbody.innerHTML = data.threads.map(u => `<tr>
-                    <td><b>${escapeHTML(u.consumerId)}</b></td>
-                    <td><a href="javascript:void(0)" class="text-primary hover-pop" style="font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:6px;" onclick="fetchAdminUserDetails('${escapeHTML(u.consumerId)}')">${escapeHTML(u.name)} <i class="fa-solid fa-address-card" style="font-size:0.8rem;"></i></a></td>
-                    <td>+91 ${escapeHTML(u.mobile)}</td>
-                    <td>${Number(u.sanctionedLoadKw || 2.0)} kW</td>
-                    <td><span class="badge ${u.accountStatus === 'deleted' ? 'light-red-bg' : 'light-green-bg'}">${escapeHTML(u.accountStatus || 'active')}</span></td>
-                </tr>`).join('') || '<tr><td colspan="5" class="text-center small-text">No registered consumers yet.</td></tr>';
-            }
-        }
-    } catch (e) {}
-}
-
-let selectedAdminConsumerId = null;
-async function selectAdminThread(cid, name) {
-    selectedAdminConsumerId = cid;
-    safeSetText('activeChatName', `${name} (${cid})`);
-    $('singleChatActionBox').classList.remove('hidden');
-    const res = await secureApiFetch(`/support/admin/messages/${cid}`);
-    const data = await res.json();
-    if (data.success) {
-        $('adminChatMsgArea').innerHTML = data.messages.map(m => `<div class="emcs-bubble ${m.sender === 'admin' ? 'emcs-sent' : 'emcs-received'}">${escapeHTML(m.text)}</div>`).join('');
-    }
-}
-
-async function sendAdminSupportMessage() {
-    if (!selectedAdminConsumerId) return alert("Select a consumer thread first.");
-    const input = $('adminChatInput');
-    const text = input.value.trim().slice(0, 500);
-    if (!text) return;
-    input.value = '';
-    $('adminChatMsgArea').innerHTML += `<div class="emcs-bubble emcs-sent">${escapeHTML(text)}</div>`;
-    await secureApiFetch('/support/admin/reply', { method: 'POST', body: JSON.stringify({ consumerId: selectedAdminConsumerId, text }) }).catch(() => {});
-}
-
-async function deleteSelectedConsumerChat() {
-    if (!selectedAdminConsumerId || !confirm("Clear this thread?")) return;
-    await secureApiFetch(`/support/chat/clear/${selectedAdminConsumerId}`, { method: 'DELETE' });
-    $('adminChatMsgArea').innerHTML = '';
-}
-
-async function purgeAllChatsConfirm() {
-    if (prompt("Type 'DELETE ALL' to confirm:") !== 'DELETE ALL') return;
-    await secureApiFetch('/support/chat/purge-all', { method: 'DELETE' });
-    $('adminChatMsgArea').innerHTML = '';
-}
-
-async function downloadAdminMasterDatabase() {
-    try {
-        const res = await secureApiFetch('/admin/master-database-dump');
-        const blob = await res.blob();
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `EMCS_Vault_Export_${Date.now()}.json`; a.click();
-    } catch (e) { alert("Vault export requires active server."); }
-}
-
-async function deleteMyAccount() {
-    if (!confirm("WARNING: Account deactivate ho jayega aur 2 saal baad permanently erase ho jayega. Continue?")) return;
-    if (prompt("Type 'DELETE' to confirm:") !== "DELETE") return;
-    try {
-        const res = await secureApiFetch('/user/delete-account', { method: 'DELETE' });
-        if (res.ok) { alert("Account deactivated."); logoutUser(); }
-    } catch (e) { alert("Failed."); }
-}
-
-function changeSanctionedLoad(val) { window.KamAbhiRAM.sanctionedLoadKw = parseFloat(val); renderAppliances(); autoSyncToCloud(); }
-function promptSetBudget() {
-    const b = prompt("Enter Monthly Budget Target (₹):", window.KamAbhiRAM.budgetThreshold);
-    if (b && !isNaN(b)) { window.KamAbhiRAM.budgetThreshold = parseFloat(b); safeSetText('currentBudgetDisplay', `₹${b}`); renderAppliances(); autoSyncToCloud(); }
-}
-function enableBrowserNotifications() { if ("Notification" in window) Notification.requestPermission(); }
-
-async function saveUserProfile() {
-    if (!window.KamAbhiRAM.userSession) return alert("Please log in first to save profile settings.");
-    enforceUrlAntiIdorGuard();
-    const newName = safeGetVal('profileName').trim();
-    if (newName.length >= 2) {
-        window.KamAbhiRAM.userSession.name = newName;
-        localStorage.setItem('ecoActiveUser', JSON.stringify(window.KamAbhiRAM.userSession));
-        safeSetText('userGreeting', `Welcome, ${newName}! ☀️`);
-        $('sidebarAuthArea').innerHTML = `<button class="secondary-btn sm-btn w-100" onclick="logoutUser()"><i class="fa-solid fa-power-off"></i> Logout (${escapeHTML(newName)})</button>`;
-    }
-    const payload = {
-        name: newName,
-        appliances: window.KamAbhiRAM.appliances,
-        sanctionedLoadKw: window.KamAbhiRAM.sanctionedLoadKw,
-        budgetThreshold: window.KamAbhiRAM.budgetThreshold,
-        tariffProvider: safeGetVal('tariffProviderSelect'),
-        tariffCategory: safeGetVal('tariffCategorySelect'),
-        tariffArea: safeGetVal('tariffAreaSelect'),
-        customTariff: JSON.parse(localStorage.getItem('emcs_custom_tariff') || 'null')
-    };
-    await secureApiFetch('/user/sync-cloud', { method: 'POST', body: JSON.stringify(payload) }).catch(() => {});
-    safeSetText('profileMsg', '✓ Secured Profile synced.');
-    setTimeout(() => safeSetText('profileMsg', ''), 3000);
-}
-
-function toggleMobileDrawer() { $('appSidebar').classList.toggle('drawer-open');$('drawerOverlay').classList.toggle('hidden'); }
-function showFeature(id, btn) {
-    enforceUrlAntiIdorGuard();
-    document.querySelectorAll('#consumerNavLinks .nav-item').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
-    document.querySelectorAll('.feature-content').forEach(fc => { fc.classList.add('hidden'); fc.classList.remove('active-feature'); });
-    const t = $(id);
-    if (t) {
-        t.classList.remove('hidden');
-        t.classList.add('active-feature');
-    }
-    if (id === 'userSupportChat') loadUserSupportMessages();
-    if (window.innerWidth <= 920) {
-        $('appSidebar').classList.remove('drawer-open');$('drawerOverlay').classList.add('hidden');
-    }
-}
-function toggleTheme() {
-    const next = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    document.body.setAttribute('data-theme', next);
-    localStorage.setItem('ecoTheme', next);
-}
+        p.classList.add
