@@ -26,7 +26,7 @@ async function secureApiFetch(endpoint, options = {}) {
 }
 
 // ---------------------------------------------------------
-// STRICT EMAIL, TLD WHITELIST & TEMP-MAIL BLOCKER
+// STRICT EMAIL, TLD WHITELIST (.COH/.CON BLOCKED) & TEMP-MAIL GUARD
 // ---------------------------------------------------------
 const BLOCKED_TEMP_DOMAINS = new Set([
     'mailinator.com', 'yopmail.com', '10minutemail.com', 'guerrillamail.com',
@@ -34,16 +34,17 @@ const BLOCKED_TEMP_DOMAINS = new Set([
     'sharklasers.com', 'getnada.com', 'maildrop.cc', 'dispostable.com',
     'fakeinbox.com', 'throwawaymail.com', 'mohmal.com', 'emailondeck.com',
     'mailnesia.com', 'mintemail.com', 'mytemp.email', 'burnermail.io',
-    'tempmailo.com', 'inboxkitten.com', 'mailcatch.com', 'crazymailing.com'
+    'tempmailo.com', 'inboxkitten.com', 'mailcatch.com', 'crazymailing.com',
+    'tempail.com', 'yopmail.fr', 'yopmail.net'
 ]);
 
 const VALID_TLDS = new Set([
-    'com', 'in', 'org', 'net', 'edu', 'gov', 'co', 'io', 'me', 'info', 'biz', 'ac', 'uk', 'us', 'ca', 'au'
+    'com', 'in', 'org', 'net', 'edu', 'gov', 'co', 'io', 'me', 'biz', 'info', 'ac', 'uk', 'us'
 ]);
 
-const TYPO_DOMAINS = new Set([
-    'gmail.coh', 'gmail.con', 'gmail.cmo', 'gmail.cm', 'gmai.com', 'gmial.com',
-    'yahoo.coh', 'yahoo.con', 'outlook.coh', 'outlook.con', 'hotmail.coh', 'hotmail.con'
+const BLOCKED_TYPO_DOMAINS = new Set([
+    'gamil.com', 'gmial.com', 'gmai.com', 'gmail.co', 'gmail.con', 'gmail.coh',
+    'yaho.com', 'yahooo.com', 'outlok.com', 'hotmial.com'
 ]);
 
 function isStrictValidEmail(emailStr) {
@@ -64,23 +65,20 @@ function isStrictValidEmail(emailStr) {
     if (!/^[a-z0-9]+(-[a-z0-9]+)*(\.[a-z0-9]+(-[a-z0-9]+)*)+$/.test(domain)) {
         return { ok: false, msg: 'Please enter a valid email address.' };
     }
-    if (TYPO_DOMAINS.has(domain) || BLOCKED_TEMP_DOMAINS.has(domain)) {
+
+    if (BLOCKED_TEMP_DOMAINS.has(domain) || BLOCKED_TYPO_DOMAINS.has(domain)) {
         return { ok: false, msg: 'Please enter a valid personal or work email address (e.g. name@gmail.com).' };
     }
 
-    const domainParts = domain.split('.');
-    const lastTld = domainParts[domainParts.length - 1];
-    const secondLastTld = domainParts.length > 2 ? domainParts[domainParts.length - 2] : '';
+    const domainSegments = domain.split('.');
+    const lastTld = domainSegments[domainSegments.length - 1];
+    const secondLastTld = domainSegments.length >= 3 ? domainSegments[domainSegments.length - 2] : null;
 
-    if (!VALID_TLDS.has(lastTld) || (secondLastTld && domainParts.length > 2 && !VALID_TLDS.has(secondLastTld) && secondLastTld.length <= 3)) {
-        return { ok: false, msg: `Invalid email ending (.${lastTld}). Please use .com, .in, .org, etc.` };
+    if (!VALID_TLDS.has(lastTld)) {
+        return { ok: false, msg: `Invalid email extension (.${lastTld}). Please use standard extensions like .com or .in.` };
     }
-
-    // Extra check: if provider is gmail/yahoo/outlook/hotmail, only allow valid official endings
-    if (/^(gmail|googlemail|yahoo|ymail|outlook|hotmail|live|icloud)\./.test(domain)) {
-        if (!/\.(com|in|co\.in|co\.uk|org|net)$/.test(domain)) {
-            return { ok: false, msg: 'Please check your email spelling (e.g. @gmail.com).' };
-        }
+    if (secondLastTld && domainSegments.length >= 3 && !VALID_TLDS.has(secondLastTld) && secondLastTld.length <= 3) {
+        return { ok: false, msg: 'Please enter a valid email domain.' };
     }
 
     return { ok: true, email: clean };
@@ -310,6 +308,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const savedTheme = localStorage.getItem('ecoTheme') || 'light';
     document.body.setAttribute('data-theme', savedTheme);
 
+    // Default Language Strictly Set to English
     if ($('languageSelect')) $('languageSelect').value = 'en';
     switchLanguage('en');
 
@@ -500,18 +499,19 @@ function renderAppliances() {
     checkMdiDemandOverload(activeWatts);
     $('budgetAlertBanner')?.classList.toggle('hidden', billObj.total <= window.KamAbhiRAM.budgetThreshold);
 
-    // 🔥 Live Power Distribution Block Diagram Restored
+    // Render Live Power Distribution Block Diagram & Dashboard Daily Chart
     renderApplianceFlowchart(activeWatts, totalLoadKwh);
     renderDashboardChart(totalLoadKwh);
 }
 
+// 🔥 LIVE POWER DISTRIBUTION BLOCK DIAGRAM (RESTORED)
 function renderApplianceFlowchart(activeWatts, totalKwh) {
     const box = $('applianceFlowchartContainer');
     if (!box) return;
 
     const apps = window.KamAbhiRAM.appliances;
     if (apps.length === 0) {
-        box.innerHTML = `<div class="text-center small-text" style="padding: 16px;"><i class="fa-solid fa-diagram-project text-primary" style="font-size:1.6rem; opacity:0.6; margin-bottom:6px; display:block;"></i>No appliances added yet. Add an appliance above to view your live power distribution block diagram.</div>`;
+        box.innerHTML = `<div class="text-center small-text" style="padding: 16px;"><i class="fa-solid fa-diagram-project text-primary" style="font-size:1.6rem; opacity:0.6; margin-bottom:6px; display:block;"></i>No appliances connected yet. Add an appliance above to view the Live Power Distribution Block Diagram.</div>`;
         return;
     }
 
@@ -522,12 +522,15 @@ function renderApplianceFlowchart(activeWatts, totalKwh) {
     const nodesHtml = apps.map(app => {
         const sharePct = totalKwh > 0 && app.state ? Math.round((parseFloat(app.monthlyKwh) / totalKwh) * 100) : 0;
         const borderCol = app.state ? '#10B981' : '#94A3B8';
-        const modeLabel = app.connMode === 'wifi' ? 'Wi-Fi Switch' : (app.connMode === 'smartmeter' ? 'Smart Meter' : (app.connMode === 'usb' ? 'Cable Switch' : 'Manual'));
+        const modeLabel = app.connMode === 'wifi'
+            ? 'Wi-Fi Switch'
+            : (app.connMode === 'smartmeter' ? 'Smart Meter' : (app.connMode === 'usb' ? 'Cable Switch' : 'Manual'));
         const statusBadge = app.state
             ? `<span class="badge light-green-bg" style="font-size:0.68rem;">ON • ${sharePct}% Load</span>`
             : `<span class="badge" style="background:rgba(148,163,184,0.2); color:var(--text-muted); font-size:0.68rem;">OFF</span>`;
-        return `<div style="min-width: 155px; background: var(--card-bg); border: 2px solid ${borderCol}; border-radius: 12px; padding: 10px 12px; text-align: center; box-shadow: var(--shadow);">
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px;"><i class="fa-solid fa-plug" style="color:${borderCol};"></i> ${escapeHTML(modeLabel)}</div>
+
+        return `<div style="min-width: 160px; background: var(--card-bg); border: 2px solid ${borderCol}; border-radius: 12px; padding: 10px 12px; text-align: center; box-shadow: var(--shadow);">
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px;"><i class="fa-solid fa-bolt" style="color:${borderCol};"></i> ${escapeHTML(modeLabel)}</div>
             <div style="font-weight: 700; font-size: 0.88rem; margin-bottom: 4px; color: var(--text-color);">${escapeHTML(app.name)}</div>
             <div style="font-size: 0.8rem; font-weight: 600; color: var(--primary); margin-bottom: 6px;">${Number(app.power)} W • ${Number(app.monthlyKwh)} Units</div>
             ${statusBadge}
@@ -536,9 +539,9 @@ function renderApplianceFlowchart(activeWatts, totalKwh) {
 
     box.innerHTML = `<div style="display: flex; flex-direction: column; align-items: center; gap: 14px;">
         <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
-            <div style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #fff; padding: 10px 18px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;"><i class="fa-solid fa-tower-observation"></i> Main Power Supply (228V)</div>
+            <div style="background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #fff; padding: 10px 18px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;"><i class="fa-solid fa-tower-observation"></i> Main Power Supply (228V AC)</div>
             <div style="color: var(--primary); font-weight: bold;">━━►</div>
-            <div style="background: var(--card-bg); border: 2px solid ${meterColor}; padding: 10px 18px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;">Home Meter: <span style="color:${meterColor};">${activeWatts}W / ${maxWatts}W</span></div>
+            <div style="background: var(--card-bg); border: 2px solid ${meterColor}; padding: 10px 18px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;">Home Meter Box: <span style="color:${meterColor};">${activeWatts}W / ${maxWatts}W</span></div>
         </div>
         <div style="color: var(--primary); font-size: 1.1rem; line-height: 1;">▼</div>
         <div style="display: flex; align-items: stretch; justify-content: center; gap: 10px; flex-wrap: wrap; width: 100%;">${nodesHtml}</div>
@@ -1038,7 +1041,7 @@ function toggleLoginUI() {
         input.type = 'email';
         input.setAttribute('maxlength', '90');
         input.removeAttribute('pattern');
-        input.placeholder = 'Enter Email Address';
+        input.placeholder = 'Enter Your Email Address';
         if (prefix) prefix.classList.add('hidden');
         if (wrapper) wrapper.classList.remove('phone-input-group');
     }
@@ -1050,11 +1053,13 @@ function toggleRegAuthUI() {
     const input = $('regCredential');
     if (!input) return;
     input.value = '';
+    input.oninput = null;
     if (type === 'pin') {
         input.setAttribute('pattern', '[0-9]{4,6}');
         input.setAttribute('minlength', '4');
         input.setAttribute('maxlength', '6');
         input.placeholder = 'Enter PIN';
+        input.oninput = function() { this.value = this.value.replace(/[^0-9]/g, ''); };
     } else {
         input.removeAttribute('pattern');
         input.setAttribute('minlength', '8');
@@ -1078,7 +1083,6 @@ function toggleForgotUI() {
         input.setAttribute('maxlength', '12');
         input.setAttribute('pattern', '[0-9]{12}');
         input.placeholder = 'Enter 12 Digit Consumer ID';
-        input.style.textTransform = 'none';
         input.oninput = function() { this.value = this.value.replace(/[^0-9]/g, ''); };
     } else {
         input.type = 'email';
@@ -1087,7 +1091,6 @@ function toggleForgotUI() {
         input.removeAttribute('pattern');
         input.setAttribute('maxlength', '90');
         input.placeholder = 'Enter Email Address';
-        input.style.textTransform = 'none';
     }
 }
 
@@ -1097,11 +1100,13 @@ function toggleForgotAuthUI() {
     const input = $('forgotNewCredential');
     if (!input) return;
     input.value = '';
+    input.oninput = null;
     if (type === 'pin') {
         input.setAttribute('pattern', '[0-9]{4,6}');
         input.setAttribute('minlength', '4');
         input.setAttribute('maxlength', '6');
         input.placeholder = 'Enter New PIN';
+        input.oninput = function() { this.value = this.value.replace(/[^0-9]/g, ''); };
     } else {
         input.removeAttribute('pattern');
         input.setAttribute('minlength', '8');
@@ -1179,7 +1184,7 @@ function switchAuthTab(tab, btn) {
 }
 
 // ---------------------------------------------------------
-// AUTHENTICATION HANDLERS (STRICT NUMERIC CID & EMAIL CHECKS)
+// AUTHENTICATION HANDLERS (WITH INVISIBLE BOT TRAP)
 // ---------------------------------------------------------
 async function handleSecureRegister(e) {
     e.preventDefault();
@@ -1190,13 +1195,13 @@ async function handleSecureRegister(e) {
     }
 
     const mobile = safeGetVal('regMobile').trim();
+    const consumerId = safeGetVal('regConsumerId').trim();
+
     if (!/^[0-9]{10}$/.test(mobile)) {
         return safeSetText('modalAuthError', 'Please enter a valid 10 Digit Mobile No.');
     }
-
-    const consumerId = safeGetVal('regConsumerId').trim();
     if (!/^[0-9]{12}$/.test(consumerId)) {
-        return safeSetText('modalAuthError', 'Consumer ID must be strictly 12 numeric digits (numbers only).');
+        return safeSetText('modalAuthError', 'Consumer ID must be strictly 12 digits (numbers 0-9 only).');
     }
 
     const emailCheck = isStrictValidEmail(safeGetVal('regEmail'));
@@ -1206,10 +1211,10 @@ async function handleSecureRegister(e) {
     const credential = safeGetVal('regCredential').trim();
 
     if (authType === 'pin' && !/^[0-9]{4,6}$/.test(credential)) {
-        return safeSetText('modalAuthError', 'Please enter a valid PIN.');
+        return safeSetText('modalAuthError', 'Please enter a valid 4 to 6 digit PIN.');
     }
     if (authType === 'password' && (credential.length < 8 || credential.length > 16)) {
-        return safeSetText('modalAuthError', 'Please enter a valid Password.');
+        return safeSetText('modalAuthError', 'Please enter a valid Password (8 to 16 characters).');
     }
 
     const payload = {
@@ -1254,11 +1259,9 @@ async function handleSecureLogin(e) {
     const payload = {
         loginType,
         loginValue: loginType === 'email' ? loginValue.toLowerCase() : loginValue,
-        mobile: loginType === 'mobile' ? loginValue : '',
         credential,
         _emcs_trap: botTrap
     };
-
     try {
         const res = await secureApiFetch('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
         const data = await res.json();
@@ -1297,10 +1300,10 @@ async function handleForgotReset(e) {
     const newCredential = safeGetVal('forgotNewCredential').trim();
 
     if (newAuthType === 'pin' && !/^[0-9]{4,6}$/.test(newCredential)) {
-        return safeSetText('modalAuthError', 'Please enter a valid New PIN.');
+        return safeSetText('modalAuthError', 'Please enter a valid 4 to 6 digit New PIN.');
     }
     if (newAuthType === 'password' && (newCredential.length < 8 || newCredential.length > 16)) {
-        return safeSetText('modalAuthError', 'Please enter a valid New Password.');
+        return safeSetText('modalAuthError', 'Please enter a valid New Password (8 to 16 characters).');
     }
 
     const payload = {
@@ -1440,20 +1443,16 @@ async function handleSecureAdminLogin(e) {
 
 function enterAdminHub(data) {
     closeAllPopups();
-    $('mainAppSection').classList.add('hidden');
-    $('adminSection').classList.remove('hidden');
+    $('mainAppSection').classList.add('hidden');$('adminSection').classList.remove('hidden');
 
     $('appSidebar').classList.remove('hidden');
-    $('consumerNavLinks')?.classList.add('hidden');
-    $('sidebarAuthArea')?.classList.add('hidden');
-    $('adminNavLinks')?.classList.remove('hidden');
-    $('adminSidebarFooter')?.classList.remove('hidden');
+    $('consumerNavLinks')?.classList.add('hidden');$('sidebarAuthArea')?.classList.add('hidden');
+    $('adminNavLinks')?.classList.remove('hidden');$('adminSidebarFooter')?.classList.remove('hidden');
     safeSetText('sidebarSubTitle', 'Admin Management Panel');
 
     safeSetText('adminRoleDisplay', `${data.name} (${data.role.toUpperCase()})`);
     $('ownerStaffTabBtn')?.classList.toggle('hidden', data.role !== 'owner');
-    $('masterDumpBtn')?.classList.toggle('hidden', data.role !== 'owner');
-    $('ownerCmsTabBtn')?.classList.toggle('hidden', !data.permissions?.canEditCMS && data.role !== 'owner');
+    $('masterDumpBtn')?.classList.toggle('hidden', data.role !== 'owner');$('ownerCmsTabBtn')?.classList.toggle('hidden', !data.permissions?.canEditCMS && data.role !== 'owner');
     $('purgeAllChatsBtn')?.classList.toggle('hidden', !data.permissions?.canDeleteChat && data.role !== 'owner');
 
     const firstAdminItem = document.querySelector('#adminNavLinks .nav-item');
@@ -1466,13 +1465,10 @@ function enterAdminHub(data) {
 
 function exitAdminView() {
     secureApiFetch('/admin/logout', { method: 'POST' }).catch(() => {});
-    $('adminSection').classList.add('hidden');
-    $('mainAppSection').classList.remove('hidden');
+    $('adminSection').classList.add('hidden');$('mainAppSection').classList.remove('hidden');
 
-    $('adminNavLinks')?.classList.add('hidden');
-    $('adminSidebarFooter')?.classList.add('hidden');
-    $('consumerNavLinks')?.classList.remove('hidden');
-    $('sidebarAuthArea')?.classList.remove('hidden');
+    $('adminNavLinks')?.classList.add('hidden');$('adminSidebarFooter')?.classList.add('hidden');
+    $('consumerNavLinks')?.classList.remove('hidden');$('sidebarAuthArea')?.classList.remove('hidden');
     safeSetText('sidebarSubTitle', 'Smart Energy Manager');
 
     safeSetVal('adminLoginUser', '');
@@ -1501,11 +1497,11 @@ function switchAdminSubTab(tab, btn) {
         targetPane.classList.add('active-feature');
     }
     if (window.innerWidth <= 920) {
-        $('appSidebar').classList.remove('drawer-open');
-        $('drawerOverlay').classList.add('hidden');
+        $('appSidebar').classList.remove('drawer-open');$('drawerOverlay').classList.add('hidden');
     }
 }
 
+// 🔥 ADMIN AI CHAT HISTORY VIEWER
 async function loadAdminAiUsers() {
     const listEl = $('adminAiUsersList');
     if (!listEl) return;
@@ -1549,6 +1545,7 @@ async function selectAdminAiThread(cid) {
     } catch (e) {}
 }
 
+// 🔥 ADMIN EMERGENCY SECURITY ALERTS (BOT TRAP & AI SPAM DDOS)
 async function loadEmergencyAlerts() {
     const tbody = $('adminEmergencyListBody');
     if (!tbody) return;
@@ -1566,7 +1563,7 @@ async function loadEmergencyAlerts() {
                 <td><span class="badge danger-bg">${escapeHTML(a.attackType)}</span></td>
                 <td><code>${escapeHTML(a.ipAddress || 'Unknown')}</code></td>
                 <td><strong class="danger-text">${escapeHTML(a.details)}</strong></td>
-                <td><small>${escapeHTML((a.deviceInfo || 'Unknown').slice(0, 45))}</small></td>
+                <td><small>${escapeHTML((a.deviceInfo || 'Unknown').slice(0, 50))}</small></td>
             </tr>`).join('');
         }
     } catch (e) {}
@@ -1581,6 +1578,7 @@ async function clearEmergencyAlerts() {
     } catch (e) {}
 }
 
+// 🔥 ADMIN USER DETAILS, BLOCK/UNBLOCK, DELETE & 24-MONTH LEDGER
 async function fetchAdminUserDetails(consumerId) {
     activeAdminKycCid = consumerId;
     try {
@@ -1649,10 +1647,8 @@ async function fetchAdminUserDetails(consumerId) {
                 }
             }
 
-            $('kycTabSessions')?.classList.remove('hidden');
-            $('kycTabBilling')?.classList.add('hidden');
-            $('adminUserKycModal')?.classList.remove('hidden');
-            $('popupOverlay')?.classList.remove('hidden');
+            $('kycTabSessions')?.classList.remove('hidden');$('kycTabBilling')?.classList.add('hidden');
+            $('adminUserKycModal')?.classList.remove('hidden');$('popupOverlay')?.classList.remove('hidden');
         } else {
             alert("Could not load user details.");
         }
@@ -1701,7 +1697,7 @@ async function clearAiChatAdmin() {
     try {
         const res = await secureApiFetch(`/admin/ai-history/${encodeURIComponent(activeAdminKycCid)}`, { method: 'DELETE' });
         if (res.ok) {
-            if ($('adminAiChatMsgArea')) $('adminAiChatMsgArea').innerHTML = '<div class="small-text text-center" style="margin:auto;">AI chat history cleared.</div>';
+            if ($('adminAiChatMsgArea'))$('adminAiChatMsgArea').innerHTML = '<div class="small-text text-center" style="margin:auto;">AI chat history cleared.</div>';
             loadAdminAiUsers();
             alert("AI Chat History deleted successfully.");
         }
@@ -1715,10 +1711,10 @@ async function createNewStaffMember() {
     if (!name || !username || password.length < 6) return alert("Please enter valid name, username, and password.");
 
     const permissions = {
-        canManageUsers: $('permManageUsers') ? $('permManageUsers').checked : true,
-        canChatSupport: $('permChat') ? $('permChat').checked : true,
-        canEditCMS: $('permCMS') ? $('permCMS').checked : false,
-        canDeleteChat: $('permDeleteChat') ? $('permDeleteChat').checked : false
+        canManageUsers: $('permManageUsers') ?$('permManageUsers').checked : true,
+        canChatSupport: $('permChat') ?$('permChat').checked : true,
+        canEditCMS: $('permCMS') ?$('permCMS').checked : false,
+        canDeleteChat: $('permDeleteChat') ?$('permDeleteChat').checked : false
     };
 
     try {
@@ -1794,10 +1790,10 @@ async function loadCmsContent() {
     let cms = JSON.parse(localStorage.getItem('emcsCmsData')) || {
         broadcast: "",
         about: "EMCS (Smart Energy Manager) helps households and businesses track appliance power consumption, estimate monthly electricity bills, and control smart switches safely.",
-        privacy: "1. INFORMATION WE COLLECT: We collect your Name, Mobile Number, Email Address, and 12-Digit Consumer ID to create your account, enable dual login (via Mobile or Email), and help you recover forgotten credentials.\n\n2. DEVICE & IP SECURITY: For your account safety and to prevent unauthorized access, we record the device model and IP address when you log in.\n\n3. AI CHAT HISTORY: Questions asked to KamAbhi AI (EMCS AI) are saved in your account history to help you review past electrical advice and are automatically deleted after 3 months (90 days).\n\n4. ACCOUNT DELETION: If you deactivate your account, all devices are logged out immediately and records are retained for 2 years for legal compliance before permanent deletion.",
+        privacy: "1. INFORMATION WE COLLECT: We collect your Name, Mobile Number, Verified Email Address, and 12-Digit Consumer ID to create your account and help you recover forgotten credentials.\n\n2. DEVICE & IP SECURITY: For your account safety and to prevent unauthorized access, we record the device model and IP address when you log in.\n\n3. AI CHAT HISTORY: Questions asked to KamAbhi AI (EMCS AI) are saved in your account history to help you review past electrical advice and are automatically deleted after 3 months (90 days).\n\n4. ACCOUNT DELETION: If you deactivate your account, all devices are logged out immediately and records are retained for 2 years for legal compliance before permanent deletion.",
         terms: "1. BILL ESTIMATES: All electricity bills and solar calculations shown on EMCS are estimates for planning and saving energy. Please pay your official electricity board bill as per your utility meter.\n\n2. HARDWARE & SMART SWITCH RESPONSIBILITY: Hardware testing nhi kiya gya hai. Kripya apne risk or jimmedari par ye hardware connect kare, iske liye hamari team ki koi jimmedari nhi hogi. EMCS is not responsible for any electrical damage, short circuit, or injury.\n\n3. FAIR USE & SECURITY: Using automated bots, fake emails, or spamming the AI assistant (10+ questions in 10 seconds) will result in an automatic block.",
         faqs: [
-            { q: "How can I log in or reset my forgotten PIN or Password?", a: "You can log in using either your Mobile Number or your Email Address. If you forget your PIN/Password, click 'Forgot Access' and verify using your 12-Digit Consumer ID or Email Address." },
+            { q: "How can I log in or reset my forgotten PIN or Password?", a: "You can log in using either your 10-digit Mobile Number or your Email Address. If you forget your PIN or Password, click 'Forgot Access' and verify using your 12-digit Consumer ID or Email Address." },
             { q: "Who is KamAbhi AI?", a: "KamAbhi AI (EMCS AI) is your dedicated electrical safety and energy-saving assistant available after you log in." },
             { q: "How long is my AI chat history saved?", a: "Your AI chat history is saved for 3 months (90 days) and then automatically deleted." },
             { q: "Can I connect smart Wi-Fi switches or a smart meter?", a: "Yes! Tick the hardware responsibility agreement box in the Smart Hardware Control or My Appliances section to unlock wireless and cable switch controls." }
@@ -1862,8 +1858,7 @@ function openLegalModal(type) {
     } else {
         $('legalModalBody').innerHTML = `<div style="white-space: pre-line;">${escapeHTML(cms[type] || '')}</div>`;
     }
-    $('legalModal').classList.remove('hidden');
-    $('popupOverlay').classList.remove('hidden');
+    $('legalModal').classList.remove('hidden');$('popupOverlay').classList.remove('hidden');
 }
 
 // ---------------------------------------------------------
@@ -1880,7 +1875,7 @@ async function loadUserSupportMessages() {
             area.innerHTML = data.messages.map(m => `
                 <div class="emcs-bubble ${m.sender === 'user' ? 'emcs-sent' : 'emcs-received'}">
                     ${escapeHTML(m.text)}
-                    <span class="emcs-time">${m.sender === 'admin' ? 'Support Team' : 'You'} •${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span class="emcs-time">${m.sender === 'admin' ? 'Support Team' : 'You'} • ${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
             `).join('');
             area.scrollTop = area.scrollHeight;
@@ -1908,7 +1903,7 @@ async function loadAdminChatThreads() {
         const res = await secureApiFetch('/support/admin/threads');
         const data = await res.json();
         if (data.success && Array.isArray(data.threads)) {
-            $('adminChatThreadsList').innerHTML = data.threads.map(t => `<div class="admin-wa-user-item" onclick="selectAdminThread('${escapeHTML(t.consumerId)}', '${escapeHTML(t.name)}')"><div class="emcs-avatar" style="width:32px; height:32px; font-size:0.8rem;">${escapeHTML(t.name[0] \vert{}\vert{} 'U')}</div><div><strong>${escapeHTML(t.name)}</strong><br><small class="small-text">${escapeHTML(t.consumerId)}</small></div></div>`).join('');
+            $('adminChatThreadsList').innerHTML = data.threads.map(t => `<div class="admin-wa-user-item" onclick="selectAdminThread('${escapeHTML(t.consumerId)}', '${escapeHTML(t.name)}')"><div class="emcs-avatar" style="width:32px; height:32px; font-size:0.8rem;">${escapeHTML(t.name[0] || 'U')}</div><div><strong>${escapeHTML(t.name)}</strong><br><small class="small-text">${escapeHTML(t.consumerId)}</small></div></div>`).join('');
 
             safeSetText('adminUserCount', data.threads.length);
             const userTbody = $('adminUserListBody');
@@ -2008,7 +2003,7 @@ async function saveUserProfile() {
     setTimeout(() => safeSetText('profileMsg', ''), 3000);
 }
 
-function toggleMobileDrawer() { $('appSidebar').classList.toggle('drawer-open'); $('drawerOverlay').classList.toggle('hidden'); }
+function toggleMobileDrawer() { $('appSidebar').classList.toggle('drawer-open');$('drawerOverlay').classList.toggle('hidden'); }
 function showFeature(id, btn) {
     enforceUrlAntiIdorGuard();
     document.querySelectorAll('#consumerNavLinks .nav-item').forEach(b => b.classList.remove('active'));
@@ -2021,8 +2016,7 @@ function showFeature(id, btn) {
     }
     if (id === 'userSupportChat') loadUserSupportMessages();
     if (window.innerWidth <= 920) {
-        $('appSidebar').classList.remove('drawer-open');
-        $('drawerOverlay').classList.add('hidden');
+        $('appSidebar').classList.remove('drawer-open');$('drawerOverlay').classList.add('hidden');
     }
 }
 function toggleTheme() {
