@@ -23,7 +23,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.js"></script>
 
     <style>
         :root {
@@ -291,7 +291,7 @@
             <button onclick="toggleTheme()" class="icon-btn" title="Change Theme"><i class="fa-solid fa-moon"></i></button>
         </div>
 
-        <!-- USER NAVIGATION LINKS (Human-Friendly Names) -->
+        <!-- USER NAVIGATION LINKS -->
         <ul class="nav-links" id="consumerNavLinks">
             <li class="nav-item active" onclick="showFeature('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> <span data-i18n="navDash">Dashboard</span></li>
             <li class="nav-item" onclick="showFeature('appliances', this)"><i class="fa-solid fa-plug"></i> <span data-i18n="navAppliances">My Appliances</span></li>
@@ -712,7 +712,7 @@
                 </div>
             </div>
 
-            <!-- TAB 2: MY APPLIANCES (2D & Flowgraph Removed + Hardware Compatibility Added) -->
+            <!-- TAB 2: MY APPLIANCES (Table + Live Block Diagram Restored; 2D/Flowgraph Charts Removed) -->
             <div id="appliances" class="feature-content hidden">
                 <div class="clean-card mb-3">
                     <h3><i class="fa-solid fa-plug-circle-plus text-primary hover-pop"></i> Add Home Appliance</h3>
@@ -744,7 +744,7 @@
                         </div>
                     </div>
 
-                    <!-- MANDATORY HARDWARE RISK DISCLAIMER CHECKBOX (Shown when Hardware mode is picked) -->
+                    <!-- MANDATORY HARDWARE RISK DISCLAIMER CHECKBOX -->
                     <div id="appHardwareDisclaimerBox" class="form-group hidden" style="padding: 12px; background: rgba(245, 158, 11, 0.1); border: 1px solid var(--warning); border-radius: 10px; margin-bottom: 14px;">
                         <label style="display: flex; align-items: flex-start; gap: 10px; font-size: 0.85rem; color: var(--text-color); cursor: pointer; margin: 0; font-weight: 600;">
                             <input type="checkbox" id="appHardwareRiskCheck" style="width: 18px; height: 18px; margin-top: 2px; accent-color: var(--warning); flex-shrink: 0;">
@@ -763,7 +763,6 @@
                 <div class="clean-card mb-3">
                     <div class="flex-between mb-2">
                         <h4><i class="fa-solid fa-list-check text-primary hover-pop"></i> My Connected Appliances</h4>
-                        <span class="badge light-green-bg live-pulse" id="flowTotalWattsBadge">Running Load: 0 W</span>
                     </div>
                     <div class="table-container">
                         <table>
@@ -782,6 +781,15 @@
                             <tbody id="applianceList"></tbody>
                         </table>
                     </div>
+                </div>
+
+                <!-- LIVE POWER DISTRIBUTION BLOCK DIAGRAM (RESTORED) -->
+                <div class="clean-card mb-3">
+                    <div class="flex-between mb-2">
+                        <h4><i class="fa-solid fa-diagram-project text-primary hover-pop"></i> Live Power Distribution Block Diagram</h4>
+                        <span class="badge light-green-bg live-pulse" id="flowTotalWattsBadge">Running Load: 0 W</span>
+                    </div>
+                    <div id="applianceFlowchartContainer" style="padding: 18px; background: var(--bg-color); border-radius: 12px; border: 1px dashed var(--card-border); overflow-x: auto;"></div>
                 </div>
             </div>
 
@@ -1130,16 +1138,22 @@
                 <button onclick="switchAuthTab('admin', this)">Admin</button>
             </div>
 
-            <!-- Login Form (With Invisible Honeypot Trap for Bots) -->
+            <!-- Login Form (With Mobile/Email Toggle & Invisible Honeypot Trap) -->
             <form id="modalLoginForm" onsubmit="handleSecureLogin(event)" style="animation: fadeUp 0.3s ease;">
                 <input type="text" id="loginHoneypot" name="_emcs_trap" class="emcs-visually-hidden" tabindex="-1" autocomplete="off">
-                <div class="form-group">
-                    <label>Mobile Number</label>
-                    <div class="phone-input-group">
-                        <span class="phone-prefix">+91</span>
-                        <input type="tel" id="loginMobile" maxlength="10" pattern="[0-9]{10}" placeholder="Enter Your 10 Digit Mobile No" required>
+                
+                <div class="form-group" style="background:var(--bg-color); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
+                    <label style="margin-bottom:8px;">Login Using:</label>
+                    <div style="display:flex; gap:15px; font-size:0.85rem; font-weight:500; margin-bottom:10px;">
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="loginType" value="mobile" checked onchange="toggleLoginUI()" style="width:auto;"> Mobile No</label>
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="loginType" value="email" onchange="toggleLoginUI()" style="width:auto;"> Email Address</label>
+                    </div>
+                    <div id="loginInputWrapper" class="phone-input-group">
+                        <span class="phone-prefix" id="loginPrefix">+91</span>
+                        <input type="tel" id="loginIdentifier" maxlength="10" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/[^0-9]/g, '')" placeholder="Enter Your 10 Digit Mobile No" required>
                     </div>
                 </div>
+
                 <div class="form-group">
                     <label>PIN / Password</label>
                     <div style="position: relative; display: flex; align-items: center;">
@@ -1152,7 +1166,7 @@
                 <button type="submit" class="primary-btn hover-pop">Login</button>
             </form>
 
-            <!-- Register Form (With Invisible Honeypot Trap for Bots) -->
+            <!-- Register Form (Strict 12-Digit Numeric Consumer ID & Invisible Honeypot Trap) -->
             <form id="modalRegisterForm" class="hidden" onsubmit="handleSecureRegister(event)" style="animation: fadeUp 0.3s ease;">
                 <input type="text" id="regHoneypot" name="_emcs_trap" class="emcs-visually-hidden" tabindex="-1" autocomplete="off">
                 <div class="form-group"><label>Full Name</label><input type="text" id="regName" placeholder="Enter Your Full Name" required></div>
@@ -1160,12 +1174,18 @@
                     <label>Mobile Number</label>
                     <div class="phone-input-group">
                         <span class="phone-prefix">+91</span>
-                        <input type="tel" id="regMobile" maxlength="10" pattern="[0-9]{10}" placeholder="Enter Your 10 Digit Mobile No" required>
+                        <input type="tel" id="regMobile" maxlength="10" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/[^0-9]/g, '')" placeholder="Enter Your 10 Digit Mobile No" required>
                     </div>
                 </div>
                 <div class="grid-2" style="gap:10px;">
-                    <div class="form-group"><label>Consumer ID</label><input type="text" id="regConsumerId" minlength="12" maxlength="12" placeholder="Enter Consumer ID" style="text-transform:uppercase;" required></div>
-                    <div class="form-group"><label>Email Address</label><input type="email" id="regEmail" maxlength="100" placeholder="Enter Email Address" required></div>
+                    <div class="form-group">
+                        <label>Consumer ID</label>
+                        <input type="text" id="regConsumerId" inputmode="numeric" minlength="12" maxlength="12" pattern="[0-9]{12}" oninput="this.value = this.value.replace(/[^0-9]/g, '')" placeholder="Enter 12 Digit Consumer ID" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="email" id="regEmail" maxlength="90" placeholder="Enter Email Address" required>
+                    </div>
                 </div>
                 <div class="form-group" style="background:var(--bg-color); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
                     <label style="margin-bottom:8px;">Choose Security Method</label>
@@ -1189,14 +1209,14 @@
                 <button type="submit" class="primary-btn hover-pop">Create Account</button>
             </form>
 
-            <!-- Forgot Credentials Form -->
+            <!-- Forgot Credentials Form (Strict 12-Digit Numeric Consumer ID or Email Toggle) -->
             <form id="modalForgotForm" class="hidden" onsubmit="handleForgotReset(event)" style="animation: fadeUp 0.3s ease;">
                 <p class="small-text mb-2 text-primary"><b>Account Recovery:</b> Reset your PIN or Password using your Consumer ID or Email.</p>
                 <div class="form-group">
                     <label>Mobile Number</label>
                     <div class="phone-input-group">
                         <span class="phone-prefix">+91</span>
-                        <input type="tel" id="forgotMobile" maxlength="10" pattern="[0-9]{10}" placeholder="Enter Your 10 Digit Mobile No" required>
+                        <input type="tel" id="forgotMobile" maxlength="10" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/[^0-9]/g, '')" placeholder="Enter Your 10 Digit Mobile No" required>
                     </div>
                 </div>
                 <div class="form-group"><label>Full Name</label><input type="text" id="forgotName" placeholder="Enter Your Full Name" required></div>
@@ -1207,7 +1227,7 @@
                         <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="recoveryType" value="cid" checked onchange="toggleForgotUI()" style="width:auto;"> Consumer ID</label>
                         <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="recoveryType" value="email" onchange="toggleForgotUI()" style="width:auto;"> Email Address</label>
                     </div>
-                    <input type="text" id="forgotRecoveryValue" placeholder="Enter Consumer ID" minlength="12" maxlength="12" style="text-transform:uppercase;" required>
+                    <input type="text" id="forgotRecoveryValue" inputmode="numeric" placeholder="Enter 12 Digit Consumer ID" minlength="12" maxlength="12" pattern="[0-9]{12}" oninput="this.value = this.value.replace(/[^0-9]/g, '')" required>
                 </div>
 
                 <div class="form-group" style="background:var(--bg-color); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
@@ -1307,7 +1327,7 @@
             <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
                 <div>
                     <h2 id="kycName" class="text-primary" style="margin:0;">Consumer Name</h2>
-                    <p id="kycConsumerId" class="small-text">EM100XXXXXXX</p>
+                    <p id="kycConsumerId" class="small-text">100000000000</p>
                 </div>
                 <span id="kycStatusBadge" class="badge light-green-bg">Active</span>
             </div>
