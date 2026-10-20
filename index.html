@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="EMCS - Energy Management Control System. Smart electricity billing, appliance load monitoring, and secure cloud sync.">
+    <meta name="description" content="EMCS - Smart electricity bill estimator, appliance tracker, and energy saving assistant.">
     <meta name="theme-color" content="#6366F1">
-    <title>EMCS - Energy Management Control System</title>
+    <title>EMCS - Smart Energy Manager</title>
 
-    <!-- Basic Inspect Element / Right-Click Deterrent -->
+    <!-- Basic Right-Click Deterrent -->
     <script>
         document.addEventListener('contextmenu', event => event.preventDefault());
         document.onkeydown = function(e) {
@@ -58,7 +58,7 @@
             --shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
         }
 
-        /* 🌟 KEYFRAME ANIMATIONS (Client GPU/RAM Accelerated - Zero Server Load) */
+        /* 🌟 SMOOTH CLIENT-SIDE ANIMATIONS */
         @keyframes fadeUp {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -90,6 +90,22 @@
         body { background-color: var(--bg-color); color: var(--text-color); display: flex; min-height: 100vh; overflow-x: hidden; }
         .hidden { display: none !important; }
 
+        /* Invisible Bot Trap (Completely hidden from humans) */
+        .emcs-visually-hidden {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            z-index: -9999 !important;
+        }
+
         .mb-1 { margin-bottom: 0.5rem; }
         .mb-2 { margin-bottom: 1rem; }
         .mb-3 { margin-bottom: 1.5rem; }
@@ -120,6 +136,10 @@
         .hover-pop { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .hover-pop:hover { transform: scale(1.05); }
         .active-feature { animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        /* Hardware Lock Overlay Styling */
+        .hardware-locked-zone { opacity: 0.45; pointer-events: none; filter: grayscale(0.4); user-select: none; transition: opacity 0.3s ease, filter 0.3s ease; }
+        .hardware-unlocked-zone { opacity: 1; pointer-events: auto; filter: none; transition: opacity 0.3s ease, filter 0.3s ease; }
 
         .sidebar { width: var(--sidebar-width); background: var(--card-bg); border-right: 1px solid var(--card-border); padding: 1.25rem 0.9rem; display: flex; flex-direction: column; height: 100vh; position: fixed; left: 0; top: 0; z-index: 1000; transition: transform 0.3s ease, background-color 0.3s ease; }
         .sidebar-top { display: flex; justify-content: space-between; align-items: center; padding: 0 8px 12px 8px; }
@@ -207,7 +227,7 @@
         .legal-link { color: var(--primary); text-decoration: none; font-weight: 600; cursor: pointer; transition: color 0.2s ease; }
         .legal-link:hover { text-decoration: underline; color: var(--accent); }
 
-        /* Custom Support & Admin Chat Animations */
+        /* Helpdesk & Admin Chat Layout */
         .emcs-chat-wrapper { max-width: 780px; margin: 0 auto; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); }
         .emcs-header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
         .emcs-avatar { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.2); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; }
@@ -256,67 +276,74 @@
         <div class="sidebar-top">
             <div>
                 <div class="logo-main"><i class="fa-solid fa-bolt text-primary"></i> EMCS</div>
-                <div class="logo-sub" id="sidebarSubTitle">Energy Management System</div>
+                <div class="logo-sub" id="sidebarSubTitle">Smart Energy Manager</div>
             </div>
             <button class="icon-btn borderless" onclick="toggleMobileDrawer()" style="display:none;" id="mobileCloseBtn"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
+        <!-- DEFAULT LANGUAGE SET TO ENGLISH -->
         <div class="nav-controls">
             <select id="languageSelect" onchange="switchLanguage(this.value)">
-                <option value="en">English (EN)</option>
+                <option value="en" selected>English (EN)</option>
                 <option value="hi">Hindi (हिंदी)</option>
-                <option value="hinglish" selected>Hinglish</option>
+                <option value="hinglish">Hinglish</option>
             </select>
-            <button onclick="toggleTheme()" class="icon-btn" title="Toggle Theme"><i class="fa-solid fa-moon"></i></button>
+            <button onclick="toggleTheme()" class="icon-btn" title="Change Theme"><i class="fa-solid fa-moon"></i></button>
         </div>
 
-        <!-- CONSUMER NAVIGATION LINKS -->
+        <!-- USER NAVIGATION LINKS (Human-Friendly Names) -->
         <ul class="nav-links" id="consumerNavLinks">
             <li class="nav-item active" onclick="showFeature('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> <span data-i18n="navDash">Dashboard</span></li>
-            <li class="nav-item" onclick="showFeature('appliances', this)"><i class="fa-solid fa-plug"></i> <span data-i18n="navAppliances">Appliances & Flowgraph</span></li>
-            <li class="nav-item" onclick="showFeature('gridSafety', this)"><i class="fa-solid fa-gauge-high text-warning"></i> <span data-i18n="navVoltage">Voltage & Surge Guard</span></li>
+            <li class="nav-item" onclick="showFeature('appliances', this)"><i class="fa-solid fa-plug"></i> <span data-i18n="navAppliances">My Appliances</span></li>
+            <li class="nav-item" onclick="showFeature('gridSafety', this)"><i class="fa-solid fa-gauge-high text-warning"></i> <span data-i18n="navVoltage">Voltage Safety</span></li>
             <li class="nav-item" onclick="showFeature('inverterAssistant', this)"><i class="fa-solid fa-car-battery text-warning"></i> <span data-i18n="navInverter">Inverter Backup</span></li>
-            <li class="nav-item" onclick="showFeature('vampireCheck', this)"><i class="fa-solid fa-shield-virus text-danger"></i> <span data-i18n="navVampire">Vampire Audit</span></li>
-            <li class="nav-item" onclick="showFeature('ocrScanner', this)"><i class="fa-solid fa-file-arrow-up"></i> <span data-i18n="navOcr">Bill OCR Scanner</span></li>
-            <li class="nav-item" onclick="showFeature('smartMeterCsv', this)"><i class="fa-solid fa-file-csv green-text"></i> <span data-i18n="navCsv">Smart Meter CSV</span></li>
-            <li class="nav-item" onclick="showFeature('todOptimizer', this)"><i class="fa-solid fa-clock-rotate-left"></i> <span data-i18n="navTod">ToD Tariff Saver</span></li>
-            <li class="nav-item" onclick="showFeature('solarRoi', this)"><i class="fa-solid fa-sun text-warning"></i> <span data-i18n="navSolar">Solar Rooftop ROI</span></li>
-            <li class="nav-item" onclick="showFeature('iotControl', this)"><i class="fa-solid fa-microchip"></i> <span data-i18n="navIoT">Hardware Relay Control</span></li>
-            <li class="nav-item" onclick="showFeature('audit', this)"><i class="fa-solid fa-chart-line"></i> <span data-i18n="navAudit">Insights & Ledger</span></li>
-            <li class="nav-item" onclick="showFeature('simulator', this)"><i class="fa-solid fa-sliders"></i> <span data-i18n="navSim">Savings Simulator</span></li>
-            <li class="nav-item" onclick="showFeature('payment', this)"><i class="fa-solid fa-file-invoice-dollar"></i> <span data-i18n="navPayment">Bill Settlement</span></li>
-            <li class="nav-item" onclick="openAIModal()"><i class="fa-solid fa-robot text-primary"></i> <span data-i18n="navAI">EMCS Ai Assistant</span></li>
-            <li class="nav-item" onclick="showFeature('userSupportChat', this)"><i class="fa-solid fa-headset text-primary"></i> <span data-i18n="navSupport">Help & Support Desk</span></li>
-            <li class="nav-item" onclick="showFeature('profile', this)"><i class="fa-solid fa-user-shield"></i> <span data-i18n="navProfile">Account & Security</span></li>
+            <li class="nav-item" onclick="showFeature('vampireCheck', this)"><i class="fa-solid fa-shield-virus text-danger"></i> <span data-i18n="navVampire">Standby Power Saver</span></li>
+            <li class="nav-item" onclick="showFeature('ocrScanner', this)"><i class="fa-solid fa-file-arrow-up"></i> <span data-i18n="navOcr">Scan Electricity Bill</span></li>
+            <li class="nav-item" onclick="showFeature('smartMeterCsv', this)"><i class="fa-solid fa-file-csv green-text"></i> <span data-i18n="navCsv">Smart Meter File</span></li>
+            <li class="nav-item" onclick="showFeature('todOptimizer', this)"><i class="fa-solid fa-clock-rotate-left"></i> <span data-i18n="navTod">Best Time to Use</span></li>
+            <li class="nav-item" onclick="showFeature('solarRoi', this)"><i class="fa-solid fa-sun text-warning"></i> <span data-i18n="navSolar">Solar Calculator</span></li>
+            <li class="nav-item" onclick="showFeature('iotControl', this)"><i class="fa-solid fa-microchip"></i> <span data-i18n="navIoT">Smart Hardware Control</span></li>
+            <li class="nav-item" onclick="showFeature('audit', this)"><i class="fa-solid fa-chart-line"></i> <span data-i18n="navAudit">Reports & History</span></li>
+            <li class="nav-item" onclick="showFeature('simulator', this)"><i class="fa-solid fa-sliders"></i> <span data-i18n="navSim">Savings Calculator</span></li>
+            <li class="nav-item" onclick="showFeature('payment', this)"><i class="fa-solid fa-file-invoice-dollar"></i> <span data-i18n="navPayment">Pay Bill</span></li>
+            <li class="nav-item" onclick="openAIModal()"><i class="fa-solid fa-robot text-primary"></i> <span data-i18n="navAI">KamAbhi AI Assistant</span></li>
+            <li class="nav-item" onclick="showFeature('userSupportChat', this)"><i class="fa-solid fa-headset text-primary"></i> <span data-i18n="navSupport">Help & Support</span></li>
+            <li class="nav-item" onclick="showFeature('profile', this)"><i class="fa-solid fa-user-shield"></i> <span data-i18n="navProfile">My Account</span></li>
         </ul>
 
-        <!-- ADMIN LEFT SIDEBAR NAVIGATION LINKS (Visible when Admin logs in) -->
+        <!-- ADMIN LEFT SIDEBAR NAVIGATION LINKS -->
         <ul class="nav-links hidden" id="adminNavLinks">
-            <li class="nav-item active" onclick="switchAdminSubTab('chatTab', this)"><i class="fa-solid fa-headset text-primary"></i> <span>Inquiry Desk</span></li>
-            <li class="nav-item" id="adminUsersTabBtn" onclick="switchAdminSubTab('usersTab', this)"><i class="fa-solid fa-users-gear text-primary"></i> <span>Registered Accounts</span></li>
-            <li class="nav-item" id="ownerStaffTabBtn" onclick="switchAdminSubTab('staffTab', this)"><i class="fa-solid fa-user-lock text-warning"></i> <span>Access Roles</span></li>
-            <li class="nav-item" id="ownerCmsTabBtn" onclick="switchAdminSubTab('cmsTab', this)"><i class="fa-solid fa-pen-to-square text-primary"></i> <span>Portal CMS & FAQs</span></li>
+            <li class="nav-item active" onclick="switchAdminSubTab('chatTab', this)"><i class="fa-solid fa-headset text-primary"></i> <span>Support Messages</span></li>
+            <li class="nav-item" id="adminAiHistoryTabBtn" onclick="switchAdminSubTab('aiHistoryTab', this)"><i class="fa-solid fa-robot text-accent"></i> <span>AI Chat History</span></li>
+            <li class="nav-item" id="adminUsersTabBtn" onclick="switchAdminSubTab('usersTab', this)"><i class="fa-solid fa-users-gear text-primary"></i> <span>Registered Users</span></li>
+            <li class="nav-item" id="ownerStaffTabBtn" onclick="switchAdminSubTab('staffTab', this)"><i class="fa-solid fa-user-lock text-warning"></i> <span>Team Access</span></li>
+            <li class="nav-item" id="ownerCmsTabBtn" onclick="switchAdminSubTab('cmsTab', this)"><i class="fa-solid fa-pen-to-square text-primary"></i> <span>Website Info & FAQs</span></li>
+            <li class="nav-item" id="adminEmergencyTabBtn" onclick="switchAdminSubTab('emergencyTab', this)">
+                <i class="fa-solid fa-triangle-exclamation danger-text"></i>
+                <span style="flex:1;">Emergency Alerts</span>
+                <span id="adminEmergencyCountBadge" class="badge danger-bg">0</span>
+            </li>
             <li class="nav-item" id="adminErrorTabBtn" onclick="switchAdminSubTab('errorTab', this)">
-                <i class="fa-solid fa-bug danger-text"></i>
-                <span style="flex:1;">System Error Logs</span>
+                <i class="fa-solid fa-clipboard-list text-warning"></i>
+                <span style="flex:1;">Activity Logs</span>
                 <span id="adminErrorCountBadge" class="badge light-red-bg">0</span>
             </li>
             <li class="nav-item" id="masterDumpBtn" onclick="downloadAdminMasterDatabase()" style="margin-top:12px; border:1px dashed var(--savings-green); background:rgba(16,185,129,0.06);">
-                <i class="fa-solid fa-database green-text"></i> <span class="green-text" style="font-weight:600;">Secure Vault Export</span>
+                <i class="fa-solid fa-download green-text"></i> <span class="green-text" style="font-weight:600;">Download Backup</span>
             </li>
         </ul>
 
         <!-- CONSUMER AUTH FOOTER -->
         <div class="sidebar-auth-btn-box" id="sidebarAuthArea">
             <button class="primary-btn sm-btn w-100" onclick="openLoginModal()">
-                <i class="fa-solid fa-arrow-right-to-bracket"></i> <span data-i18n="btnConnect">Login / Connect</span>
+                <i class="fa-solid fa-arrow-right-to-bracket"></i> <span data-i18n="btnConnect">Login / Register</span>
             </button>
         </div>
 
         <!-- ADMIN SIDEBAR FOOTER -->
         <div class="sidebar-auth-btn-box hidden" id="adminSidebarFooter">
             <button type="button" class="danger-btn sm-btn w-100" onclick="exitAdminView()">
-                <i class="fa-solid fa-power-off"></i> Exit Console
+                <i class="fa-solid fa-power-off"></i> Exit Admin Panel
             </button>
         </div>
     </nav>
@@ -330,41 +357,44 @@
             <button class="icon-btn borderless" onclick="document.getElementById('systemBroadcastBanner').classList.add('hidden')"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
-        <!-- SECURE ADMIN CONTROL CONSOLE -->
+        <!-- ======================================================= -->
+        <!-- ADMIN MANAGEMENT PANEL                                  -->
+        <!-- ======================================================= -->
         <section id="adminSection" class="hidden">
             <div class="clean-card mb-3 flex-between" style="border-left: 4px solid var(--danger);">
                 <div>
-                    <h2><i class="fa-solid fa-shield-halved text-primary"></i> Secure Control Console</h2>
-                    <p class="small-text">Authorized Role: <b id="adminRoleDisplay" class="text-primary">System Administrator</b></p>
+                    <h2><i class="fa-solid fa-shield-halved text-primary"></i> Admin Management Panel</h2>
+                    <p class="small-text">Logged in as: <b id="adminRoleDisplay" class="text-primary">Administrator</b></p>
                 </div>
-                <span class="badge light-green-bg live-pulse"><i class="fa-solid fa-lock"></i> Session Encrypted</span>
+                <span class="badge light-green-bg live-pulse"><i class="fa-solid fa-lock"></i> Protected Session</span>
             </div>
 
+            <!-- 1. SUPPORT MESSAGES PANE -->
             <div id="adminChatSubPane" class="admin-sub-pane active-feature">
                 <div class="clean-card p-0" style="overflow:hidden;">
                     <div class="admin-wa-container">
                         <div class="admin-wa-users-panel">
                             <div class="p-2 flex-between" style="border-bottom: 1px solid var(--card-border); background: var(--bg-color);">
-                                <strong>Active Chats</strong>
-                                <button id="purgeAllChatsBtn" class="sm-btn danger-bg" style="padding:4px 8px; font-size:0.72rem;" onclick="purgeAllChatsConfirm()"><i class="fa-solid fa-trash-can"></i> Purge All</button>
+                                <strong>User Conversations</strong>
+                                <button id="purgeAllChatsBtn" class="sm-btn danger-bg" style="padding:4px 8px; font-size:0.72rem;" onclick="purgeAllChatsConfirm()"><i class="fa-solid fa-trash-can"></i> Clear All</button>
                             </div>
                             <div id="adminChatThreadsList"></div>
                         </div>
                         <div style="display:flex; flex-direction:column;">
                             <div class="p-2 flex-between" style="background: var(--bg-color); border-bottom: 1px solid var(--card-border);">
                                 <div>
-                                    <strong id="activeChatName">Select an account</strong>
-                                    <p class="small-text" id="activeChatSub" style="margin:0;">Click a thread on the left</p>
+                                    <strong id="activeChatName">Select a user</strong>
+                                    <p class="small-text" id="activeChatSub" style="margin:0;">Click a user on the left to view messages</p>
                                 </div>
                                 <div id="singleChatActionBox" class="hidden">
-                                    <button class="sm-btn danger-bg hover-pop" onclick="deleteSelectedConsumerChat()"><i class="fa-solid fa-trash"></i> Clear</button>
+                                    <button class="sm-btn danger-bg hover-pop" onclick="deleteSelectedConsumerChat()"><i class="fa-solid fa-trash"></i> Delete Chat</button>
                                 </div>
                             </div>
                             <div class="emcs-chat-body" id="adminChatMsgArea" style="flex:1;">
-                                <div class="small-text text-center" style="margin-top:auto; margin-bottom:auto;">Select a thread to review messages</div>
+                                <div class="small-text text-center" style="margin-top:auto; margin-bottom:auto;">Select a conversation from the left</div>
                             </div>
                             <div class="emcs-input-bar">
-                                <input type="text" id="adminChatInput" maxlength="500" placeholder="Type official response..." onkeypress="if(event.key==='Enter') sendAdminSupportMessage()">
+                                <input type="text" id="adminChatInput" maxlength="500" placeholder="Write a reply..." onkeypress="if(event.key==='Enter') sendAdminSupportMessage()">
                                 <button class="emcs-send-btn" onclick="sendAdminSupportMessage()"><i class="fa-solid fa-paper-plane"></i></button>
                             </div>
                         </div>
@@ -372,40 +402,71 @@
                 </div>
             </div>
 
+            <!-- 2. AI CHAT HISTORY PANE -->
+            <div id="adminAiHistorySubPane" class="admin-sub-pane hidden">
+                <div class="clean-card p-0" style="overflow:hidden;">
+                    <div class="admin-wa-container">
+                        <div class="admin-wa-users-panel">
+                            <div class="p-2 flex-between" style="border-bottom: 1px solid var(--card-border); background: var(--bg-color);">
+                                <strong>User AI Chats</strong>
+                                <span class="badge" style="background:var(--accent-light); color:var(--primary);">Auto-clears in 90d</span>
+                            </div>
+                            <div id="adminAiUsersList"></div>
+                        </div>
+                        <div style="display:flex; flex-direction:column;">
+                            <div class="p-2 flex-between" style="background: var(--bg-color); border-bottom: 1px solid var(--card-border);">
+                                <div>
+                                    <strong id="activeAiChatName">Select a user to view AI questions</strong>
+                                    <p class="small-text" style="margin:0;">Review questions asked to KamAbhi AI</p>
+                                </div>
+                                <div id="aiChatActionBox" class="hidden">
+                                    <button class="sm-btn danger-bg hover-pop" onclick="clearAiChatAdmin()"><i class="fa-solid fa-trash"></i> Delete AI History</button>
+                                </div>
+                            </div>
+                            <div class="emcs-chat-body" id="adminAiChatMsgArea" style="flex:1;">
+                                <div class="small-text text-center" style="margin-top:auto; margin-bottom:auto;">Select a user on the left to view their AI chat history</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. REGISTERED USERS PANE -->
             <div id="adminUsersSubPane" class="admin-sub-pane hidden">
                 <div class="clean-card">
                     <div class="flex-between mb-2">
                         <div>
-                            <h3>Registered Accounts Registry</h3>
-                            <p class="small-text">Click on any Consumer's Full Name to view full KYC, IP Forensics & 24-Month Billing Ledger.</p>
+                            <h3>Registered Users</h3>
+                            <p class="small-text">Click on any user's name to view full details, 24-month bills, login devices, or to Block/Delete their account.</p>
                         </div>
-                        <span class="badge light-green-bg live-pulse">Total Active: <b id="adminUserCount">0</b></span>
+                        <span class="badge light-green-bg live-pulse">Total Users: <b id="adminUserCount">0</b></span>
                     </div>
                     <div class="table-container">
                         <table>
-                            <thead><tr><th>Consumer ID</th><th>Full Name (Click for KYC)</th><th>Mobile</th><th>Sanctioned Load</th><th>Status</th></tr></thead>
+                            <thead><tr><th>Consumer ID</th><th>Full Name (Click for Details)</th><th>Mobile</th><th>Load Limit</th><th>Status</th></tr></thead>
                             <tbody id="adminUserListBody"></tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
+            <!-- 4. TEAM ACCESS PANE -->
             <div id="adminStaffSubPane" class="admin-sub-pane hidden">
                 <div class="clean-card mb-3">
-                    <h3><i class="fa-solid fa-user-shield text-warning hover-pop"></i> Provision Admin Staff Account</h3>
+                    <h3><i class="fa-solid fa-user-shield text-warning hover-pop"></i> Add Team Member</h3>
                     <div class="grid-3 mt-2 mb-2">
-                        <input type="text" id="staffNewName" placeholder="Staff Full Name">
+                        <input type="text" id="staffNewName" placeholder="Full Name">
                         <input type="text" id="staffNewUser" placeholder="Username">
-                        <input type="password" id="staffNewPass" placeholder="Enter Password">
+                        <input type="password" id="staffNewPass" placeholder="Password">
                     </div>
                     <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:14px; font-size:0.84rem;">
-                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="permManageUsers" checked style="width:auto;"> View Accounts</label>
+                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="permManageUsers" checked style="width:auto;"> View Users</label>
                         <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="permChat" checked style="width:auto;"> Reply Support</label>
-                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="permCMS" style="width:auto;"> Edit Portal CMS</label>
+                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="permCMS" style="width:auto;"> Edit Website Info</label>
                         <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="permDeleteChat" style="width:auto;"> Delete Chats</label>
                     </div>
-                    <button class="primary-btn sm-btn" onclick="createNewStaffMember()"><i class="fa-solid fa-plus"></i> Grant Role Access</button>
-                    <h4 class="mt-3">Assigned Personnel</h4>
+                    <button class="primary-btn sm-btn" onclick="createNewStaffMember()"><i class="fa-solid fa-plus"></i> Add Member</button>
+                    <h4 class="mt-3">Team Members</h4>
                     <div class="table-container">
                         <table>
                             <thead><tr><th>Name</th><th>Username</th><th>Permissions</th><th>Action</th></tr></thead>
@@ -415,23 +476,24 @@
                 </div>
             </div>
 
+            <!-- 5. WEBSITE INFO & FAQs PANE -->
             <div id="adminCmsSubPane" class="admin-sub-pane hidden">
                 <div class="clean-card">
-                    <h3><i class="fa-solid fa-pen-to-square text-primary hover-pop"></i> Portal CMS & Knowledge Base</h3>
+                    <h3><i class="fa-solid fa-pen-to-square text-primary hover-pop"></i> Website Info & FAQs</h3>
                     <div class="form-group mt-2">
-                        <label>Global Notification Broadcast</label>
-                        <input type="text" id="cmsBroadcastInput" placeholder="e.g. Scheduled maintenance update">
+                        <label>Top Announcement Banner</label>
+                        <input type="text" id="cmsBroadcastInput" placeholder="e.g. Welcome to EMCS Smart Energy Manager">
                     </div>
                     <div class="form-group">
-                        <label>About Statement</label>
+                        <label>About Us</label>
                         <textarea id="cmsAboutInput" rows="3"></textarea>
                     </div>
                     <div class="grid-2">
-                        <div class="form-group"><label>Privacy Statement</label><textarea id="cmsPrivacyInput" rows="4"></textarea></div>
-                        <div class="form-group"><label>Service Terms</label><textarea id="cmsTermsInput" rows="4"></textarea></div>
+                        <div class="form-group"><label>Privacy Policy</label><textarea id="cmsPrivacyInput" rows="4"></textarea></div>
+                        <div class="form-group"><label>Terms & Conditions</label><textarea id="cmsTermsInput" rows="4"></textarea></div>
                     </div>
                     <hr style="border: 0; border-top: 1px solid var(--card-border); margin: 16px 0;">
-                    <h4 class="mb-2"><i class="fa-solid fa-circle-question text-primary"></i> Helpdesk FAQ Entries</h4>
+                    <h4 class="mb-2"><i class="fa-solid fa-circle-question text-primary"></i> Frequently Asked Questions (FAQs)</h4>
                     <div id="cmsFaqList" class="mb-2"></div>
                     <div class="grid-2 mb-2">
                         <input type="text" id="cmsFaqQuestion" placeholder="Question">
@@ -439,18 +501,41 @@
                     </div>
                     <button type="button" class="secondary-btn sm-btn mb-3" onclick="addAdminFaq()"><i class="fa-solid fa-plus"></i> Add FAQ</button>
                     <div>
-                        <button class="primary-btn sm-btn" onclick="saveCmsContent()"><i class="fa-solid fa-floppy-disk"></i> Publish Updates</button>
+                        <button class="primary-btn sm-btn" onclick="saveCmsContent()"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
                         <span id="cmsSavedNotice" class="green-text" style="margin-left:12px; font-weight:600;"></span>
                     </div>
                 </div>
             </div>
 
+            <!-- 6. EMERGENCY ALERTS PANE -->
+            <div id="adminEmergencySubPane" class="admin-sub-pane hidden">
+                <div class="clean-card" style="border-left: 4px solid var(--danger);">
+                    <div class="flex-between mb-2">
+                        <div>
+                            <h3><i class="fa-solid fa-triangle-exclamation danger-text hover-pop"></i> Emergency Security Alerts</h3>
+                            <p class="small-text">Instant records of blocked automated bots, fake form attempts, and AI spam abuse.</p>
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <button type="button" class="secondary-btn sm-btn" onclick="loadEmergencyAlerts()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                            <button type="button" class="danger-btn sm-btn" onclick="clearEmergencyAlerts()"><i class="fa-solid fa-trash-can"></i> Clear Alerts</button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Date & Time</th><th>Alert Type</th><th>IP Address</th><th>Details</th><th>Device & Browser</th></tr></thead>
+                            <tbody id="adminEmergencyListBody"><tr><td colspan="5" class="text-center small-text">No security alerts triggered.</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 7. ACTIVITY LOGS PANE -->
             <div id="adminErrorSubPane" class="admin-sub-pane hidden">
                 <div class="clean-card">
                     <div class="flex-between mb-2">
                         <div>
-                            <h3><i class="fa-solid fa-triangle-exclamation danger-text hover-pop"></i> System Error Telemetry</h3>
-                            <p class="small-text">Encrypted application runtime error ledger.</p>
+                            <h3><i class="fa-solid fa-clipboard-list text-warning hover-pop"></i> Activity Logs</h3>
+                            <p class="small-text">Protected summary of general application events.</p>
                         </div>
                         <div style="display:flex; gap:8px;">
                             <button type="button" class="secondary-btn sm-btn" onclick="loadSystemErrors()"><i class="fa-solid fa-rotate"></i> Refresh</button>
@@ -459,26 +544,28 @@
                     </div>
                     <div class="table-container">
                         <table>
-                            <thead><tr><th>Timestamp</th><th>Source Component</th><th>Description</th><th>Route Location</th><th>Context</th></tr></thead>
-                            <tbody id="adminErrorListBody"><tr><td colspan="5" class="text-center small-text">No recorded system exceptions.</td></tr></tbody>
+                            <thead><tr><th>Time</th><th>Section</th><th>Message</th><th>Page</th><th>User</th></tr></thead>
+                            <tbody id="adminErrorListBody"><tr><td colspan="5" class="text-center small-text">No recent activity logs.</td></tr></tbody>
                         </table>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- MAIN CONSUMER APPLICATION -->
+        <!-- ======================================================= -->
+        <!-- MAIN USER APPLICATION                                   -->
+        <!-- ======================================================= -->
         <section id="mainAppSection">
             <div class="flex-between mb-3">
                 <div>
-                    <h2 id="userGreeting" data-i18n="greetDefault" style="animation: fadeUp 0.5s ease;">Energy Analytics Overview ☀️</h2>
-                    <p class="small-text" data-i18n="greetSub">Monitor and optimize your daily energy consumption securely.</p>
+                    <h2 id="userGreeting" data-i18n="greetDefault" style="animation: fadeUp 0.5s ease;">Welcome to Smart Energy Manager ☀️</h2>
+                    <p class="small-text" data-i18n="greetSub">Track your home appliances, control smart switches, and reduce your monthly electricity bill.</p>
                 </div>
                 <div style="display:flex; gap:10px; align-items:center;">
                     <button class="icon-btn hover-pop" onclick="promptSetBudget()">
-                        <i class="fa-solid fa-bullseye text-primary"></i> <span data-i18n="lblBudgetBtn">Budget:</span> <b id="currentBudgetDisplay" class="text-primary">₹3,000</b>
+                        <i class="fa-solid fa-bullseye text-primary"></i> <span data-i18n="lblBudgetBtn">Monthly Budget:</span> <b id="currentBudgetDisplay" class="text-primary">₹3,000</b>
                     </button>
-                    <button class="icon-btn hover-pop" onclick="enableBrowserNotifications()"><i class="fa-solid fa-bell text-primary"></i></button>
+                    <button class="icon-btn hover-pop" onclick="enableBrowserNotifications()" title="Enable Alerts"><i class="fa-solid fa-bell text-primary"></i></button>
                 </div>
             </div>
 
@@ -486,19 +573,19 @@
                 <div style="display:flex; align-items:center; gap:10px;">
                     <i class="fa-solid fa-bolt text-danger" style="font-size:1.5rem;"></i>
                     <div>
-                        <strong class="danger-text" id="mdiAlertTitle">Sanctioned Load Overload Detected!</strong>
-                        <p class="small-text">Active appliance wattage exceeds safe threshold limit.</p>
+                        <strong class="danger-text" id="mdiAlertTitle">High Load Warning!</strong>
+                        <p class="small-text">Your running appliances have crossed your meter's safe load limit.</p>
                     </div>
                 </div>
-                <button class="danger-btn sm-btn hover-pop" onclick="executeHeavyApplianceCutoff()">Cut Heavy Load</button>
+                <button class="danger-btn sm-btn hover-pop" onclick="executeHeavyApplianceCutoff()">Turn Off Heavy Appliances</button>
             </div>
 
             <div id="budgetAlertBanner" class="clean-card mb-2 p-2 flex-between hidden" style="border: 1px solid var(--danger); background: rgba(239, 68, 68, 0.06); animation: fadeUp 0.4s ease;">
                 <div>
-                    <strong class="danger-text">Monthly Budget Target Exceeded!</strong>
-                    <p class="small-text">Projected billing has crossed your custom ceiling threshold.</p>
+                    <strong class="danger-text">Monthly Budget Crossed!</strong>
+                    <p class="small-text">Your estimated monthly bill is higher than your set budget target.</p>
                 </div>
-                <button class="danger-btn sm-btn hover-pop" onclick="promptSetBudget()">Update Budget</button>
+                <button class="danger-btn sm-btn hover-pop" onclick="promptSetBudget()">Change Budget</button>
             </div>
 
             <!-- TAB 1: DASHBOARD -->
@@ -506,23 +593,23 @@
                 <div class="clean-card mb-3 p-3" style="border-left: 4px solid var(--primary);">
                     <div class="flex-between mb-2">
                         <div>
-                            <h4 style="margin:0;"><i class="fa-solid fa-bolt text-primary hover-pop"></i> Tariff & Calculation Engine</h4>
-                            <p class="small-text">Multi-utility rate slabs, fixed demand, and tax computation</p>
+                            <h4 style="margin:0;"><i class="fa-solid fa-bolt text-primary hover-pop"></i> Electricity Board & Rate Settings</h4>
+                            <p class="small-text">Select your electricity provider and connection type for accurate bill calculation</p>
                         </div>
                         <div style="display:flex; gap:10px; align-items:center;">
                             <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:600; cursor:pointer;">
-                                <input type="checkbox" id="includeFppcaToggle" checked onchange="renderAppliances()" style="width:auto;"> Include Surcharges
+                                <input type="checkbox" id="includeFppcaToggle" checked onchange="renderAppliances()" style="width:auto;"> Include Taxes & Surcharges
                             </label>
                             <button type="button" class="sm-btn hover-pop" style="background:var(--primary); color:#fff;" onclick="toggleCustomTariffModal()">
-                                <i class="fa-solid fa-sliders"></i> Custom Rate
+                                <i class="fa-solid fa-sliders"></i> Set Custom Rate
                             </button>
                         </div>
                     </div>
                     <div class="grid-4" style="gap:10px;">
                         <div class="form-group" style="margin:0;">
-                            <label class="small-text">Utility Board</label>
+                            <label class="small-text">Electricity Board</label>
                             <select id="tariffProviderSelect" onchange="onTariffConfigChange()">
-                                <optgroup label="State Electricity Boards (DISCOMs)">
+                                <optgroup label="State Electricity Boards">
                                     <option value="bihar" selected>Bihar (NBPDCL / SBPDCL)</option>
                                     <option value="up">Uttar Pradesh (UPPCL)</option>
                                     <option value="maharashtra">Maharashtra (MSEDCL)</option>
@@ -536,34 +623,34 @@
                                     <option value="haryana">Haryana (UHBVN / DHBVN)</option>
                                     <option value="mp">Madhya Pradesh (MPPKVVCL)</option>
                                 </optgroup>
-                                <optgroup label="Private Utilities & National">
-                                    <option value="tata_delhi">Tata Power Delhi (TPDDL)</option>
+                                <optgroup label="Private Providers & Standard">
+                                    <option value="tata_delhi">Tata Power Delhi</option>
                                     <option value="bses_delhi">BSES Rajdhani / Yamuna</option>
                                     <option value="tata_mumbai">Tata Power Mumbai</option>
                                     <option value="adani_mumbai">Adani Electricity Mumbai</option>
                                     <option value="cesc_kolkata">CESC Kolkata</option>
                                     <option value="torrent">Torrent Power</option>
-                                    <option value="national">Standard National Average</option>
-                                    <option value="custom">★ Custom Defined Rate</option>
+                                    <option value="national">Standard India Average</option>
+                                    <option value="custom">★ My Custom Rate</option>
                                 </optgroup>
                             </select>
                         </div>
                         <div class="form-group" style="margin:0;">
-                            <label class="small-text">Connection Category</label>
+                            <label class="small-text">Connection Type</label>
                             <select id="tariffCategorySelect" onchange="onTariffConfigChange()">
-                                <option value="domestic" selected>Domestic (Residential)</option>
-                                <option value="commercial">Commercial</option>
+                                <option value="domestic" selected>Home (Domestic)</option>
+                                <option value="commercial">Shop / Office (Commercial)</option>
                             </select>
                         </div>
                         <div class="form-group" style="margin:0;">
-                            <label class="small-text">Geographic Zone</label>
+                            <label class="small-text">Area Type</label>
                             <select id="tariffAreaSelect" onchange="onTariffConfigChange()">
-                                <option value="urban" selected>Urban Area</option>
-                                <option value="rural">Rural Area</option>
+                                <option value="urban" selected>City (Urban)</option>
+                                <option value="rural">Village / Town (Rural)</option>
                             </select>
                         </div>
                         <div class="form-group" style="margin:0;">
-                            <label class="small-text">Sanctioned Limit</label>
+                            <label class="small-text">Meter Load Limit</label>
                             <select id="sanctionedLoadSelect" onchange="changeSanctionedLoad(this.value)">
                                 <option value="1.0">1.0 kW</option>
                                 <option value="2.0" selected>2.0 kW Standard</option>
@@ -576,14 +663,14 @@
 
                 <div class="grid-4 mb-3">
                     <div class="clean-card p-2">
-                        <p class="card-label">Active Monthly Load</p>
-                        <h2 id="dashLoadDisplay" class="text-primary">0.0 kWh</h2>
-                        <span class="badge light-green-bg live-pulse mt-1">Live Draw: <b id="liveWattsDisplay">0 W</b></span>
+                        <p class="card-label">Monthly Electricity Usage</p>
+                        <h2 id="dashLoadDisplay" class="text-primary">0.0 Units</h2>
+                        <span class="badge light-green-bg live-pulse mt-1">Running Load: <b id="liveWattsDisplay">0 W</b></span>
                     </div>
                     <div class="clean-card p-2">
-                        <p class="card-label">Efficiency Index</p>
+                        <p class="card-label">Energy Saving Score</p>
                         <h2 id="ecoScoreDisplay" class="green-text">94%</h2>
-                        <span class="badge light-green-bg mt-1">Optimized</span>
+                        <span class="badge light-green-bg mt-1">Good</span>
                     </div>
                     <div class="clean-card p-2" style="border-left: 3px solid var(--danger);">
                         <p class="card-label">Estimated Monthly Bill</p>
@@ -591,23 +678,23 @@
                             <h2 id="dashBillDisplay" class="danger-text">₹0</h2>
                             <button class="primary-btn sm-btn hover-pop" style="padding:4px 10px;" onclick="showFeature('payment', null)">Pay</button>
                         </div>
-                        <span class="badge light-red-bg mt-1">Slabs + Taxes</span>
+                        <span class="badge light-red-bg mt-1">Includes Fixed Charges</span>
                     </div>
                     <div class="clean-card p-2" style="border-left: 3px solid var(--accent);">
-                        <p class="card-label">Standby Waste</p>
+                        <p class="card-label">Standby Power Waste</p>
                         <h2 id="vampireDisplay" class="text-accent">₹0</h2>
-                        <span class="badge light-red-bg mt-1">Phantom Load</span>
+                        <span class="badge light-red-bg mt-1">Unplug idle switches</span>
                     </div>
                 </div>
 
                 <div class="clean-card mb-3" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));">
                     <div class="flex-between">
                         <div>
-                            <h4><i class="fa-solid fa-chart-line text-primary hover-pop"></i> Billing Forecast</h4>
-                            <p class="small-text">Projected estimate based on current running profiles</p>
+                            <h4><i class="fa-solid fa-chart-line text-primary hover-pop"></i> Next Month Bill Forecast</h4>
+                            <p class="small-text">Expected bill if your daily usage increases slightly during peak weather</p>
                         </div>
                         <div class="text-right">
-                            <span class="card-label">Projected Total:</span>
+                            <span class="card-label">Expected Total:</span>
                             <h2 class="text-primary" id="forecastBillDisplay">₹0</h2>
                         </div>
                     </div>
@@ -615,92 +702,103 @@
 
                 <div class="clean-card">
                     <div class="flex-between mb-2">
-                        <h3><i class="fa-solid fa-chart-area text-primary hover-pop"></i> Daily Energy Consumption Trend</h3>
+                        <h3><i class="fa-solid fa-chart-area text-primary hover-pop"></i> Daily Electricity Usage</h3>
                         <div style="display:flex; gap:6px;">
-                            <button class="sm-btn hover-pop" style="background:var(--primary);" onclick="setChartMode('line')">Curve</button>
-                            <button class="sm-btn hover-pop" style="background:#64748B;" onclick="setChartMode('bar')">Bar</button>
+                            <button class="sm-btn hover-pop" style="background:var(--primary);" onclick="setChartMode('line')">Line View</button>
+                            <button class="sm-btn hover-pop" style="background:#64748B;" onclick="setChartMode('bar')">Bar View</button>
                         </div>
                     </div>
                     <div style="height: 310px; position: relative;"><canvas id="energyChart"></canvas></div>
                 </div>
             </div>
 
-            <!-- TAB 2: APPLIANCES -->
+            <!-- TAB 2: MY APPLIANCES (2D & Flowgraph Removed + Hardware Compatibility Added) -->
             <div id="appliances" class="feature-content hidden">
                 <div class="clean-card mb-3">
-                    <h3><i class="fa-solid fa-plug-circle-plus text-primary hover-pop"></i> Appliance Setup & Profiler</h3>
-                    <div class="form-group mt-2">
-                        <label>Quick Preset Options</label>
-                        <select id="presetSelect" onchange="applyPreset(this.value)">
-                            <option value="">-- Select Standard Appliance Preset --</option>
-                            <option value="ac15">1.5 Ton Split AC (1400 W)</option>
-                            <option value="ac10">1.0 Ton Inverter AC (1000 W)</option>
-                            <option value="fridge">Double Door Refrigerator (180 W)</option>
-                            <option value="fan">BLDC Ceiling Fan (35 W)</option>
-                            <option value="oldfan">Standard Ceiling Fan (75 W)</option>
-                            <option value="geyser">Water Geyser (2000 W)</option>
-                            <option value="pc">Desktop Computer (350 W)</option>
-                            <option value="wm">Washing Machine (450 W)</option>
-                        </select>
+                    <h3><i class="fa-solid fa-plug-circle-plus text-primary hover-pop"></i> Add Home Appliance</h3>
+                    <p class="small-text mb-2">Add your appliances manually or link them with a smart switch or meter.</p>
+
+                    <div class="grid-2 mt-2">
+                        <div class="form-group">
+                            <label>Quick Select Appliance</label>
+                            <select id="presetSelect" onchange="applyPreset(this.value)">
+                                <option value="">-- Choose a Common Appliance --</option>
+                                <option value="ac15">1.5 Ton Split AC (1400 W)</option>
+                                <option value="ac10">1.0 Ton Inverter AC (1000 W)</option>
+                                <option value="fridge">Double Door Fridge (180 W)</option>
+                                <option value="fan">BLDC Ceiling Fan (35 W)</option>
+                                <option value="oldfan">Regular Ceiling Fan (75 W)</option>
+                                <option value="geyser">Water Geyser (2000 W)</option>
+                                <option value="pc">Desktop Computer (350 W)</option>
+                                <option value="wm">Washing Machine (450 W)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Connection Mode (Hardware Compatibility)</label>
+                            <select id="appConnMode" onchange="onAppConnectionModeChange(this.value)">
+                                <option value="manual" selected>Manual Entry (Standard)</option>
+                                <option value="wifi">Wireless Wi-Fi Smart Switch</option>
+                                <option value="smartmeter">Smart Meter Linked</option>
+                                <option value="usb">Direct Cable Switch</option>
+                            </select>
+                        </div>
                     </div>
+
+                    <!-- MANDATORY HARDWARE RISK DISCLAIMER CHECKBOX (Shown when Hardware mode is picked) -->
+                    <div id="appHardwareDisclaimerBox" class="form-group hidden" style="padding: 12px; background: rgba(245, 158, 11, 0.1); border: 1px solid var(--warning); border-radius: 10px; margin-bottom: 14px;">
+                        <label style="display: flex; align-items: flex-start; gap: 10px; font-size: 0.85rem; color: var(--text-color); cursor: pointer; margin: 0; font-weight: 600;">
+                            <input type="checkbox" id="appHardwareRiskCheck" style="width: 18px; height: 18px; margin-top: 2px; accent-color: var(--warning); flex-shrink: 0;">
+                            <span>Hardware testing nhi kiya gya hai. Kripya apne risk or jimmedari par ye hardware connect kare, iske liye hamari team ki koi jimmedari nhi hogi.</span>
+                        </label>
+                    </div>
+
                     <div class="grid-4">
-                        <input type="text" id="appName" placeholder="Device Name (e.g. Room AC)">
-                        <input type="number" id="appPower" placeholder="Power Watts (e.g. 1400)" min="1" max="50000">
-                        <input type="number" id="appHours" placeholder="Daily Hours (e.g. 6)" min="0.1" max="24" step="0.5">
-                        <button class="primary-btn" onclick="addAppliance()"><i class="fa-solid fa-plus"></i> Add Device</button>
+                        <input type="text" id="appName" placeholder="Appliance Name (e.g. Bedroom AC)">
+                        <input type="number" id="appPower" placeholder="Power in Watts (e.g. 1400)" min="1" max="50000">
+                        <input type="number" id="appHours" placeholder="Hours used per day (e.g. 6)" min="0.1" max="24" step="0.5">
+                        <button class="primary-btn" onclick="addAppliance()"><i class="fa-solid fa-plus"></i> Add Appliance</button>
                     </div>
                 </div>
 
                 <div class="clean-card mb-3">
-                    <h4><i class="fa-solid fa-list-check text-primary hover-pop"></i> Connected Nodes</h4>
+                    <div class="flex-between mb-2">
+                        <h4><i class="fa-solid fa-list-check text-primary hover-pop"></i> My Connected Appliances</h4>
+                        <span class="badge light-green-bg live-pulse" id="flowTotalWattsBadge">Running Load: 0 W</span>
+                    </div>
                     <div class="table-container">
                         <table>
-                            <thead><tr><th>Name</th><th>Watts</th><th>Daily Usage</th><th>Monthly Units</th><th>Status</th><th>Est. Cost</th><th>Action</th></tr></thead>
+                            <thead>
+                                <tr>
+                                    <th>Appliance Name</th>
+                                    <th>Connection Mode</th>
+                                    <th>Power (Watts)</th>
+                                    <th>Daily Use</th>
+                                    <th>Monthly Units</th>
+                                    <th>ON / OFF</th>
+                                    <th>Monthly Cost</th>
+                                    <th>Remove</th>
+                                </tr>
+                            </thead>
                             <tbody id="applianceList"></tbody>
                         </table>
                     </div>
                 </div>
-
-                <div class="clean-card mb-3">
-                    <div class="flex-between mb-2">
-                        <h4><i class="fa-solid fa-diagram-project text-primary hover-pop"></i> Live Power Distribution Flowchart</h4>
-                        <span class="badge light-green-bg live-pulse" id="flowTotalWattsBadge">Active Draw: 0 W</span>
-                    </div>
-                    <div id="applianceFlowchartContainer" style="padding: 18px; background: var(--bg-color); border-radius: 12px; border: 1px dashed var(--card-border); overflow-x: auto;"></div>
-                </div>
-
-                <div class="grid-2">
-                    <div class="clean-card">
-                        <div class="flex-between mb-2">
-                            <h4><i class="fa-solid fa-chart-area text-primary hover-pop"></i> Flowgraph Analysis</h4>
-                            <div style="display:flex; gap:6px;">
-                                <button type="button" class="sm-btn hover-pop" id="appFlowBtn" style="background:var(--primary);" onclick="setAppChartMode('line')">Flow Curve</button>
-                                <button type="button" class="sm-btn hover-pop" id="appBarBtn" style="background:#64748B;" onclick="setAppChartMode('bar')">2D Bar</button>
-                            </div>
-                        </div>
-                        <div style="height: 290px; position: relative;"><canvas id="applianceCompChart"></canvas></div>
-                    </div>
-                    <div class="clean-card">
-                        <h4 class="mb-2"><i class="fa-solid fa-chart-pie text-primary hover-pop"></i> Load Share Breakdown</h4>
-                        <div style="height: 290px; position: relative;"><canvas id="pieChart"></canvas></div>
-                    </div>
-                </div>
             </div>
 
-            <!-- TAB 3: VOLTAGE & SURGE GUARD -->
+            <!-- TAB 3: VOLTAGE SAFETY -->
             <div id="gridSafety" class="feature-content hidden">
                 <div class="clean-card" style="max-width:780px; margin:0 auto;">
                     <div class="flex-between mb-2">
-                        <h3><i class="fa-solid fa-gauge-high text-warning hover-pop"></i> Voltage & Surge Guard</h3>
-                        <span class="badge light-green-bg live-pulse" id="voltageHealthBadge">228 V • Normal</span>
+                        <h3><i class="fa-solid fa-gauge-high text-warning hover-pop"></i> Voltage Safety Monitor</h3>
+                        <span class="badge light-green-bg live-pulse" id="voltageHealthBadge">228 V • Safe</span>
                     </div>
-                    <p class="small-text mb-3">Protects sensitive compressors by isolating heavy circuits during brownouts (&lt;180V) or voltage surges (&gt;260V).</p>
+                    <p class="small-text mb-3">Protects your AC, Fridge, and heavy appliances by automatically turning them off if voltage drops too low (&lt;180V) or rises too high (&gt;260V).</p>
                     <div class="p-3 text-center" style="background:var(--bg-color); border-radius:12px;">
                         <h1 id="liveVoltageMetric" style="font-size:3rem; color:var(--primary); transition: color 0.3s ease;">228 V</h1>
                         <div style="display:flex; gap:10px; justify-content:center; margin-top:12px; flex-wrap:wrap;">
-                            <button class="sm-btn hover-pop" style="background:#10B981; color:#fff;" onclick="simulateGridVoltage(226)">Normal Grid (226V)</button>
-                            <button class="sm-btn hover-pop" style="background:#F59E0B; color:#fff;" onclick="simulateGridVoltage(168)">Simulate Brownout (168V)</button>
-                            <button class="sm-btn hover-pop" style="background:#EF4444; color:#fff;" onclick="simulateGridVoltage(278)">Simulate Surge (278V)</button>
+                            <button class="sm-btn hover-pop" style="background:#10B981; color:#fff;" onclick="simulateGridVoltage(226)">Test Normal Voltage (226V)</button>
+                            <button class="sm-btn hover-pop" style="background:#F59E0B; color:#fff;" onclick="simulateGridVoltage(168)">Test Low Voltage (168V)</button>
+                            <button class="sm-btn hover-pop" style="background:#EF4444; color:#fff;" onclick="simulateGridVoltage(278)">Test High Voltage (278V)</button>
                         </div>
                     </div>
                     <div id="voltageAlertBox" class="p-2 mt-2 hidden text-center" style="border-radius:8px; font-weight:600; animation: fadeUp 0.3s ease;"></div>
@@ -710,174 +808,191 @@
             <!-- TAB 4: INVERTER BACKUP -->
             <div id="inverterAssistant" class="feature-content hidden">
                 <div class="clean-card" style="max-width:780px; margin:0 auto; border-left:4px solid var(--warning);">
-                    <h3><i class="fa-solid fa-car-battery text-warning hover-pop"></i> Inverter Backup Calculator</h3>
-                    <p class="small-text mb-3">Compute exact backup runtime based on battery Ah and active load.</p>
+                    <h3><i class="fa-solid fa-car-battery text-warning hover-pop"></i> Inverter Backup Time Calculator</h3>
+                    <p class="small-text mb-3">Check how long your home inverter battery will last during a power cut.</p>
                     <div class="grid-3">
                         <div class="form-group"><label>Battery Capacity (Ah)</label><input type="number" id="invBatteryAh" value="150" min="10" max="2000" oninput="calculateInverterRuntime()"></div>
                         <div class="form-group">
-                            <label>System Voltage</label>
+                            <label>Battery Type</label>
                             <select id="invVoltage" onchange="calculateInverterRuntime()">
-                                <option value="12" selected>12V System</option>
-                                <option value="24">24V System</option>
+                                <option value="12" selected>Single Battery (12V)</option>
+                                <option value="24">Double Battery (24V)</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label>Running Load (Watts)</label>
                             <div style="display:flex; gap:6px;">
                                 <input type="number" id="invActiveLoad" value="250" min="1" max="50000" oninput="calculateInverterRuntime()">
-                                <button class="icon-btn hover-pop" onclick="fetchActiveLoadToInverter()" title="Copy Active Load"><i class="fa-solid fa-rotate-right"></i></button>
+                                <button class="icon-btn hover-pop" onclick="fetchActiveLoadToInverter()" title="Use My Current Running Load"><i class="fa-solid fa-rotate-right"></i></button>
                             </div>
                         </div>
                     </div>
                     <div class="mt-3 p-3 text-center" style="background:var(--accent-light); border-radius:12px;">
-                        <p class="small-text" style="color:var(--primary); font-weight:600;">Estimated Backup Runtime</p>
+                        <p class="small-text" style="color:var(--primary); font-weight:600;">Estimated Backup Time</p>
                         <h1 class="text-primary m-0" id="inverterRuntimeOutput" style="font-size:2.5rem; transition: all 0.3s ease;">-- Hrs -- Min</h1>
                     </div>
                 </div>
             </div>
 
-            <!-- TAB 5: VAMPIRE AUDIT -->
+            <!-- TAB 5: STANDBY POWER SAVER -->
             <div id="vampireCheck" class="feature-content hidden">
                 <div class="clean-card" style="max-width:720px; margin:0 auto;">
                     <div class="flex-between mb-2">
-                        <h3><i class="fa-solid fa-shield-virus text-danger hover-pop"></i> Standby (Vampire) Power Audit</h3>
-                        <span class="badge light-green-bg" id="vampireTotalSavedBadge">Saved: ₹0/mo</span>
+                        <h3><i class="fa-solid fa-shield-virus text-danger hover-pop"></i> Standby Power Saver</h3>
+                        <span class="badge light-green-bg" id="vampireTotalSavedBadge">Saved: ₹0/month</span>
                     </div>
-                    <p class="small-text mb-3">Eliminate phantom wall drain from idle devices.</p>
+                    <p class="small-text mb-3">Appliances left plugged in with the main switch ON still consume electricity. Turn off wall switches to save money.</p>
                     <div class="flex-between p-2 mb-2" style="background:var(--bg-color); border-radius:10px; transition: transform 0.2s ease;">
-                        <div><strong>Unplug Microwave & Induction</strong><p class="small-text">Saves continuous display LED drain</p></div>
+                        <div><strong>Switch off Microwave & Induction main plug</strong><p class="small-text">Stops continuous digital display power drain</p></div>
                         <label class="switch"><input type="checkbox" onchange="toggleVampireItem(45, this)"><span class="slider"></span></label>
                     </div>
                     <div class="flex-between p-2 mb-2" style="background:var(--bg-color); border-radius:10px; transition: transform 0.2s ease;">
-                        <div><strong>Turn off TV & Set-Top Box wall switch</strong><p class="small-text">Saves standby receiver draw</p></div>
+                        <div><strong>Switch off TV & Set-Top Box from wall socket</strong><p class="small-text">Saves daily standby power waste</p></div>
                         <label class="switch"><input type="checkbox" onchange="toggleVampireItem(85, this)"><span class="slider"></span></label>
                     </div>
                 </div>
             </div>
 
-            <!-- TAB 6: BILL OCR SCANNER -->
+            <!-- TAB 6: SCAN ELECTRICITY BILL -->
             <div id="ocrScanner" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-file-arrow-up text-primary hover-pop"></i> Electricity Bill OCR Scanner</h3>
-                    <p class="small-text mb-2">Upload a physical bill image to extract units automatically.</p>
+                    <h3><i class="fa-solid fa-file-arrow-up text-primary hover-pop"></i> Scan Paper Electricity Bill</h3>
+                    <p class="small-text mb-2">Upload a clear photo of your electricity bill to read units automatically.</p>
                     <input type="file" id="billImageInput" accept="image/jpeg,image/png,image/webp" class="mb-2" style="padding: 6px;">
-                    <button class="primary-btn" onclick="processBillOcr()"><i class="fa-solid fa-wand-magic-sparkles"></i> Scan Bill Image</button>
-                    <div id="ocrLoader" class="hidden text-center mt-2"><i class="fa-solid fa-spinner fa-spin text-primary"></i> Processing secure image stream...</div>
+                    <button class="primary-btn" onclick="processBillOcr()"><i class="fa-solid fa-wand-magic-sparkles"></i> Read Bill Photo</button>
+                    <div id="ocrLoader" class="hidden text-center mt-2"><i class="fa-solid fa-spinner fa-spin text-primary"></i> Reading your bill photo...</div>
                     <div id="ocrResultBox" class="hidden mt-2 p-2" style="background:var(--accent-light); border-radius:10px; animation: fadeUp 0.4s ease;">
-                        <p><b>Consumer ID:</b> <span id="ocrConsumerId">—</span> | <b>Units Read:</b> <span id="ocrUnits">—</span> kWh | <b>Est Bill:</b> <span id="ocrAmount">—</span></p>
-                        <button class="primary-btn sm-btn mt-2 hover-pop" onclick="applyOcrToSimulator()">Load Into Simulator</button>
+                        <p><b>Consumer ID:</b> <span id="ocrConsumerId">—</span> | <b>Units Read:</b> <span id="ocrUnits">—</span> Units | <b>Estimated Bill:</b> <span id="ocrAmount">—</span></p>
+                        <button class="primary-btn sm-btn mt-2 hover-pop" onclick="applyOcrToSimulator()">Check Savings on This Bill</button>
                     </div>
                 </div>
             </div>
 
-            <!-- TAB 7: SMART METER CSV -->
+            <!-- TAB 7: SMART METER FILE -->
             <div id="smartMeterCsv" class="feature-content hidden">
                 <div class="clean-card" style="max-width:700px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-file-csv green-text hover-pop"></i> Smart Meter CSV Analyzer</h3>
-                    <p class="small-text mb-2">Upload interval logs exported from utility smart meters.</p>
+                    <h3><i class="fa-solid fa-file-csv green-text hover-pop"></i> Smart Meter File Reader</h3>
+                    <p class="small-text mb-2">Upload your smart meter usage file (.csv or .txt) to see your total and peak usage.</p>
                     <input type="file" id="meterCsvInput" accept=".csv,.txt" onchange="handleSmartMeterCsv(event)" style="padding: 6px;">
                     <div id="csvSummaryBox" class="hidden mt-3 grid-3 text-center">
-                        <div class="p-2 clean-card" style="animation: fadeUp 0.3s ease;"><p class="small-text">Total Consumption</p><h3 class="text-primary" id="csvTotalKwh">0 kWh</h3></div>
-                        <div class="p-2 clean-card" style="animation: fadeUp 0.4s ease;"><p class="small-text">Peak Draw</p><h3 class="danger-text" id="csvPeakHour">--</h3></div>
-                        <div class="p-2 clean-card" style="animation: fadeUp 0.5s ease;"><p class="small-text">Daily Average</p><h3 class="green-text" id="csvAvgDaily">0 kWh</h3></div>
+                        <div class="p-2 clean-card" style="animation: fadeUp 0.3s ease;"><p class="small-text">Total Usage</p><h3 class="text-primary" id="csvTotalKwh">0 Units</h3></div>
+                        <div class="p-2 clean-card" style="animation: fadeUp 0.4s ease;"><p class="small-text">Highest Usage</p><h3 class="danger-text" id="csvPeakHour">--</h3></div>
+                        <div class="p-2 clean-card" style="animation: fadeUp 0.5s ease;"><p class="small-text">Daily Average</p><h3 class="green-text" id="csvAvgDaily">0 Units</h3></div>
                     </div>
                 </div>
             </div>
 
-            <!-- TAB 8: TOD OPTIMIZER -->
+            <!-- TAB 8: BEST TIME TO USE -->
             <div id="todOptimizer" class="feature-content hidden">
                 <div class="clean-card" style="max-width:780px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-clock-rotate-left text-primary hover-pop"></i> ToD Smart Tariff Optimizer</h3>
-                    <p class="small-text mb-2">Shift heavy appliance execution to solar off-peak hours.</p>
+                    <h3><i class="fa-solid fa-clock-rotate-left text-primary hover-pop"></i> Best Time to Run Heavy Appliances</h3>
+                    <p class="small-text mb-2">Run heavy appliances like Washing Machine and Geyser during daytime solar hours to save money.</p>
                     <div class="grid-3 mt-2 text-center">
                         <div class="p-2 clean-card" style="border-top:4px solid #10B981; transition: transform 0.2s ease;">
-                            <span class="badge light-green-bg">10 AM - 3 PM (Solar)</span>
-                            <h3 class="green-text mt-1">-20% Rebate</h3>
-                            <p class="small-text">Ideal for Washing Machine & Geyser</p>
+                            <span class="badge light-green-bg">10 AM - 3 PM (Daytime)</span>
+                            <h3 class="green-text mt-1">20% Cheaper</h3>
+                            <p class="small-text">Best time for Washing Machine & Geyser</p>
                         </div>
                         <div class="p-2 clean-card" style="border-top:4px solid #6366F1; transition: transform 0.2s ease;">
                             <span class="badge" style="background:var(--accent-light); color:var(--primary);">Normal Hours</span>
-                            <h3 class="text-primary mt-1">Standard Rate</h3>
-                            <p class="small-text">Regular household operation</p>
+                            <h3 class="text-primary mt-1">Normal Rate</h3>
+                            <p class="small-text">Regular home usage</p>
                         </div>
                         <div class="p-2 clean-card" style="border-top:4px solid #EF4444; transition: transform 0.2s ease;">
-                            <span class="badge light-red-bg">6 PM - 10 PM (Peak)</span>
-                            <h3 class="danger-text mt-1">+20% Tariff</h3>
-                            <p class="small-text">Minimize heavy load usage</p>
+                            <span class="badge light-red-bg">6 PM - 10 PM (Evening Peak)</span>
+                            <h3 class="danger-text mt-1">20% Costlier</h3>
+                            <p class="small-text">Avoid running heavy appliances</p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- TAB 9: SOLAR ROI -->
+            <!-- TAB 9: SOLAR CALCULATOR -->
             <div id="solarRoi" class="feature-content hidden">
                 <div class="clean-card" style="max-width:780px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-sun text-warning hover-pop"></i> Solar Rooftop Sizing & Subsidy Estimator</h3>
+                    <h3><i class="fa-solid fa-sun text-warning hover-pop"></i> Rooftop Solar & Subsidy Calculator</h3>
                     <div class="grid-2 mt-2 mb-2">
-                        <div class="form-group"><label>Monthly Consumption (kWh)</label><input type="number" id="solarInputUnits" value="300" oninput="calculateSolarRoi()"></div>
-                        <div class="form-group"><label>Available Roof Area (Sq.Ft)</label><input type="number" id="solarInputArea" value="250" oninput="calculateSolarRoi()"></div>
+                        <div class="form-group"><label>Monthly Electricity Usage (Units)</label><input type="number" id="solarInputUnits" value="300" oninput="calculateSolarRoi()"></div>
+                        <div class="form-group"><label>Available Roof Space (Sq.Ft)</label><input type="number" id="solarInputArea" value="250" oninput="calculateSolarRoi()"></div>
                     </div>
                     <div class="grid-4 text-center">
-                        <div class="p-2 clean-card"><p class="small-text">Recommended</p><h3 class="text-primary" id="solarCapResult">3.0 kW</h3></div>
-                        <div class="p-2 clean-card"><p class="small-text">Estimated Cost</p><h3 id="solarCostResult">₹1,50,000</h3></div>
-                        <div class="p-2 clean-card"><p class="small-text">Govt Subsidy</p><h3 class="green-text" id="solarSubsidyResult">-₹78,000</h3></div>
-                        <div class="p-2 clean-card"><p class="small-text">Payback Period</p><h3 class="green-text" id="solarPaybackResult">2.4 Yrs</h3></div>
+                        <div class="p-2 clean-card"><p class="small-text">Recommended Size</p><h3 class="text-primary" id="solarCapResult">3.0 kW</h3></div>
+                        <div class="p-2 clean-card"><p class="small-text">Approx. Cost</p><h3 id="solarCostResult">₹1,50,000</h3></div>
+                        <div class="p-2 clean-card"><p class="small-text">Govt. Subsidy</p><h3 class="green-text" id="solarSubsidyResult">-₹78,000</h3></div>
+                        <div class="p-2 clean-card"><p class="small-text">Recovery Time</p><h3 class="green-text" id="solarPaybackResult">2.4 Yrs</h3></div>
                     </div>
                 </div>
             </div>
 
-            <!-- TAB 10: IOT HARDWARE RELAY -->
+            <!-- TAB 10: SMART HARDWARE CONTROL (With Mandatory Risk Consent Tick-Box) -->
             <div id="iotControl" class="feature-content hidden">
                 <div class="clean-card" style="max-width:850px; margin:0 auto;">
                     <div class="flex-between mb-2">
-                        <h3><i class="fa-solid fa-microchip text-primary hover-pop"></i> Hardware Relay Control</h3>
-                        <span class="badge light-green-bg live-pulse" id="hardwareConnectionBadge">Ready</span>
+                        <h3><i class="fa-solid fa-microchip text-primary hover-pop"></i> Smart Hardware & Wireless Switch Control</h3>
+                        <span class="badge light-green-bg live-pulse" id="hardwareConnectionBadge">Ready to Connect</span>
                     </div>
-                    <div class="grid-2 mb-3">
-                        <div class="p-2 clean-card text-center">
-                            <h4>USB Serial Link</h4>
-                            <p class="small-text mb-2">Direct microcontroller cable connection</p>
-                            <button class="primary-btn sm-btn hover-pop" onclick="connectSerialHardware()"><i class="fa-solid fa-link"></i> Connect USB</button>
-                        </div>
-                        <div class="p-2 clean-card text-center">
-                            <h4>Secure Local Wi-Fi Gateway</h4>
-                            <div class="grid-2 mb-1">
-                                <input type="text" id="iotCutoffEndpoint" value="http://192.168.1.50/relay" placeholder="Node IP">
-                                <input type="password" id="espAuthToken" value="" placeholder="Shared Auth Secret" autocomplete="off">
+                    <p class="small-text mb-2">Connect your Smart Wi-Fi Plugs, Smart Meters, or USB Switches to turn appliances ON or OFF directly from here.</p>
+
+                    <!-- MANDATORY USER RESPONSIBILITY TICK-BOX -->
+                    <div class="p-3 mb-3" style="background: rgba(239, 68, 68, 0.07); border: 2px solid var(--danger); border-radius: 12px;">
+                        <label style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer; font-size: 0.9rem; line-height: 1.5; color: var(--text-color); font-weight: 600;">
+                            <input type="checkbox" id="hardwareMasterConsentCheck" onchange="toggleHardwareRiskConsent(this.checked)" style="width: 20px; height: 20px; margin-top: 2px; accent-color: var(--danger); flex-shrink: 0; cursor: pointer;">
+                            <span>
+                                <strong class="danger-text"><i class="fa-solid fa-triangle-exclamation"></i> Important Hardware Notice:</strong><br>
+                                Hardware testing nhi kiya gya hai. Kripya apne risk or jimmedari par ye hardware connect kare, iske liye hamari team ki koi jimmedari nhi hogi. (Please tick this box to unlock hardware controls).
+                            </span>
+                        </label>
+                    </div>
+
+                    <!-- LOCKED UNTIL USER TICKS THE BOX ABOVE -->
+                    <div id="hardwareInteractiveZone" class="hardware-locked-zone">
+                        <div class="grid-2 mb-3">
+                            <div class="p-2 clean-card text-center">
+                                <h4><i class="fa-solid fa-usb text-primary"></i> Direct Cable Connection</h4>
+                                <p class="small-text mb-2">Connect a smart switch controller using a USB cable</p>
+                                <button class="primary-btn sm-btn hover-pop" onclick="connectSerialHardware()"><i class="fa-solid fa-link"></i> Connect Cable</button>
+                            </div>
+                            <div class="p-2 clean-card text-center">
+                                <h4><i class="fa-solid fa-wifi text-primary"></i> Wireless Wi-Fi Smart Switch</h4>
+                                <p class="small-text mb-1">Enter your local Wi-Fi switch address and secret key</p>
+                                <div class="grid-2 mb-1">
+                                    <input type="text" id="iotCutoffEndpoint" value="http://192.168.1.50/switch" placeholder="Local Wi-Fi Address">
+                                    <input type="password" id="espAuthToken" value="" placeholder="Switch Secret Key" autocomplete="off">
+                                </div>
                             </div>
                         </div>
+                        <div class="table-container">
+                            <table>
+                                <thead><tr><th>Switch Channel</th><th>Connected Appliance</th><th>Current Status</th><th>Turn ON / OFF</th></tr></thead>
+                                <tbody>
+                                    <tr><td><b>Switch 1</b></td><td>Heavy Appliance 1 (AC)</td><td><span class="badge light-green-bg" id="gpio16Status">ON</span></td><td><label class="switch"><input type="checkbox" checked onchange="sendRealHardwareRelay(16, this.checked)"><span class="slider"></span></label></td></tr>
+                                    <tr><td><b>Switch 2</b></td><td>Heavy Appliance 2 (Geyser)</td><td><span class="badge light-red-bg" id="gpio17Status">OFF</span></td><td><label class="switch"><input type="checkbox" onchange="sendRealHardwareRelay(17, this.checked)"><span class="slider"></span></label></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="p-2 mt-2" style="background:var(--bg-color); border-radius:8px; font-size:0.84rem;" id="espConsoleLog">Status: Please tick the agreement box above to enable smart hardware switches.</div>
                     </div>
-                    <div class="table-container">
-                        <table>
-                            <thead><tr><th>GPIO Pin</th><th>Connected Circuit</th><th>Relay Status</th><th>Manual Control</th></tr></thead>
-                            <tbody>
-                                <tr><td><code>GPIO 16</code></td><td>Heavy Load 1 (AC)</td><td><span class="badge light-green-bg" id="gpio16Status">ACTIVE / ON</span></td><td><label class="switch"><input type="checkbox" checked onchange="sendRealHardwareRelay(16, this.checked)"><span class="slider"></span></label></td></tr>
-                                <tr><td><code>GPIO 17</code></td><td>Heavy Load 2 (Geyser)</td><td><span class="badge light-red-bg" id="gpio17Status">CUT OFF</span></td><td><label class="switch"><input type="checkbox" onchange="sendRealHardwareRelay(17, this.checked)"><span class="slider"></span></label></td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="p-2 mt-2" style="background:var(--bg-color); border-radius:8px; font-family:monospace; font-size:0.82rem;" id="espConsoleLog">[Gateway Log]: HMAC-SHA256 time-stamped signature security active.</div>
                 </div>
             </div>
 
-            <!-- TAB 11: AUDIT & LEDGER -->
+            <!-- TAB 11: REPORTS & HISTORY -->
             <div id="audit" class="feature-content hidden">
                 <div class="grid-2">
                     <div class="clean-card">
                         <div class="flex-between mb-2">
-                            <h3>Carbon Footprint & Export</h3>
-                            <button class="primary-btn sm-btn hover-pop" style="background:#10B981;" onclick="exportYearlyExcel()"><i class="fa-solid fa-file-excel"></i> Export CSV</button>
+                            <h3>Monthly Summary & Download</h3>
+                            <button class="primary-btn sm-btn hover-pop" style="background:#10B981;" onclick="exportYearlyExcel()"><i class="fa-solid fa-file-excel"></i> Download Excel</button>
                         </div>
-                        <p class="mb-1">Monthly Load: <b id="autoAuditUnits" class="text-primary">0.0 kWh</b></p>
-                        <p class="mb-1">Est. Bill: <b id="autoAuditBill" class="danger-text">₹0.00</b></p>
-                        <p class="mb-2">Carbon Emissions: <b id="autoAuditCarbon" class="green-text">0.0 kg CO2</b></p>
-                        <button class="primary-btn sm-btn hover-pop" onclick="downloadInvoicePDF()"><i class="fa-solid fa-file-pdf"></i> Download PDF Summary</button>
+                        <p class="mb-1">Monthly Usage: <b id="autoAuditUnits" class="text-primary">0.0 Units</b></p>
+                        <p class="mb-1">Estimated Bill: <b id="autoAuditBill" class="danger-text">₹0.00</b></p>
+                        <p class="mb-2">Environment Impact: <b id="autoAuditCarbon" class="green-text">0.0 kg CO2</b></p>
+                        <button class="primary-btn sm-btn hover-pop" onclick="downloadInvoicePDF()"><i class="fa-solid fa-file-pdf"></i> Download PDF Bill Report</button>
                     </div>
                     <div class="clean-card">
-                        <h3>Settlement Ledger</h3>
+                        <h3>Past Bill Records</h3>
                         <div class="table-container">
                             <table>
-                                <thead><tr><th>Ref ID</th><th>Units</th><th>Amount</th><th>Status</th></tr></thead>
+                                <thead><tr><th>Receipt No</th><th>Units</th><th>Amount</th><th>Status</th></tr></thead>
                                 <tbody id="sixMonthTableBody"></tbody>
                             </table>
                         </div>
@@ -885,33 +1000,33 @@
                 </div>
             </div>
 
-            <!-- TAB 12: SAVINGS SIMULATOR -->
+            <!-- TAB 12: SAVINGS CALCULATOR -->
             <div id="simulator" class="feature-content hidden">
                 <div class="clean-card text-center" style="max-width:650px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-sliders text-primary hover-pop"></i> Monthly Savings Simulator</h3>
+                    <h3><i class="fa-solid fa-sliders text-primary hover-pop"></i> Monthly Savings Calculator</h3>
                     <div class="grid-2 text-left mt-2">
-                        <div class="form-group"><label>Monthly Units (kWh)</label><input type="number" id="simUserUnits" value="300" oninput="calculateSimulator()"></div>
-                        <div class="form-group"><label>Average Rate (₹/Unit)</label><input type="number" id="simUserRate" value="7.5" oninput="calculateSimulator()"></div>
+                        <div class="form-group"><label>Monthly Units</label><input type="number" id="simUserUnits" value="300" oninput="calculateSimulator()"></div>
+                        <div class="form-group"><label>Rate per Unit (₹)</label><input type="number" id="simUserRate" value="7.5" oninput="calculateSimulator()"></div>
                     </div>
                     <div class="p-2 mt-2" style="background:var(--bg-color); border-radius:10px;">
-                        <label>Reduction Target: <b id="simPctVal" class="text-primary">15</b>%</label>
+                        <label>If I reduce usage by: <b id="simPctVal" class="text-primary">15</b>%</label>
                         <input type="range" id="simSlider" min="5" max="50" value="15" oninput="calculateSimulator()" class="mt-1" style="cursor: pointer;">
                     </div>
                     <div class="grid-2 mt-2">
-                        <div class="p-2 clean-card"><p class="small-text">Units Saved</p><h2 class="green-text" id="simUnitsResult">45 kWh</h2></div>
+                        <div class="p-2 clean-card"><p class="small-text">Electricity Saved</p><h2 class="green-text" id="simUnitsResult">45 Units</h2></div>
                         <div class="p-2 clean-card"><p class="small-text">Money Saved</p><h2 class="text-primary" id="simSavingsResult">₹338</h2></div>
                     </div>
                 </div>
             </div>
 
-            <!-- TAB 13: BILL SETTLEMENT -->
+            <!-- TAB 13: PAY BILL -->
             <div id="payment" class="feature-content hidden">
                 <div class="clean-card text-center" style="max-width:480px; margin:0 auto; padding:2.2rem;">
                     <i class="fa-solid fa-file-invoice-dollar text-primary hover-pop" style="font-size:3rem; margin-bottom: 10px;"></i>
-                    <h3 class="mt-2">Bill Settlement</h3>
-                    <p class="small-text mb-2">Computed according to active tariff rules</p>
+                    <h3 class="mt-2">Pay Electricity Bill</h3>
+                    <p class="small-text mb-2">Estimated total based on your connected appliances</p>
                     <h1 class="text-primary mb-3" id="paymentTabAmount" style="font-size:2.8rem; transition: transform 0.2s ease;">₹0.00</h1>
-                    <button class="primary-btn hover-pop" onclick="executeRealPayment()"><i class="fa-solid fa-shield-halved"></i> Authorize & Settle Bill</button>
+                    <button class="primary-btn hover-pop" onclick="executeRealPayment()"><i class="fa-solid fa-shield-halved"></i> Proceed to Pay</button>
                 </div>
             </div>
 
@@ -922,44 +1037,44 @@
                         <div style="display:flex; align-items:center; gap:12px;">
                             <div class="emcs-avatar"><i class="fa-solid fa-headset"></i></div>
                             <div>
-                                <h4 style="margin:0; color:#fff; font-family:'Poppins', sans-serif;">EMCS Helpdesk</h4>
-                                <small style="color:rgba(255,255,255,0.85); font-size:0.75rem;"><span class="emcs-online-dot"></span>Secure Support Channel</small>
+                                <h4 style="margin:0; color:#fff; font-family:'Poppins', sans-serif;">EMCS Support Desk</h4>
+                                <small style="color:rgba(255,255,255,0.85); font-size:0.75rem;"><span class="emcs-online-dot"></span>Direct Support Chat</small>
                             </div>
                         </div>
-                        <span style="font-size:0.8rem; background:rgba(255,255,255,0.15); padding:4px 10px; border-radius:8px;"><i class="fa-solid fa-lock"></i> Encrypted</span>
+                        <span style="font-size:0.8rem; background:rgba(255,255,255,0.15); padding:4px 10px; border-radius:8px;"><i class="fa-solid fa-lock"></i> Private</span>
                     </div>
                     <div class="emcs-chat-body" id="userChatMsgArea">
-                        <div class="emcs-bubble emcs-received">Namaste! How can we assist with your energy management today?<span class="emcs-time">Helpdesk</span></div>
+                        <div class="emcs-bubble emcs-received">Hello! How can we help you with your electricity bill or appliances today?<span class="emcs-time">Support Team</span></div>
                     </div>
                     <div class="emcs-input-bar">
-                        <input type="text" id="userChatInput" maxlength="500" placeholder="Type your inquiry..." onkeypress="if(event.key==='Enter') sendUserSupportMessage()">
+                        <input type="text" id="userChatInput" maxlength="500" placeholder="Write your message here..." onkeypress="if(event.key==='Enter') sendUserSupportMessage()">
                         <button class="emcs-send-btn hover-pop" onclick="sendUserSupportMessage()"><i class="fa-solid fa-paper-plane"></i></button>
                     </div>
                 </div>
             </div>
 
-            <!-- TAB 15: PROFILE & SECURITY -->
+            <!-- TAB 15: MY ACCOUNT -->
             <div id="profile" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-user-shield text-primary hover-pop"></i> Account Settings & Security</h3>
+                    <h3><i class="fa-solid fa-user-shield text-primary hover-pop"></i> My Account & Security</h3>
                     <div class="p-2 mb-3 flex-between mt-2" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
                         <div>
-                            <strong><i class="fa-solid fa-laptop-mobile text-primary"></i> Active Sessions</strong>
-                            <p class="small-text">Manage authorized client devices securely.</p>
+                            <strong><i class="fa-solid fa-laptop-mobile text-primary"></i> Logged-in Devices</strong>
+                            <p class="small-text">Check phones or computers where your account is logged in.</p>
                         </div>
-                        <button class="secondary-btn sm-btn hover-pop" onclick="openDeviceManager()">Manage Devices</button>
+                        <button class="secondary-btn sm-btn hover-pop" onclick="openDeviceManager()">View Devices</button>
                     </div>
 
-                    <div class="form-group"><label>Consumer Full Name</label><input type="text" id="profileName" placeholder="Enter Full Name"></div>
+                    <div class="form-group"><label>Full Name</label><input type="text" id="profileName" placeholder="Enter Full Name"></div>
                     <div class="form-group"><label>Consumer ID</label><input type="text" id="profileId" readonly style="opacity: 0.7;"></div>
-                    <button class="primary-btn hover-pop" onclick="saveUserProfile()"><i class="fa-solid fa-floppy-disk"></i> Save & Sync</button>
+                    <button class="primary-btn hover-pop" onclick="saveUserProfile()"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
                     <p id="profileMsg" class="green-text text-center mt-2"></p>
 
                     <hr style="border:0; border-top:1px solid var(--card-border); margin:20px 0;">
                     <div class="p-2" style="background:rgba(239, 68, 68, 0.06); border:1px solid rgba(239, 68, 68, 0.25); border-radius:10px;">
-                        <strong class="danger-text"><i class="fa-solid fa-triangle-exclamation"></i> Deactivation & Retention Policy</strong>
-                        <p class="small-text mt-1 mb-2">Deactivating your account logs out all endpoints. Data is retained in secure archives for 2 years prior to automatic purge.</p>
-                        <button type="button" class="danger-btn sm-btn hover-pop" onclick="deleteMyAccount()"><i class="fa-solid fa-user-xmark"></i> Deactivate & Schedule Deletion</button>
+                        <strong class="danger-text"><i class="fa-solid fa-triangle-exclamation"></i> Close My Account</strong>
+                        <p class="small-text mt-1 mb-2">Closing your account logs out all devices immediately.</p>
+                        <button type="button" class="danger-btn sm-btn hover-pop" onclick="deleteMyAccount()"><i class="fa-solid fa-user-xmark"></i> Deactivate Account</button>
                     </div>
                 </div>
             </div>
@@ -979,24 +1094,24 @@
     <!-- Modals Overlay -->
     <div id="popupOverlay" class="popup-overlay hidden" onclick="closeAllPopups()"></div>
 
-    <!-- 1. AI Assistant Modal -->
+    <!-- 1. KamAbhi AI / EMCS AI Assistant Modal -->
     <div id="aiModal" class="popup-modal hidden" style="max-width:520px;">
         <div class="chat-header">
-            <h4 style="margin:0;"><i class="fa-solid fa-robot"></i> EMCS Ai Energy Assistant</h4>
+            <h4 style="margin:0;"><i class="fa-solid fa-robot"></i> KamAbhi AI (EMCS Assistant)</h4>
             <button class="close-btn" onclick="closeAllPopups()"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="p-3" style="display:flex; flex-direction:column; height:62vh;">
             <div id="tabChatBox" style="flex:1; overflow-y:auto; background:var(--bg-color); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px; border: 1px solid var(--card-border);">
                 <div class="clean-card p-2" style="max-width:88%; align-self:flex-start; animation: bubbleSlideRight 0.3s ease;">
-                    <p class="small-text" style="color:var(--text-color);">Namaste! I am your EMCS Ai Energy Assistant. How can I assist with your load management today?</p>
-                    <button class="sm-btn mt-1 hover-pop" style="background:var(--accent-light); color:var(--primary);" onclick="speakFemaleVoice('Namaste! I am your EMCS Ai Assistant. How can I assist with your energy optimization today?')">
+                    <p class="small-text" style="color:var(--text-color);">Hello! I am KamAbhi AI, your EMCS electrical and energy saving assistant. Please log in to ask questions about reducing your bill, appliance safety, or smart switches.</p>
+                    <button class="sm-btn mt-1 hover-pop" style="background:var(--accent-light); color:var(--primary);" onclick="speakFemaleVoice('Hello! I am KamAbhi AI, your EMCS electrical and energy saving assistant.')">
                         <i class="fa-solid fa-volume-high"></i> Listen
                     </button>
                 </div>
             </div>
             <div style="display:flex; gap:8px; margin-top:12px;">
-                <input type="text" id="tabChatInput" maxlength="500" placeholder="Ask questions or command..." onkeypress="if(event.key==='Enter') sendTabChatMessage()">
-                <button class="primary-btn sm-btn hover-pop" onclick="sendTabChatMessage()"><i class="fa-solid fa-paper-plane"></i></button>
+                <input type="text" id="tabChatInput" maxlength="500" placeholder="Ask an electrical or energy saving question..." onkeypress="if(event.key==='Enter') sendTabChatMessage()">
+                <button class="primary-btn sm-btn hover-pop" id="aiSendBtn" onclick="sendTabChatMessage()"><i class="fa-solid fa-paper-plane"></i></button>
             </div>
         </div>
     </div>
@@ -1004,7 +1119,7 @@
     <!-- 2. Auth Modal (Login / Register / Forgot Access / Admin Console) -->
     <div id="loginModal" class="popup-modal hidden">
         <div class="chat-header">
-            <h4 style="margin:0;"><i class="fa-solid fa-shield-halved"></i> Secure Access Portal</h4>
+            <h4 style="margin:0;"><i class="fa-solid fa-shield-halved"></i> Account Access</h4>
             <button class="close-btn" onclick="closeAllPopups()"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="p-3" style="overflow-y:auto;">
@@ -1012,11 +1127,12 @@
                 <button class="active" onclick="switchAuthTab('login', this)">Login</button>
                 <button onclick="switchAuthTab('register', this)">Register</button>
                 <button onclick="switchAuthTab('forgot', this)">Forgot Access</button>
-                <button onclick="switchAuthTab('admin', this)">Console</button>
+                <button onclick="switchAuthTab('admin', this)">Admin</button>
             </div>
 
-            <!-- Login Form -->
+            <!-- Login Form (With Invisible Honeypot Trap for Bots) -->
             <form id="modalLoginForm" onsubmit="handleSecureLogin(event)" style="animation: fadeUp 0.3s ease;">
+                <input type="text" id="loginHoneypot" name="_emcs_trap" class="emcs-visually-hidden" tabindex="-1" autocomplete="off">
                 <div class="form-group">
                     <label>Mobile Number</label>
                     <div class="phone-input-group">
@@ -1033,12 +1149,12 @@
                         </button>
                     </div>
                 </div>
-                <button type="submit" class="primary-btn hover-pop">Authenticate & Sign In</button>
+                <button type="submit" class="primary-btn hover-pop">Login</button>
             </form>
 
-            <!-- Register Form (Clean Labels + Silent Backend Security) -->
+            <!-- Register Form (With Invisible Honeypot Trap for Bots) -->
             <form id="modalRegisterForm" class="hidden" onsubmit="handleSecureRegister(event)" style="animation: fadeUp 0.3s ease;">
-                <input type="text" id="regHoneypot" name="_bot_honeypot" style="display:none;" tabindex="-1" autocomplete="off">
+                <input type="text" id="regHoneypot" name="_emcs_trap" class="emcs-visually-hidden" tabindex="-1" autocomplete="off">
                 <div class="form-group"><label>Full Name</label><input type="text" id="regName" placeholder="Enter Your Full Name" required></div>
                 <div class="form-group">
                     <label>Mobile Number</label>
@@ -1070,12 +1186,12 @@
                         <span>I accept the <span class="legal-link" onclick="event.preventDefault(); openLegalModal('privacy')">Privacy Policy</span> and <span class="legal-link" onclick="event.preventDefault(); openLegalModal('terms')">Terms & Conditions</span>.</span>
                     </label>
                 </div>
-                <button type="submit" class="primary-btn hover-pop">Create Secure Account</button>
+                <button type="submit" class="primary-btn hover-pop">Create Account</button>
             </form>
 
             <!-- Forgot Credentials Form -->
             <form id="modalForgotForm" class="hidden" onsubmit="handleForgotReset(event)" style="animation: fadeUp 0.3s ease;">
-                <p class="small-text mb-2 text-primary"><b>Account Recovery:</b> Verify identity using Consumer ID or Email ID.</p>
+                <p class="small-text mb-2 text-primary"><b>Account Recovery:</b> Reset your PIN or Password using your Consumer ID or Email.</p>
                 <div class="form-group">
                     <label>Mobile Number</label>
                     <div class="phone-input-group">
@@ -1083,19 +1199,19 @@
                         <input type="tel" id="forgotMobile" maxlength="10" pattern="[0-9]{10}" placeholder="Enter Your 10 Digit Mobile No" required>
                     </div>
                 </div>
-                <div class="form-group"><label>Full Name</label><input type="text" id="forgotName" placeholder="Enter Registered Full Name" required></div>
+                <div class="form-group"><label>Full Name</label><input type="text" id="forgotName" placeholder="Enter Your Full Name" required></div>
 
                 <div class="form-group" style="background:var(--bg-color); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
-                    <label style="margin-bottom:8px;">Recover Account Using:</label>
+                    <label style="margin-bottom:8px;">Verify Using:</label>
                     <div style="display:flex; gap:15px; font-size:0.85rem; font-weight:500; margin-bottom:10px;">
                         <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="recoveryType" value="cid" checked onchange="toggleForgotUI()" style="width:auto;"> Consumer ID</label>
-                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="recoveryType" value="email" onchange="toggleForgotUI()" style="width:auto;"> Email ID</label>
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="recoveryType" value="email" onchange="toggleForgotUI()" style="width:auto;"> Email Address</label>
                     </div>
                     <input type="text" id="forgotRecoveryValue" placeholder="Enter Consumer ID" minlength="12" maxlength="12" style="text-transform:uppercase;" required>
                 </div>
 
                 <div class="form-group" style="background:var(--bg-color); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
-                    <label style="margin-bottom:8px;">Set New Security Method</label>
+                    <label style="margin-bottom:8px;">Set New PIN or Password</label>
                     <div style="display:flex; gap:15px; font-size:0.85rem; font-weight:500; margin-bottom:10px;">
                         <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="forgotAuthType" value="pin" checked onchange="toggleForgotAuthUI()" style="width:auto;"> PIN</label>
                         <label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="radio" name="forgotAuthType" value="password" onchange="toggleForgotAuthUI()" style="width:auto;"> Password</label>
@@ -1107,22 +1223,22 @@
                         </button>
                     </div>
                 </div>
-                <button type="submit" class="primary-btn hover-pop">Verify & Reset Access</button>
+                <button type="submit" class="primary-btn hover-pop">Reset Now</button>
             </form>
 
             <!-- Admin Login Form -->
             <form id="modalAdminForm" class="hidden" onsubmit="handleSecureAdminLogin(event)" style="animation: fadeUp 0.3s ease;">
-                <div class="form-group"><label>Staff Username (Blank for Owner)</label><input type="text" id="adminLoginUser" placeholder="Optional for Master Owner"></div>
+                <div class="form-group"><label>Team Username (Leave blank for Owner)</label><input type="text" id="adminLoginUser" placeholder="Optional for Owner"></div>
                 <div class="form-group">
-                    <label>Administrator Access Key</label>
+                    <label>Admin Access Key</label>
                     <div style="position: relative; display: flex; align-items: center;">
-                        <input type="password" id="adminLoginPass" placeholder="Enter Security Access Key" required style="padding-right: 42px; width: 100%;">
-                        <button type="button" onclick="togglePasswordVisibility('adminLoginPass', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide Password">
+                        <input type="password" id="adminLoginPass" placeholder="Enter Access Key" required style="padding-right: 42px; width: 100%;">
+                        <button type="button" onclick="togglePasswordVisibility('adminLoginPass', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 5px; width: auto;" title="Show/Hide">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
                 </div>
-                <button type="submit" class="danger-btn hover-pop">Open Secure Console</button>
+                <button type="submit" class="danger-btn hover-pop">Open Admin Panel</button>
             </form>
 
             <div id="modalAuthError" class="error-text"></div>
@@ -1132,40 +1248,40 @@
     <!-- 3. Custom Tariff Modal -->
     <div id="customTariffModal" class="popup-modal hidden" style="max-width:520px;">
         <div class="chat-header">
-            <h4 style="margin:0;"><i class="fa-solid fa-sliders"></i> Custom Tariff Rate Configuration</h4>
+            <h4 style="margin:0;"><i class="fa-solid fa-sliders"></i> Set My Custom Electricity Rate</h4>
             <button class="close-btn" onclick="toggleCustomTariffModal()"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="p-3" style="overflow-y:auto; max-height:80vh;">
-            <p class="small-text mb-2">Define custom slab thresholds and fixed demand charges.</p>
+            <p class="small-text mb-2">Enter your local electricity unit rates and fixed monthly charges.</p>
             <div class="grid-2">
                 <div class="form-group"><label>Fixed Charge (₹/kW)</label><input type="number" id="custFixedCharge" placeholder="75"></div>
                 <div class="form-group"><label>Surcharge (%)</label><input type="number" id="custFppcaPct" placeholder="8.5" step="0.1"></div>
             </div>
-            <div class="form-group"><label>Duty (%)</label><input type="number" id="custDutyPct" placeholder="5.0" step="0.1"></div>
-            <h5 class="mt-2 mb-1">Slab Tier Rates (₹/kWh)</h5>
+            <div class="form-group"><label>Tax / Duty (%)</label><input type="number" id="custDutyPct" placeholder="5.0" step="0.1"></div>
+            <h5 class="mt-2 mb-1">Unit Rates (₹/Unit)</h5>
             <div class="grid-2 mb-2">
-                <div class="form-group"><label>Slab 1 Limit</label><input type="number" id="custSlab1Limit" placeholder="100"></div>
-                <div class="form-group"><label>Slab 1 Rate</label><input type="number" id="custSlab1Rate" placeholder="4.50" step="0.05"></div>
+                <div class="form-group"><label>First Slab Limit (Units)</label><input type="number" id="custSlab1Limit" placeholder="100"></div>
+                <div class="form-group"><label>First Slab Rate (₹)</label><input type="number" id="custSlab1Rate" placeholder="4.50" step="0.05"></div>
             </div>
             <div class="grid-2 mb-2">
-                <div class="form-group"><label>Slab 2 Limit</label><input type="number" id="custSlab2Limit" placeholder="300"></div>
-                <div class="form-group"><label>Slab 2 Rate</label><input type="number" id="custSlab2Rate" placeholder="7.00" step="0.05"></div>
+                <div class="form-group"><label>Second Slab Limit (Units)</label><input type="number" id="custSlab2Limit" placeholder="300"></div>
+                <div class="form-group"><label>Second Slab Rate (₹)</label><input type="number" id="custSlab2Rate" placeholder="7.00" step="0.05"></div>
             </div>
-            <div class="form-group mb-3"><label>Above Slab 2 Rate</label><input type="number" id="custSlabFinalRate" placeholder="9.00" step="0.05"></div>
-            <button type="button" class="primary-btn w-100 hover-pop" onclick="saveCustomTariffSettings()"><i class="fa-solid fa-floppy-disk"></i> Save & Apply</button>
+            <div class="form-group mb-3"><label>Rate Above Second Slab (₹)</label><input type="number" id="custSlabFinalRate" placeholder="9.00" step="0.05"></div>
+            <button type="button" class="primary-btn w-100 hover-pop" onclick="saveCustomTariffSettings()"><i class="fa-solid fa-floppy-disk"></i> Save My Rates</button>
         </div>
     </div>
 
     <!-- 4. Device Manager Modal -->
     <div id="deviceManagerModal" class="popup-modal hidden" style="max-width:560px;">
         <div class="chat-header">
-            <h4 style="margin:0;"><i class="fa-solid fa-laptop-mobile"></i> Authorized Client Sessions</h4>
+            <h4 style="margin:0;"><i class="fa-solid fa-laptop-mobile"></i> Logged-in Devices</h4>
             <button class="close-btn" onclick="closeAllPopups()"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="p-3">
             <div class="table-container">
                 <table>
-                    <thead><tr><th>Client Device</th><th>Timestamp</th><th>Status</th><th>Action</th></tr></thead>
+                    <thead><tr><th>Device</th><th>Login Time</th><th>Status</th><th>Action</th></tr></thead>
                     <tbody id="deviceSessionList"></tbody>
                 </table>
             </div>
@@ -1181,14 +1297,14 @@
         <div class="p-3" id="legalModalBody" style="line-height:1.6; overflow-y:auto; max-height:70vh;"></div>
     </div>
 
-    <!-- 6. Admin User KYC, 24-Month Billing & IP Forensics Modal -->
-    <div id="adminUserKycModal" class="popup-modal hidden" style="max-width:620px;">
+    <!-- 6. Admin User Details, Block/Delete Controls, 24-Month Bills & Login History Modal -->
+    <div id="adminUserKycModal" class="popup-modal hidden" style="max-width:640px;">
         <div class="chat-header">
-            <h4 style="margin:0;"><i class="fa-solid fa-address-card"></i> Consumer KYC & Forensics</h4>
+            <h4 style="margin:0;"><i class="fa-solid fa-address-card"></i> User Profile & Complete History</h4>
             <button class="close-btn" onclick="closeAllPopups()"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="p-3" style="overflow-y:auto; max-height:85vh;">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
                 <div>
                     <h2 id="kycName" class="text-primary" style="margin:0;">Consumer Name</h2>
                     <p id="kycConsumerId" class="small-text">EM100XXXXXXX</p>
@@ -1196,24 +1312,31 @@
                 <span id="kycStatusBadge" class="badge light-green-bg">Active</span>
             </div>
 
-            <div class="grid-2 mb-3">
-                <div class="p-2 clean-card"><p class="card-label">Registered Mobile</p><h4 id="kycMobile">--</h4></div>
-                <div class="p-2 clean-card"><p class="card-label">Registered Email</p><h4 id="kycEmail" style="font-size:0.9rem; word-break:break-all;">--</h4></div>
-                <div class="p-2 clean-card"><p class="card-label">Sanctioned Load / Joined</p><h4><span id="kycSanctioned">-- kW</span> • <small id="kycJoinDate" class="small-text">--</small></h4></div>
-                <div class="p-2 clean-card" style="border-left: 3px solid var(--accent);"><p class="card-label">Est. Lifetime Usage</p><h4 id="kycLifetimeUnits" class="text-accent">-- kWh</h4></div>
+            <!-- ADMIN ACTION BAR: BLOCK USER / DELETE USER / CLEAR AI HISTORY -->
+            <div style="display:flex; gap:10px; margin-bottom:15px; padding:10px; background:rgba(239, 68, 68, 0.05); border:1px solid rgba(239, 68, 68, 0.2); border-radius:10px; flex-wrap:wrap;">
+                <button type="button" class="sm-btn hover-pop" style="background:#F59E0B; color:#fff; flex:1;" id="btnAdminBlockUser" onclick="toggleUserBlockAdmin()"><i class="fa-solid fa-ban"></i> Block User</button>
+                <button type="button" class="sm-btn danger-bg hover-pop" style="flex:1;" onclick="deleteUserAdmin()"><i class="fa-solid fa-user-xmark"></i> Delete User</button>
+                <button type="button" class="sm-btn secondary-btn hover-pop" style="flex:1;" onclick="clearAiChatAdmin()"><i class="fa-solid fa-robot"></i> Clear AI History</button>
             </div>
 
-            <!-- TABS FOR IP FORENSICS AND 24-MONTH BILLING -->
+            <div class="grid-2 mb-3">
+                <div class="p-2 clean-card"><p class="card-label">Mobile Number</p><h4 id="kycMobile">--</h4></div>
+                <div class="p-2 clean-card"><p class="card-label">Email Address</p><h4 id="kycEmail" style="font-size:0.9rem; word-break:break-all;">--</h4></div>
+                <div class="p-2 clean-card"><p class="card-label">Load Limit & Joined Date</p><h4><span id="kycSanctioned">-- kW</span> • <small id="kycJoinDate" class="small-text">--</small></h4></div>
+                <div class="p-2 clean-card" style="border-left: 3px solid var(--accent);"><p class="card-label">Total Lifetime Usage</p><h4 id="kycLifetimeUnits" class="text-accent">-- Units</h4></div>
+            </div>
+
+            <!-- TABS FOR LOGIN DEVICES AND 24-MONTH BILLS -->
             <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <button type="button" class="sm-btn primary-btn w-100 hover-pop" onclick="document.getElementById('kycTabSessions').classList.remove('hidden'); document.getElementById('kycTabBilling').classList.add('hidden')"><i class="fa-solid fa-laptop-mobile"></i> IP & Device Logins</button>
-                <button type="button" class="sm-btn secondary-btn w-100 hover-pop" onclick="document.getElementById('kycTabBilling').classList.remove('hidden'); document.getElementById('kycTabSessions').classList.add('hidden')"><i class="fa-solid fa-file-invoice-dollar"></i> 24-Month Billing Ledger</button>
+                <button type="button" class="sm-btn primary-btn w-100 hover-pop" onclick="document.getElementById('kycTabSessions').classList.remove('hidden'); document.getElementById('kycTabBilling').classList.add('hidden')"><i class="fa-solid fa-laptop-mobile"></i> Login Devices & IPs</button>
+                <button type="button" class="sm-btn secondary-btn w-100 hover-pop" onclick="document.getElementById('kycTabBilling').classList.remove('hidden'); document.getElementById('kycTabSessions').classList.add('hidden')"><i class="fa-solid fa-file-invoice-dollar"></i> 24-Month Bills & Payments</button>
             </div>
 
             <!-- SESSIONS & IP TABLE -->
             <div id="kycTabSessions" class="p-2 mb-2" style="background:var(--bg-color); border-radius:8px; border:1px solid var(--card-border);">
                 <div class="table-container" style="max-height:170px; overflow-y:auto;">
                     <table>
-                        <thead><tr><th>Device OS / Browser</th><th>IP Address</th><th>Login Timestamp</th></tr></thead>
+                        <thead><tr><th>Device & Browser</th><th>IP Address</th><th>Login Time</th></tr></thead>
                         <tbody id="kycSessionList"></tbody>
                     </table>
                 </div>
@@ -1223,22 +1346,22 @@
             <div id="kycTabBilling" class="p-2 mb-2 hidden" style="background:var(--bg-color); border-radius:8px; border:1px solid var(--card-border);">
                 <div class="table-container" style="max-height:170px; overflow-y:auto;">
                     <table>
-                        <thead><tr><th>Month</th><th>Txn ID</th><th>Units</th><th>Billed Amt</th><th>Status</th></tr></thead>
+                        <thead><tr><th>Month</th><th>Receipt ID</th><th>Units</th><th>Bill Amount</th><th>Status</th></tr></thead>
                         <tbody id="kycBillingList"></tbody>
                     </table>
                 </div>
             </div>
 
             <div class="p-2" style="background:var(--bg-color); border-radius:8px; border:1px solid var(--card-border);">
-                <p class="card-label mb-1">Active Appliances (<span id="kycAppCount">0</span>)</p>
+                <p class="card-label mb-1">Connected Appliances (<span id="kycAppCount">0</span>)</p>
                 <div id="kycAppList" style="font-size:0.85rem; color:var(--text-color); max-height:100px; overflow-y:auto;">
-                    No appliances found.
+                    No appliances added.
                 </div>
             </div>
         </div>
     </div>
 
-    <button id="floatingAIBtn" class="hover-pop" onclick="openAIModal()" title="EMCS Ai Assistant"><i class="fa-solid fa-robot"></i></button>
+    <button id="floatingAIBtn" class="hover-pop" onclick="openAIModal()" title="KamAbhi AI Assistant"><i class="fa-solid fa-robot"></i></button>
     <script src="script.js"></script>
 </body>
 </html>
