@@ -11,7 +11,7 @@ let GoogleGenerativeAI = null;
 try {
     ({ GoogleGenerativeAI } = require('@google/generative-ai'));
 } catch (ignore) {
-    // Fallback to native HTTPS/fetch if package is not installed
+    // Fallback to native fetch if package is not installed
 }
 
 const app = express();
@@ -116,7 +116,7 @@ class BloomFilter {
 const emcsBloom = new BloomFilter();
 
 // ===================================================================
-// INPUT SANITIZATION, EMAIL BLOCKER & ENCRYPTED LOG HELPERS
+// STRICT VALIDATORS (EMAIL TLD WHITELIST + 12-DIGIT NUMERIC CID)
 // ===================================================================
 const sanitizeInput = (val, max = 150) => {
     if (typeof val === 'string' || typeof val === 'number') {
@@ -131,7 +131,19 @@ const DISPOSABLE_EMAIL_DOMAINS = new Set([
     'sharklasers.com', 'getnada.com', 'maildrop.cc', 'dispostable.com',
     'fakeinbox.com', 'throwawaymail.com', 'mohmal.com', 'emailondeck.com',
     'mailnesia.com', 'mintemail.com', 'mytemp.email', 'burnermail.io',
-    'tempmailo.com', 'inboxkitten.com', 'mailcatch.com', 'crazymailing.com'
+    'tempmailo.com', 'inboxkitten.com', 'mailcatch.com', 'crazymailing.com',
+    'tempail.com', 'throwaway.L', 'yopmail.fr', 'yopmail.net'
+]);
+
+// Strict Approved Top-Level Domains (Blocks typos like .coh, .con, .cmo, etc.)
+const VALID_TLDS = new Set([
+    'com', 'in', 'org', 'net', 'edu', 'gov', 'co', 'io', 'me', 'biz', 'info', 'ac', 'uk', 'us'
+]);
+
+// Catch common typo domains of major providers
+const BLOCKED_TYPO_DOMAINS = new Set([
+    'gamil.com', 'gmial.com', 'gmai.com', 'gmail.co', 'gmail.con', 'gmail.coh',
+    'yaho.com', 'yahooo.com', 'outlok.com', 'hotmial.com'
 ]);
 
 function validateStrictEmail(rawEmail) {
@@ -153,10 +165,22 @@ function validateStrictEmail(rawEmail) {
     if (!/^[a-z0-9]+(-[a-z0-9]+)*(\.[a-z0-9]+(-[a-z0-9]+)*)+$/.test(domain)) {
         return { valid: false, message: 'Please enter a valid email address.' };
     }
-    const tld = domain.split('.').pop();
-    if (!/^[a-z]{2,10}$/.test(tld) || DISPOSABLE_EMAIL_DOMAINS.has(domain)) {
-        return { valid: false, message: 'Please use a valid personal or work email address.' };
+
+    if (DISPOSABLE_EMAIL_DOMAINS.has(domain) || BLOCKED_TYPO_DOMAINS.has(domain)) {
+        return { valid: false, message: 'Please enter a valid personal or work email address (e.g. name@gmail.com).' };
     }
+
+    const domainSegments = domain.split('.');
+    const lastTld = domainSegments[domainSegments.length - 1];
+    const secondLastTld = domainSegments.length >= 3 ? domainSegments[domainSegments.length - 2] : null;
+
+    if (!VALID_TLDS.has(lastTld)) {
+        return { valid: false, message: `Invalid email extension (.${lastTld}). Please use standard extensions like .com or .in.` };
+    }
+    if (secondLastTld && domainSegments.length >= 3 && !VALID_TLDS.has(secondLastTld) && secondLastTld.length <= 3) {
+        return { valid: false, message: 'Please enter a valid email domain.' };
+    }
+
     return { valid: true, email: clean };
 }
 
@@ -165,12 +189,12 @@ function validateSecurityCredential(authType, rawCred) {
     const cred = rawCred.trim();
     if (authType === 'pin') {
         if (!/^[0-9]{4,6}$/.test(cred)) {
-            return { valid: false, message: 'Please enter a valid PIN.' };
+            return { valid: false, message: 'Please enter a valid 4 to 6 digit PIN.' };
         }
         return { valid: true, credential: cred, authType: 'pin' };
     } else if (authType === 'password') {
         if (cred.length < 8 || cred.length > 16 || /[\0]/.test(cred)) {
-            return { valid: false, message: 'Please enter a valid Password.' };
+            return { valid: false, message: 'Please enter a valid Password (8 to 16 characters).' };
         }
         return { valid: true, credential: cred, authType: 'password' };
     }
@@ -244,9 +268,9 @@ app.use('/api', globalApiLimiter);
 // ===================================================================
 const UserSchema = new mongoose.Schema({
     tenantId: { type: String, default: TENANT_ID, required: true, index: true },
-    mobile: { type: String, required: true, index: true },
+    mobile: { type: String, required: true, match: /^[0-9]{10}$/, index: true },
     email: { type: String, required: true, lowercase: true, index: true },
-    consumerId: { type: String, required: true, minlength: 12, maxlength: 12, index: true },
+    consumerId: { type: String, required: true, match: /^[0-9]{12}$/, minlength: 12, maxlength: 12, index: true },
     name: { type: String, required: true },
     authType: { type: String, enum: ['pin', 'password'], default: 'pin' },
     credentialHash: { type: String, required: true },
@@ -336,7 +360,7 @@ const CmsSchema = new mongoose.Schema({
     },
     privacy: {
         type: String,
-        default: '1. INFORMATION WE COLLECT: We collect your Name, Mobile Number, Email Address, and 12-Character Consumer ID to create your account and help you recover forgotten credentials.\n\n2. DEVICE & IP SECURITY: For your account safety and to prevent unauthorized access, we record the device model and IP address when you log in.\n\n3. AI CHAT HISTORY: Questions asked to KamAbhi AI (EMCS AI) are saved in your account history to help you review past electrical advice and are automatically deleted after 3 months (90 days).\n\n4. ACCOUNT DELETION: If you deactivate your account, all devices are logged out immediately and records are retained for 2 years for legal compliance before permanent deletion.'
+        default: '1. INFORMATION WE COLLECT: We collect your Name, Mobile Number, Verified Email Address, and 12-Digit Consumer ID to create your account and help you recover forgotten credentials.\n\n2. DEVICE & IP SECURITY: For your account safety and to prevent unauthorized access, we record the device model and IP address when you log in.\n\n3. AI CHAT HISTORY: Questions asked to KamAbhi AI (EMCS AI) are saved in your account history to help you review past electrical advice and are automatically deleted after 3 months (90 days).\n\n4. ACCOUNT DELETION: If you deactivate your account, all devices are logged out immediately and records are retained for 2 years for legal compliance before permanent deletion.'
     },
     terms: {
         type: String,
@@ -345,7 +369,7 @@ const CmsSchema = new mongoose.Schema({
     faqs: {
         type: Array,
         default: [
-            { q: 'How can I reset my forgotten PIN or Password?', a: 'Click on Login, choose "Forgot Access", and verify your account using either your Consumer ID or your Email Address.' },
+            { q: 'How can I log in or reset my forgotten PIN or Password?', a: 'You can log in using either your 10-digit Mobile Number or your Email Address. If you forget your PIN or Password, click "Forgot Access" and verify using your 12-digit Consumer ID or Email Address.' },
             { q: 'Who is KamAbhi AI?', a: 'KamAbhi AI (EMCS AI) is your dedicated electrical safety and energy-saving assistant available after you log in.' },
             { q: 'How long is my AI chat history saved?', a: 'Your AI chat history is saved for 3 months (90 days) and then automatically deleted.' },
             { q: 'Can I connect smart Wi-Fi switches or a smart meter?', a: 'Yes! Tick the hardware responsibility agreement box in the Smart Hardware Control or My Appliances section to unlock wireless and cable switch controls.' }
@@ -434,7 +458,7 @@ async function dispatchEmergencyAlert(attackType, details, req) {
 const botHoneypotShield = async (req, res, next) => {
     const trapVal = req.body?._emcs_trap || req.body?._bot_honeypot;
     if (trapVal && String(trapVal).trim().length > 0) {
-        const attemptedId = sanitizeInput(req.body?.mobile || req.body?.consumerId || req.body?.email || 'Bot Script', 50);
+        const attemptedId = sanitizeInput(req.body?.loginValue || req.body?.mobile || req.body?.consumerId || req.body?.email || 'Bot Script', 50);
         await dispatchEmergencyAlert(
             'Bot / Script Trap Triggered',
             `Invisible form filled with "${sanitizeInput(trapVal, 40)}" by target: ${attemptedId}. Request blocked immediately.`,
@@ -491,7 +515,7 @@ async function strictAntiIdorShield(req, res, next) {
     ].filter(v => v !== undefined && v !== null && String(v).trim() !== '');
 
     for (const candidate of candidates) {
-        if (String(candidate).trim().toUpperCase() !== String(req.user.consumerId).toUpperCase()) {
+        if (String(candidate).trim() !== String(req.user.consumerId)) {
             await dispatchEmergencyAlert(
                 'Cross-Account Tampering (IDOR)',
                 `User ${req.user.consumerId} attempted to access data of Consumer ID: ${sanitizeInput(candidate, 20)}`,
@@ -549,7 +573,6 @@ app.post('/api/errors/report', createLimiter(15, 60000), async (req, res) => {
 app.get('/api/admin/errors', authenticateAdmin, async (req, res) => {
     try {
         const rawLogs = await SystemError.find({ tenantId: TENANT_ID }).sort({ timestamp: -1 }).limit(100);
-        // Strictly mask any historical message to plain safe text
         const safeLogs = rawLogs.map(l => ({
             timestamp: l.timestamp,
             source: sanitizeInput(l.source || 'App', 30),
@@ -574,7 +597,7 @@ app.delete('/api/admin/errors/clear', authenticateAdmin, async (req, res) => {
 });
 
 // ===================================================================
-// USER AUTHENTICATION, REGISTRATION & DUAL RECOVERY ROUTES
+// USER REGISTRATION, DUAL LOGIN (MOBILE/EMAIL) & RECOVERY ROUTES
 // ===================================================================
 app.post('/api/auth/register', strictRegisterLimiter, botHoneypotShield, async (req, res) => {
     try {
@@ -583,7 +606,7 @@ app.post('/api/auth/register', strictRegisterLimiter, botHoneypotShield, async (
         }
 
         const mobile = sanitizeInput(req.body.mobile, 10);
-        const consumerId = sanitizeInput(req.body.consumerId, 12).toUpperCase();
+        const consumerId = sanitizeInput(req.body.consumerId, 12);
         const name = sanitizeInput(req.body.name, 60);
         const emailValidation = validateStrictEmail(req.body.email);
 
@@ -592,16 +615,23 @@ app.post('/api/auth/register', strictRegisterLimiter, botHoneypotShield, async (
         }
         const email = emailValidation.email;
 
+        // Strict 10-digit Mobile & 12-digit Numeric Consumer ID Validation (No Alphabets)
+        if (!/^[0-9]{10}$/.test(mobile)) {
+            return res.status(400).json({ success: false, message: 'Please enter a valid 10-digit Mobile Number.' });
+        }
+        if (!/^[0-9]{12}$/.test(consumerId)) {
+            return res.status(400).json({ success: false, message: 'Consumer ID must be strictly 12 numeric digits (0-9 only).' });
+        }
+        if (name.length < 2) {
+            return res.status(400).json({ success: false, message: 'Please enter your Full Name.' });
+        }
+
         const authTypeInput = req.body.authType === 'password' ? 'password' : 'pin';
         const rawCred = req.body.credential !== undefined ? req.body.credential : req.body.pin;
         const credValidation = validateSecurityCredential(authTypeInput, String(rawCred || ''));
 
         if (!credValidation.valid) {
             return res.status(400).json({ success: false, message: credValidation.message });
-        }
-
-        if (!/^[0-9]{10}$/.test(mobile) || !/^[A-Z0-9]{12}$/.test(consumerId) || name.length < 2) {
-            return res.status(400).json({ success: false, message: 'Please enter valid details.' });
         }
 
         if (emcsBloom.test(mobile) || emcsBloom.test(consumerId) || emcsBloom.test(email)) {
@@ -638,22 +668,45 @@ app.post('/api/auth/register', strictRegisterLimiter, botHoneypotShield, async (
     }
 });
 
+// Dual Login Route: Supports both Mobile Number AND Email Address Toggle
 app.post('/api/auth/login', loginLimiter, botHoneypotShield, async (req, res) => {
     try {
-        const mobile = sanitizeInput(req.body.mobile, 10);
+        const loginType = req.body.loginType === 'email' || (!req.body.mobile && req.body.email) ? 'email' : 'mobile';
+        const rawLoginVal = req.body.loginValue !== undefined
+            ? req.body.loginValue
+            : (loginType === 'email' ? req.body.email : req.body.mobile);
+        const loginValue = sanitizeInput(rawLoginVal, 100);
         const rawCred = String(req.body.credential !== undefined ? req.body.credential : (req.body.pin || '')).trim();
 
-        if (!/^[0-9]{10}$/.test(mobile) || rawCred.length < 4 || rawCred.length > 16) {
-            return res.status(400).json({ success: false, message: 'Invalid mobile number or PIN/Password.' });
+        if (rawCred.length < 4 || rawCred.length > 16) {
+            return res.status(400).json({ success: false, message: 'Invalid login details.' });
         }
 
-        if (!emcsBloom.test(mobile)) {
-            await new Promise(r => setTimeout(r, 90));
-            return res.status(401).json({ success: false, message: 'Invalid mobile number or PIN/Password.' });
+        const query = { tenantId: TENANT_ID };
+
+        if (loginType === 'email') {
+            const emailCheck = validateStrictEmail(loginValue);
+            if (!emailCheck.valid) {
+                return res.status(400).json({ success: false, message: emailCheck.message });
+            }
+            if (!emcsBloom.test(emailCheck.email)) {
+                await new Promise(r => setTimeout(r, 90));
+                return res.status(401).json({ success: false, message: 'Invalid Email Address or PIN/Password.' });
+            }
+            query.email = emailCheck.email;
+        } else {
+            if (!/^[0-9]{10}$/.test(loginValue)) {
+                return res.status(400).json({ success: false, message: 'Please enter a valid 10-digit Mobile Number.' });
+            }
+            if (!emcsBloom.test(loginValue)) {
+                await new Promise(r => setTimeout(r, 90));
+                return res.status(401).json({ success: false, message: 'Invalid Mobile Number or PIN/Password.' });
+            }
+            query.mobile = loginValue;
         }
 
-        const user = await User.findOne({ tenantId: TENANT_ID, mobile });
-        if (!user) return res.status(401).json({ success: false, message: 'Invalid mobile number or PIN/Password.' });
+        const user = await User.findOne(query);
+        if (!user) return res.status(401).json({ success: false, message: 'Invalid login details.' });
 
         if (user.accountStatus === 'blocked') {
             return res.status(403).json({ success: false, message: 'Your account has been blocked by the Administrator.' });
@@ -685,7 +738,7 @@ app.post('/api/auth/login', loginLimiter, botHoneypotShield, async (req, res) =>
                     { $set: { lockUntil: new Date(Date.now() + 15 * 60000), failedLoginAttempts: 0 } }
                 );
             }
-            return res.status(401).json({ success: false, message: 'Invalid mobile number or PIN/Password.' });
+            return res.status(401).json({ success: false, message: 'Invalid login details.' });
         }
 
         await User.updateOne(
@@ -779,9 +832,9 @@ async function handleCredentialReset(req, res) {
             }
             query.email = emailCheck.email;
         } else {
-            const cid = sanitizeInput(rawRecoveryVal, 12).toUpperCase();
-            if (!/^[A-Z0-9]{12}$/.test(cid) || !emcsBloom.test(cid)) {
-                return res.status(400).json({ success: false, message: 'Details do not match our records.' });
+            const cid = sanitizeInput(rawRecoveryVal, 12);
+            if (!/^[0-9]{12}$/.test(cid) || !emcsBloom.test(cid)) {
+                return res.status(400).json({ success: false, message: 'Please enter a valid 12-digit numeric Consumer ID.' });
             }
             query.consumerId = cid;
         }
@@ -849,12 +902,12 @@ app.post('/api/auth/revoke-device', authenticateUser, strictAntiIdorShield, asyn
 // ===================================================================
 // 🔥 KAMABHI AI (EMCS AI) - STRICT IDENTITY, RAM LOCK & SPAM BLOCKER
 // ===================================================================
-const aiRamTimestamps = new Map(); // Tracks timestamps in RAM per Consumer ID
-const aiActiveWritingLocks = new Set(); // Ensures 1 question at a time per user
+const aiRamTimestamps = new Map();
+const aiActiveWritingLocks = new Set();
 
 async function queryKamAbhiAiModel(promptText) {
     if (!GEMINI_API_KEY) {
-        return "Hello! I am KamAbhi AI (EMCS AI Assistant). Tip: Running heavy appliances like ACs at 24°C and shifting Geyser or Washing Machine usage to daytime hours (10 AM - 3 PM) can reduce your electricity bill by up to 20%. Always use a proper MCB and stabilizer for heavy loads.";
+        return "Hello! I am KamAbhi AI (EMCS AI Assistant). Tip: Running heavy appliances like ACs at 24°C and shifting Geyser or Washing Machine usage to daytime hours (10 AM - 3 PM) can reduce your electricity bill by up to 20%. Always use a proper MCB and earthing for heavy loads.";
     }
 
     if (genAI) {
@@ -863,7 +916,6 @@ async function queryKamAbhiAiModel(promptText) {
         return result.response.text();
     }
 
-    // Fallback native REST call if @google/generative-ai package is not installed
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
     const response = await fetch(url, {
         method: 'POST',
@@ -892,7 +944,6 @@ app.post('/api/ai/chat', authenticateUser, strictAntiIdorShield, async (req, res
     const cid = req.user.consumerId;
 
     try {
-        // 1. Check if User is Permanently Blocked from AI
         if (req.user.aiStatus === 'blocked') {
             return res.status(403).json({
                 success: false,
@@ -900,7 +951,7 @@ app.post('/api/ai/chat', authenticateUser, strictAntiIdorShield, async (req, res
             });
         }
 
-        // 2. RAM-Based 10-Second Burst Detector (Warnings + Permanent Block on 10 hits in 10s)
+        // RAM-Based 10-Second Burst Detector (Warnings + Permanent Block on 10 hits in 10s)
         const now = Date.now();
         let hits = (aiRamTimestamps.get(cid) || []).filter(ts => now - ts < 10000);
         hits.push(now);
@@ -920,14 +971,14 @@ app.post('/api/ai/chat', authenticateUser, strictAntiIdorShield, async (req, res
             });
         }
 
-        if (hits.length >= 5) {
+        if (hits.length >= 8) {
             req.user.aiSpamWarnings = (req.user.aiSpamWarnings || 0) + 1;
             await req.user.save();
 
             if (req.user.aiSpamWarnings <= 2) {
                 return res.status(429).json({
                     success: false,
-                    reply: `Warning (${req.user.aiSpamWarnings}/2): Please slow down! Sending questions too rapidly will permanently block your AI access.`
+                    reply: `Warning (${req.user.aiSpamWarnings}/2): Please slow down! Sending 10 questions in 10 seconds will permanently block your AI access.`
                 });
             } else {
                 req.user.aiStatus = 'blocked';
@@ -944,7 +995,7 @@ app.post('/api/ai/chat', authenticateUser, strictAntiIdorShield, async (req, res
             }
         }
 
-        // 3. Single-Question Concurrency Lock (Ignore new question while previous is generating)
+        // Single-Question Concurrency Lock
         if (aiActiveWritingLocks.has(cid)) {
             return res.status(429).json({
                 success: false,
@@ -987,7 +1038,6 @@ KamAbhi AI Answer:`;
 
             let rawAiReply = await queryKamAbhiAiModel(systemPrompt);
 
-            // Scrub any accidental third-party AI model names
             rawAiReply = String(rawAiReply || '')
                 .replace(/\bgemini\b|\bgoogle\s+ai\b|\bchatgpt\b|\bopenai\b|\blarge language model\b/gi, 'KamAbhi AI');
 
@@ -1204,7 +1254,7 @@ app.get('/api/admin/ai-history/all', authenticateAdmin, async (req, res) => {
 
 app.get('/api/admin/ai-history/:cid', authenticateAdmin, async (req, res) => {
     try {
-        const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
+        const cid = sanitizeInput(req.params.cid, 12);
         const messages = await AiChat.find({ tenantId: TENANT_ID, consumerId: cid }).sort({ timestamp: 1 });
         res.json({ success: true, messages });
     } catch (e) {
@@ -1214,7 +1264,7 @@ app.get('/api/admin/ai-history/:cid', authenticateAdmin, async (req, res) => {
 
 app.delete('/api/admin/ai-history/:cid', authenticateAdmin, async (req, res) => {
     try {
-        const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
+        const cid = sanitizeInput(req.params.cid, 12);
         await AiChat.deleteMany({ tenantId: TENANT_ID, consumerId: cid });
         res.json({ success: true });
     } catch (e) {
@@ -1229,8 +1279,8 @@ app.get('/api/admin/user/:consumerId', authenticateAdmin, async (req, res) => {
             return res.status(403).json({ success: false, message: 'Insufficient permissions.' });
         }
 
-        const cid = sanitizeInput(req.params.consumerId, 12).toUpperCase();
-        if (!/^[A-Z0-9]{12}$/.test(cid) || !emcsBloom.test(cid)) {
+        const cid = sanitizeInput(req.params.consumerId, 12);
+        if (!emcsBloom.test(cid)) {
             return res.status(404).json({ success: false, message: 'User not found.' });
         }
 
@@ -1282,13 +1332,13 @@ app.get('/api/admin/user/:consumerId', authenticateAdmin, async (req, res) => {
     }
 });
 
-// Admin Block / Unblock User (Also resets AI block when unblocking)
+// Admin Block / Unblock User
 app.put('/api/admin/user/:cid/status', authenticateAdmin, async (req, res) => {
     try {
         if (req.admin.role !== 'owner' && !req.admin.permissions?.canManageUsers) {
             return res.status(403).json({ success: false });
         }
-        const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
+        const cid = sanitizeInput(req.params.cid, 12);
         const newStatus = req.body.status === 'blocked' ? 'blocked' : 'active';
         const updateFields = {
             accountStatus: newStatus,
@@ -1311,7 +1361,7 @@ app.delete('/api/admin/user/:cid', authenticateAdmin, async (req, res) => {
         if (req.admin.role !== 'owner' && !req.admin.permissions?.canManageUsers) {
             return res.status(403).json({ success: false });
         }
-        const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
+        const cid = sanitizeInput(req.params.cid, 12);
         await User.deleteOne({ tenantId: TENANT_ID, consumerId: cid });
         await SupportMessage.deleteMany({ tenantId: TENANT_ID, consumerId: cid });
         await AiChat.deleteMany({ tenantId: TENANT_ID, consumerId: cid });
@@ -1441,7 +1491,7 @@ app.get('/api/support/admin/threads', authenticateAdmin, async (req, res) => {
 
 app.get('/api/support/admin/messages/:cid', authenticateAdmin, requireAdminPermission('canChatSupport'), async (req, res) => {
     try {
-        const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
+        const cid = sanitizeInput(req.params.cid, 12);
         if (!emcsBloom.test(cid)) return res.json({ success: true, messages: [] });
         const messages = await SupportMessage.find({ tenantId: TENANT_ID, consumerId: cid }).sort({ timestamp: 1 });
         res.json({ success: true, messages });
@@ -1452,7 +1502,7 @@ app.get('/api/support/admin/messages/:cid', authenticateAdmin, requireAdminPermi
 
 app.post('/api/support/admin/reply', authenticateAdmin, requireAdminPermission('canChatSupport'), async (req, res) => {
     try {
-        const consumerId = sanitizeInput(req.body.consumerId, 12).toUpperCase();
+        const consumerId = sanitizeInput(req.body.consumerId, 12);
         const text = sanitizeInput(req.body.text, 500);
         if (!text || !emcsBloom.test(consumerId)) return res.status(400).json({ success: false });
         const msg = await new SupportMessage({ tenantId: TENANT_ID, consumerId, sender: 'admin', text }).save();
@@ -1464,7 +1514,7 @@ app.post('/api/support/admin/reply', authenticateAdmin, requireAdminPermission('
 
 app.delete('/api/support/chat/clear/:cid', authenticateAdmin, requireAdminPermission('canDeleteChat'), async (req, res) => {
     try {
-        const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
+        const cid = sanitizeInput(req.params.cid, 12);
         await SupportMessage.deleteMany({ tenantId: TENANT_ID, consumerId: cid });
         res.json({ success: true });
     } catch (e) {
