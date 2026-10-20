@@ -11,19 +11,21 @@ let GoogleGenerativeAI = null;
 try {
     ({ GoogleGenerativeAI } = require('@google/generative-ai'));
 } catch (ignore) {
-    // Fallback to native fetch if package is not installed
+    // Fallback to native HTTPS/fetch if package is not installed
 }
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 const IS_PROD = process.env.NODE_ENV === 'production';
+
+// Multi-Site / Multi-Tenant Strict Isolation Identifier
 const TENANT_ID = process.env.TENANT_ID || 'EMCS_PROD_SITE_01';
 
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
 // ===================================================================
-// ENVIRONMENT VARIABLES (RENDER READY - ZERO SECRET LEAKAGE)
+// ENVIRONMENT VARIABLES (RENDER / CLOUD CONFIG)
 // ===================================================================
 const MONGO_URI = process.env.MONGO_URI || (IS_PROD ? '' : 'mongodb://127.0.0.1:27017/emcs_project_db');
 const MASTER_OWNER_KEY = process.env.MASTER_OWNER_KEY || '';
@@ -33,9 +35,6 @@ const JWT_SECRET = process.env.JWT_SECRET || (
         ? crypto.createHash('sha256').update(MASTER_OWNER_KEY + '_emcs_vault_' + TENANT_ID).digest('hex')
         : crypto.randomBytes(32).toString('hex')
 );
-
-// 32-Byte AES-256 Key for encrypting stored logs
-const LOG_CIPHER_KEY = crypto.createHash('sha256').update(JWT_SECRET + '_log_encryption_key').digest();
 
 const genAI = (GoogleGenerativeAI && GEMINI_API_KEY) ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
@@ -74,28 +73,13 @@ app.use((req, res, next) => {
     }
 
     if (['POST', 'DELETE', 'PUT'].includes(req.method) && req.path.startsWith('/api/')) {
-        if (req.headers['x-emcs-csrf'] !== 'emcs-verified-client') {
-            return res.status(403).json({ success: false, message: 'Request could not be verified.' });
+        const csrf = req.headers['x-emcs-csrf'];
+        if (csrf !== 'emcs-verified-client') {
+            return res.status(403).json({ success: false, message: 'Invalid request signature.' });
         }
     }
     next();
 });
-
-// ===================================================================
-// AES-256-GCM LOG ENCRYPTION (NO SENSITIVE OR BACKEND DETAILS LEAKED)
-// ===================================================================
-function encryptLogText(plainText) {
-    try {
-        const iv = crypto.randomBytes(12);
-        const cipher = crypto.createCipheriv('aes-256-gcm', LOG_CIPHER_KEY, iv);
-        let encrypted = cipher.update(String(plainText || ''), 'utf8', 'hex');
-        encrypted += cipher.final('hex');
-        const tag = cipher.getAuthTag().toString('hex');
-        return `${iv.toString('hex')}:${tag}:${encrypted}`;
-    } catch (e) {
-        return '';
-    }
-}
 
 // ===================================================================
 // 🚀 BLOOM FILTER (O(1) Memory Bouncer Against Non-Existent DB Queries)
@@ -132,7 +116,7 @@ class BloomFilter {
 const emcsBloom = new BloomFilter();
 
 // ===================================================================
-// INPUT VALIDATION & DISPOSABLE EMAIL BLOCKER
+// INPUT SANITIZATION, EMAIL BLOCKER & ENCRYPTED LOG HELPERS
 // ===================================================================
 const sanitizeInput = (val, max = 150) => {
     if (typeof val === 'string' || typeof val === 'number') {
@@ -157,11 +141,12 @@ function validateStrictEmail(rawEmail) {
         return { valid: false, message: 'Please enter a valid email address.' };
     }
     if (/[\s\0$<>'"`;\\(){}[\]|!#$%^&*=+/?~]|\.\./.test(clean)) {
-        return { valid: false, message: 'Please enter a valid email address.' };
+        return { valid: false, message: 'Invalid characters in email address.' };
     }
     const parts = clean.split('@');
     if (parts.length !== 2) return { valid: false, message: 'Please enter a valid email address.' };
     const [local, domain] = parts;
+
     if (!/^[a-z0-9]+([._-][a-z0-9]+)*$/.test(local) || local.length < 2 || local.length > 60) {
         return { valid: false, message: 'Please enter a valid email address.' };
     }
@@ -170,20 +155,22 @@ function validateStrictEmail(rawEmail) {
     }
     const tld = domain.split('.').pop();
     if (!/^[a-z]{2,10}$/.test(tld) || DISPOSABLE_EMAIL_DOMAINS.has(domain)) {
-        return { valid: false, message: 'Please use a standard personal or work email address.' };
+        return { valid: false, message: 'Please use a valid personal or work email address.' };
     }
     return { valid: true, email: clean };
 }
 
 function validateSecurityCredential(authType, rawCred) {
-    if (typeof rawCred !== 'string') return { valid: false, message: 'Please enter your PIN or Password.' };
+    if (typeof rawCred !== 'string') return { valid: false, message: 'PIN or Password is required.' };
     const cred = rawCred.trim();
     if (authType === 'pin') {
-        if (!/^[0-9]{4,6}$/.test(cred)) return { valid: false, message: 'Invalid PIN format.' };
+        if (!/^[0-9]{4,6}$/.test(cred)) {
+            return { valid: false, message: 'Please enter a valid PIN.' };
+        }
         return { valid: true, credential: cred, authType: 'pin' };
     } else if (authType === 'password') {
         if (cred.length < 8 || cred.length > 16 || /[\0]/.test(cred)) {
-            return { valid: false, message: 'Invalid Password length.' };
+            return { valid: false, message: 'Please enter a valid Password.' };
         }
         return { valid: true, credential: cred, authType: 'password' };
     }
@@ -212,11 +199,9 @@ function safeCompareStrings(a, b) {
 }
 
 // ===================================================================
-// RATE LIMITING & IP BLOCKLIST IN RAM
+// MULTI-TIER RATE LIMITING (RAM GUARDED)
 // ===================================================================
 const rateLimits = new Map();
-const blockedBotIps = new Set();
-
 setInterval(() => {
     const now = Date.now();
     for (const [k, v] of rateLimits.entries()) {
@@ -226,9 +211,6 @@ setInterval(() => {
 
 function createLimiter(maxReqs, windowMs, customMsg) {
     return (req, res, next) => {
-        if (blockedBotIps.has(req.ip)) {
-            return res.status(403).json({ success: false, message: 'Access permanently blocked due to suspicious activity.' });
-        }
         const key = `${TENANT_ID}_${req.ip}_${req.baseUrl || req.path}`;
         const now = Date.now();
         let rec = rateLimits.get(key) || { count: 0, resetAt: now + windowMs };
@@ -243,17 +225,22 @@ function createLimiter(maxReqs, windowMs, customMsg) {
         if (rec.count > allowedMax) {
             return res.status(429).json({
                 success: false,
-                message: customMsg || 'Too many requests. Please wait a moment and try again.'
+                message: customMsg || 'Please wait a moment before trying again.'
             });
         }
         next();
     };
 }
 
-app.use('/api', createLimiter(60, 60 * 1000));
+const globalApiLimiter = createLimiter(80, 60 * 1000, 'Please slow down and try again in a moment.');
+const strictRegisterLimiter = createLimiter(4, 24 * 60 * 60 * 1000, 'Maximum account limit reached for today.');
+const loginLimiter = createLimiter(6, 15 * 60 * 1000, 'Too many attempts. Please wait 15 minutes.');
+const chatLimiter = createLimiter(15, 60 * 1000, 'Sending messages too fast. Please wait a moment.');
+
+app.use('/api', globalApiLimiter);
 
 // ===================================================================
-// DATABASE SCHEMAS (MULTI-TENANT ISOLATION + AUTO-DELETE TTL)
+// DATABASE SCHEMAS (MULTI-TENANT + 90-DAY AI TTL + 2-YEAR USER TTL)
 // ===================================================================
 const UserSchema = new mongoose.Schema({
     tenantId: { type: String, default: TENANT_ID, required: true, index: true },
@@ -295,7 +282,26 @@ const UserSchema = new mongoose.Schema({
 UserSchema.index({ tenantId: 1, mobile: 1 }, { unique: true });
 UserSchema.index({ tenantId: 1, email: 1 }, { unique: true });
 UserSchema.index({ tenantId: 1, consumerId: 1 }, { unique: true });
-UserSchema.index({ deletionScheduledAt: 1 }, { expireAfterSeconds: 63072000 }); // 2 Years Legal Retention
+UserSchema.index({ deletionScheduledAt: 1 }, { expireAfterSeconds: 63072000 }); // 2 Years Auto-Erase
+
+// 🔥 AI CHAT HISTORY SCHEMA (Automatically Deletes After 3 Months / 90 Days)
+const AiChatSchema = new mongoose.Schema({
+    tenantId: { type: String, default: TENANT_ID, required: true, index: true },
+    consumerId: { type: String, required: true, index: true },
+    sender: { type: String, enum: ['user', 'ai'], required: true },
+    text: { type: String, required: true, maxlength: 2500 },
+    timestamp: { type: Date, default: Date.now, expires: 7776000 } // 90 Days (3 Months) TTL
+});
+
+// 🔥 EMERGENCY SECURITY ALERTS SCHEMA (Bot Traps, IDOR & AI Spam DDoS)
+const EmergencyAlertSchema = new mongoose.Schema({
+    tenantId: { type: String, default: TENANT_ID, required: true, index: true },
+    attackType: { type: String, required: true },
+    ipAddress: { type: String, default: 'Unknown' },
+    deviceInfo: { type: String, default: 'Unknown' },
+    details: { type: String, required: true },
+    timestamp: { type: Date, default: Date.now, expires: 7776000 }
+});
 
 const StaffSchema = new mongoose.Schema({
     tenantId: { type: String, default: TENANT_ID, required: true, index: true },
@@ -317,27 +323,7 @@ const SupportMessageSchema = new mongoose.Schema({
     consumerId: { type: String, required: true, index: true },
     sender: { type: String, enum: ['user', 'admin'], required: true },
     text: { type: String, required: true, maxlength: 500 },
-    timestamp: { type: Date, default: Date.now, expires: 2592000 } // 30 Days
-});
-
-// 🔥 AI CHAT HISTORY SCHEMA (Automatically deletes after 3 Months / 90 Days)
-const AiChatSchema = new mongoose.Schema({
-    tenantId: { type: String, default: TENANT_ID, required: true, index: true },
-    consumerId: { type: String, required: true, index: true },
-    userName: { type: String, default: 'Consumer' },
-    sender: { type: String, enum: ['user', 'ai'], required: true },
-    text: { type: String, required: true, maxlength: 2500 },
-    timestamp: { type: Date, default: Date.now, expires: 7776000 } // 90 Days (3 Months) TTL
-});
-
-// 🔥 EMERGENCY ALERTS SCHEMA (Captures Bot Honeypot & AI Spam DDoS Forensics)
-const EmergencyAlertSchema = new mongoose.Schema({
-    tenantId: { type: String, default: TENANT_ID, required: true, index: true },
-    timestamp: { type: Date, default: Date.now, expires: 7776000 },
-    attackType: { type: String, required: true },
-    ipAddress: { type: String, default: 'Unknown IP' },
-    deviceInfo: { type: String, default: 'Unknown Device' },
-    details: { type: String, required: true }
+    timestamp: { type: Date, default: Date.now, expires: 2592000 }
 });
 
 const CmsSchema = new mongoose.Schema({
@@ -346,43 +332,44 @@ const CmsSchema = new mongoose.Schema({
     broadcast: { type: String, default: '' },
     about: {
         type: String,
-        default: 'EMCS (Smart Energy Manager) helps households and businesses track electricity consumption, estimate monthly bills, and manage smart appliances.'
+        default: 'EMCS (Smart Energy Manager) helps households and businesses track appliance power consumption, estimate monthly electricity bills, and control smart switches safely.'
     },
     privacy: {
         type: String,
-        default: '1. DATA COLLECTION & SECURITY (DPDP Act 2023): We collect your Mobile Number, Email Address, Consumer ID, and Name strictly for account access, recovery, and energy tracking. For security and fraud prevention, we log Device Models and IP Addresses during login.\n\n2. AI CHAT HISTORY: Questions asked to KamAbhi AI (EMCS AI) are stored for your convenience and quality safety review, and are automatically deleted after 3 months (90 days).\n\n3. ACCOUNT RETENTION: Upon account deactivation, all devices are logged out immediately and records are retained in a protected archive for 2 years before permanent deletion.'
+        default: '1. INFORMATION WE COLLECT: We collect your Name, Mobile Number, Email Address, and 12-Character Consumer ID to create your account and help you recover forgotten credentials.\n\n2. DEVICE & IP SECURITY: For your account safety and to prevent unauthorized access, we record the device model and IP address when you log in.\n\n3. AI CHAT HISTORY: Questions asked to KamAbhi AI (EMCS AI) are saved in your account history to help you review past electrical advice and are automatically deleted after 3 months (90 days).\n\n4. ACCOUNT DELETION: If you deactivate your account, all devices are logged out immediately and records are retained for 2 years for legal compliance before permanent deletion.'
     },
     terms: {
         type: String,
-        default: '1. BILL ESTIMATES: All bills, solar calculations, and savings shown on EMCS are estimates based on standard tariff slabs. Always pay your official electricity board bill.\n\n2. HARDWARE & SMART SWITCH DISCLAIMER: Hardware testing has not been performed for third-party switches. Connecting any Wi-Fi switch, smart meter, or USB relay is strictly at your own risk and responsibility. Our team holds zero liability for any electrical or equipment damage.\n\n3. FAIR USE & ANTI-BOT POLICY: Automated scripts, bots, URL tampering, or spamming the AI assistant (10+ rapid requests) will result in an automatic permanent block.'
+        default: '1. BILL ESTIMATES: All electricity bills and solar calculations shown on EMCS are estimates for planning and saving energy. Please pay your official electricity board bill as per your utility meter.\n\n2. HARDWARE & SMART SWITCH RESPONSIBILITY: Hardware testing nhi kiya gya hai. Kripya apne risk or jimmedari par ye hardware connect kare, iske liye hamari team ki koi jimmedari nhi hogi. EMCS is not responsible for any electrical damage, short circuit, or injury.\n\n3. FAIR USE & SECURITY: Using automated bots, fake emails, or spamming the AI assistant (10+ questions in 10 seconds) will result in an automatic block.'
     },
     faqs: {
         type: Array,
         default: [
-            { q: 'How can I reset my forgotten PIN or Password?', a: 'Open Login, click Forgot Access, and verify using either your Consumer ID or your Registered Email Address.' },
-            { q: 'Who is KamAbhi AI (EMCS AI)?', a: 'KamAbhi AI is your dedicated electrical safety and energy-saving assistant available to logged-in users.' },
-            { q: 'How long is my AI chat history saved?', a: 'Your AI chat history is saved for 3 months (90 days) and then automatically erased.' }
+            { q: 'How can I reset my forgotten PIN or Password?', a: 'Click on Login, choose "Forgot Access", and verify your account using either your Consumer ID or your Email Address.' },
+            { q: 'Who is KamAbhi AI?', a: 'KamAbhi AI (EMCS AI) is your dedicated electrical safety and energy-saving assistant available after you log in.' },
+            { q: 'How long is my AI chat history saved?', a: 'Your AI chat history is saved for 3 months (90 days) and then automatically deleted.' },
+            { q: 'Can I connect smart Wi-Fi switches or a smart meter?', a: 'Yes! Tick the hardware responsibility agreement box in the Smart Hardware Control or My Appliances section to unlock wireless and cable switch controls.' }
         ]
     }
 });
 CmsSchema.index({ tenantId: 1, key: 1 }, { unique: true });
 
-// Encrypted Activity Logs (Only clean summary text is shown; raw details are AES-256 encrypted)
+// Encrypted & Sanitized Activity Logs (Never stores API keys or technical stack traces)
 const SystemErrorSchema = new mongoose.Schema({
     tenantId: { type: String, default: TENANT_ID, index: true },
     timestamp: { type: Date, default: Date.now, expires: 2592000 },
     source: { type: String, default: 'Application' },
     message: { type: String, default: 'Something went wrong, try again later.' },
-    encryptedPayload: { type: String, default: '' },
-    location: { type: String, default: 'General' },
-    userOrIp: { type: String, default: 'Protected' }
+    location: { type: String, default: 'User Screen' },
+    userOrIp: { type: String, default: 'Visitor' },
+    encryptedDigest: { type: String, default: '' }
 });
 
 const User = mongoose.model('User', UserSchema);
-const Staff = mongoose.model('Staff', StaffSchema);
-const SupportMessage = mongoose.model('SupportMessage', SupportMessageSchema);
 const AiChat = mongoose.model('AiChat', AiChatSchema);
 const EmergencyAlert = mongoose.model('EmergencyAlert', EmergencyAlertSchema);
+const Staff = mongoose.model('Staff', StaffSchema);
+const SupportMessage = mongoose.model('SupportMessage', SupportMessageSchema);
 const CmsConfig = mongoose.model('CmsConfig', CmsSchema);
 const SystemError = mongoose.model('SystemError', SystemErrorSchema);
 
@@ -400,54 +387,67 @@ async function populateBloomFilter() {
 if (MONGO_URI) {
     mongoose.connect(MONGO_URI)
         .then(async () => {
-            console.log(`[EMCS READY] Connected on Port ${PORT}`);
+            console.log('[EMCS] Service Online.');
             await populateBloomFilter();
         })
-        .catch(() => console.error('[EMCS NOTICE] Database connection unavailable.'));
+        .catch(() => console.error('[EMCS] Storage connection error.'));
 }
 
 // ===================================================================
-// ENCRYPTED LOGGING & EMERGENCY FORENSICS HELPERS
+// ENCRYPTED CLEAN LOGGING & EMERGENCY FORENSIC CAPTURE
 // ===================================================================
-async function logBackendError(section, rawErr, req = null) {
+async function logCleanActivity(section = 'Application', req = null) {
     try {
-        const rawText = rawErr?.message || String(rawErr || 'Event');
-        const encryptedPayload = encryptLogText(rawText);
+        const cleanSource = String(section || 'Application').replace(/mongodb|mongoose|express|node|gemini|api|key|token|db|server/gi, 'System');
+        const digest = crypto.createHmac('sha256', JWT_SECRET).update(`${Date.now()}_${cleanSource}`).digest('hex').slice(0, 32);
         await new SystemError({
             tenantId: TENANT_ID,
-            source: sanitizeInput(section || 'App Section', 40),
+            source: sanitizeInput(cleanSource, 40),
             message: 'Something went wrong, try again later.',
-            encryptedPayload,
-            location: 'Protected Section',
-            userOrIp: sanitizeInput(req?.user?.consumerId || 'Visitor', 30)
+            location: 'Protected View',
+            userOrIp: sanitizeInput(req ? (req.user?.consumerId || 'Visitor') : 'System', 30),
+            encryptedDigest: digest
         }).save();
     } catch (ignore) {}
 }
 
-async function triggerEmergencyAlert(attackType, details, req, clientTelemetry = {}) {
+async function dispatchEmergencyAlert(attackType, details, req) {
     try {
-        const ip = sanitizeInput(req.ip || req.headers['x-forwarded-for'] || 'Unknown IP', 50);
-        const ua = sanitizeInput(req.headers['user-agent'] || 'Unknown Browser', 120);
-        const lang = sanitizeInput(req.headers['accept-language'] || '', 40);
-        const screenInfo = sanitizeInput(clientTelemetry.screen || '', 30);
-        const tzInfo = sanitizeInput(clientTelemetry.tz || '', 40);
-        const platformInfo = sanitizeInput(clientTelemetry.platform || '', 40);
-
-        const fullDevice = [ua, platformInfo, screenInfo, tzInfo, lang].filter(Boolean).join(' | ').slice(0, 220);
+        const ip = sanitizeInput(req.ip || req.headers['x-forwarded-for'] || 'Unknown IP', 60);
+        const ua = sanitizeInput(req.headers['user-agent'] || 'Unknown Device', 180);
+        const lang = sanitizeInput(req.headers['accept-language'] || 'N/A', 40);
+        const fullDevice = `${ua} [Lang: ${lang}]`;
 
         await new EmergencyAlert({
             tenantId: TENANT_ID,
             attackType: sanitizeInput(attackType, 60),
             ipAddress: ip,
-            deviceInfo: fullDevice || 'Unknown Device',
-            details: sanitizeInput(details, 350)
+            deviceInfo: fullDevice,
+            details: sanitizeInput(details, 450)
         }).save();
     } catch (ignore) {}
 }
 
 // ===================================================================
-// AUTHENTICATION & STRICT ANTI-IDOR MIDDLEWARES
+// AUTHENTICATION, BOT HONEYPOT TRAP & STRICT ANTI-IDOR SHIELD
 // ===================================================================
+const botHoneypotShield = async (req, res, next) => {
+    const trapVal = req.body?._emcs_trap || req.body?._bot_honeypot;
+    if (trapVal && String(trapVal).trim().length > 0) {
+        const attemptedId = sanitizeInput(req.body?.mobile || req.body?.consumerId || req.body?.email || 'Bot Script', 50);
+        await dispatchEmergencyAlert(
+            'Bot / Script Trap Triggered',
+            `Invisible form filled with "${sanitizeInput(trapVal, 40)}" by target: ${attemptedId}. Request blocked immediately.`,
+            req
+        );
+        return res.status(403).json({
+            success: false,
+            message: 'Access blocked due to automated script activity.'
+        });
+    }
+    next();
+};
+
 async function authenticateUser(req, res, next) {
     const token = req.cookies.emcs_auth_token;
     if (!token) return res.status(401).json({ success: false, message: 'Please log in to continue.' });
@@ -463,7 +463,7 @@ async function authenticateUser(req, res, next) {
         if (!user || user.accountStatus !== 'active' || !user.activeSessions.some(s => s.sessionId === decoded.sessionId)) {
             res.clearCookie('emcs_auth_token');
             const msg = user?.accountStatus === 'blocked'
-                ? 'Your account has been blocked by the administrator.'
+                ? 'Your account has been blocked by the Administrator.'
                 : 'Session expired. Please log in again.';
             return res.status(401).json({ success: false, message: msg });
         }
@@ -472,11 +472,12 @@ async function authenticateUser(req, res, next) {
         req.sessionId = decoded.sessionId;
         next();
     } catch (e) {
-        return res.status(403).json({ success: false, message: 'Please log in again.' });
+        return res.status(403).json({ success: false, message: 'Please log in to continue.' });
     }
 }
 
-function strictAntiIdorShield(req, res, next) {
+// Strict Anti-IDOR Shield: Blocks any attempt to request another Consumer ID's data
+async function strictAntiIdorShield(req, res, next) {
     if (!req.user) return res.status(401).json({ success: false, message: 'Unauthorized.' });
 
     const candidates = [
@@ -491,14 +492,14 @@ function strictAntiIdorShield(req, res, next) {
 
     for (const candidate of candidates) {
         if (String(candidate).trim().toUpperCase() !== String(req.user.consumerId).toUpperCase()) {
-            triggerEmergencyAlert(
+            await dispatchEmergencyAlert(
                 'Cross-Account Tampering (IDOR)',
-                `User ${req.user.consumerId} attempted to access data of ${sanitizeInput(candidate, 20)}`,
+                `User ${req.user.consumerId} attempted to access data of Consumer ID: ${sanitizeInput(candidate, 20)}`,
                 req
             );
             return res.status(403).json({
                 success: false,
-                message: 'Access denied: You can only view your own account.'
+                message: 'Access Denied: You can only access your own account data.'
             });
         }
     }
@@ -513,12 +514,12 @@ async function authenticateAdmin(req, res, next) {
         const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
         if (decoded.tenantId && decoded.tenantId !== TENANT_ID) {
             res.clearCookie('emcs_admin_token');
-            return res.status(403).json({ success: false });
+            return res.status(403).json({ success: false, message: 'Invalid session.' });
         }
         req.admin = decoded;
         next();
     } catch (e) {
-        return res.status(403).json({ success: false });
+        return res.status(403).json({ success: false, message: 'Invalid admin session.' });
     }
 }
 
@@ -526,63 +527,39 @@ function requireAdminPermission(permKey) {
     return (req, res, next) => {
         if (!req.admin) return res.status(401).json({ success: false });
         if (req.admin.role === 'owner') return next();
-        if (permKey && req.admin.permissions && req.admin.permissions[permKey] === true) return next();
+        if (permKey && req.admin.permissions && req.admin.permissions[permKey] === true) {
+            return next();
+        }
         return res.status(403).json({ success: false, message: 'Insufficient permissions.' });
     };
 }
 
 // ===================================================================
-// INVISIBLE HONEYPOT BOT TRAP MIDDLEWARE (BLOCKS BOTS ON LOGIN/REGISTER)
-// ===================================================================
-async function verifyNotABot(req, res, next) {
-    const trapVal = req.body._emcs_trap || req.body._bot_honeypot;
-    if (trapVal && String(trapVal).trim().length > 0) {
-        blockedBotIps.add(req.ip);
-        const attemptedId = sanitizeInput(req.body.mobile || req.body.consumerId || 'Unknown', 30);
-        await triggerEmergencyAlert(
-            'Automated Bot Trap Triggered',
-            `Hidden form field filled during ${req.path.includes('register') ? 'Registration' : 'Login'}. Target: ${attemptedId} | Trap Value: "${sanitizeInput(trapVal, 40)}"`,
-            req,
-            req.body._clientMeta || {}
-        );
-        return res.status(403).json({
-            success: false,
-            message: 'Automated bot activity detected. Your access has been blocked.'
-        });
-    }
-    next();
-}
-
-// ===================================================================
-// HEALTH & PROTECTED LOGS ROUTES
+// HEALTH & CLEAN ACTIVITY LOG ROUTES
 // ===================================================================
 app.get('/api/health', (req, res) => {
-    res.status(200).json({ status: 'ok' });
+    res.status(200).json({ status: 'ok', uptime: Math.floor(process.uptime()) });
 });
 
 app.post('/api/errors/report', createLimiter(15, 60000), async (req, res) => {
-    try {
-        await logBackendError('Client Activity', 'Something went wrong, try again later.', req);
-        res.json({ success: true });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
+    await logCleanActivity(req.body?.source || 'User Screen', req);
+    res.json({ success: true });
 });
 
 app.get('/api/admin/errors', authenticateAdmin, async (req, res) => {
     try {
         const rawLogs = await SystemError.find({ tenantId: TENANT_ID }).sort({ timestamp: -1 }).limit(100);
-        // Always return sanitized, non-technical display text
-        const errors = rawLogs.map(l => ({
+        // Strictly mask any historical message to plain safe text
+        const safeLogs = rawLogs.map(l => ({
             timestamp: l.timestamp,
-            source: 'App Notice',
+            source: sanitizeInput(l.source || 'App', 30),
             message: 'Something went wrong, try again later.',
-            location: 'Protected',
-            userOrIp: l.userOrIp || 'User'
+            location: sanitizeInput(l.location || 'Screen', 30),
+            userOrIp: sanitizeInput(l.userOrIp || 'User', 30)
         }));
-        res.json({ success: true, errors });
+        res.json({ success: true, errors: safeLogs });
     } catch (e) {
-        res.status(500).json({ success: false });
+        res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
     }
 });
 
@@ -596,29 +573,10 @@ app.delete('/api/admin/errors/clear', authenticateAdmin, async (req, res) => {
     }
 });
 
-app.get('/api/admin/emergency-alerts', authenticateAdmin, async (req, res) => {
-    try {
-        const alerts = await EmergencyAlert.find({ tenantId: TENANT_ID }).sort({ timestamp: -1 }).limit(100);
-        res.json({ success: true, alerts });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
-
-app.delete('/api/admin/emergency-alerts/clear', authenticateAdmin, async (req, res) => {
-    try {
-        if (req.admin.role !== 'owner') return res.status(403).json({ success: false });
-        await EmergencyAlert.deleteMany({ tenantId: TENANT_ID });
-        res.json({ success: true });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
-
 // ===================================================================
-// USER REGISTRATION, LOGIN & RECOVERY ROUTES
+// USER AUTHENTICATION, REGISTRATION & DUAL RECOVERY ROUTES
 // ===================================================================
-app.post('/api/auth/register', createLimiter(3, 86400000), verifyNotABot, async (req, res) => {
+app.post('/api/auth/register', strictRegisterLimiter, botHoneypotShield, async (req, res) => {
     try {
         if (req.body.termsAccepted !== true) {
             return res.status(400).json({ success: false, message: 'Please accept the Privacy Policy and Terms & Conditions.' });
@@ -632,18 +590,20 @@ app.post('/api/auth/register', createLimiter(3, 86400000), verifyNotABot, async 
         if (!emailValidation.valid) {
             return res.status(400).json({ success: false, message: emailValidation.message });
         }
+        const email = emailValidation.email;
 
         const authTypeInput = req.body.authType === 'password' ? 'password' : 'pin';
-        const credValidation = validateSecurityCredential(authTypeInput, String(req.body.credential || ''));
+        const rawCred = req.body.credential !== undefined ? req.body.credential : req.body.pin;
+        const credValidation = validateSecurityCredential(authTypeInput, String(rawCred || ''));
+
         if (!credValidation.valid) {
             return res.status(400).json({ success: false, message: credValidation.message });
         }
 
         if (!/^[0-9]{10}$/.test(mobile) || !/^[A-Z0-9]{12}$/.test(consumerId) || name.length < 2) {
-            return res.status(400).json({ success: false, message: 'Please enter valid Name, 10-digit Mobile, and 12-character Consumer ID.' });
+            return res.status(400).json({ success: false, message: 'Please enter valid details.' });
         }
 
-        const email = emailValidation.email;
         if (emcsBloom.test(mobile) || emcsBloom.test(consumerId) || emcsBloom.test(email)) {
             const existing = await User.findOne({
                 tenantId: TENANT_ID,
@@ -671,23 +631,22 @@ app.post('/api/auth/register', createLimiter(3, 86400000), verifyNotABot, async 
         emcsBloom.add(email);
         emcsBloom.add(consumerId);
 
-        res.json({ success: true, message: 'Account created successfully!' });
+        res.json({ success: true, message: 'Account created successfully.' });
     } catch (e) {
-        await logBackendError('Registration', e, req);
+        await logCleanActivity('Registration', req);
         res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
     }
 });
 
-app.post('/api/auth/login', createLimiter(5, 900000), verifyNotABot, async (req, res) => {
+app.post('/api/auth/login', loginLimiter, botHoneypotShield, async (req, res) => {
     try {
         const mobile = sanitizeInput(req.body.mobile, 10);
-        const rawCred = String(req.body.credential || '').trim();
+        const rawCred = String(req.body.credential !== undefined ? req.body.credential : (req.body.pin || '')).trim();
 
         if (!/^[0-9]{10}$/.test(mobile) || rawCred.length < 4 || rawCred.length > 16) {
             return res.status(400).json({ success: false, message: 'Invalid mobile number or PIN/Password.' });
         }
 
-        // Bloom Filter Memory Check (Prevents Phantom DB DoS)
         if (!emcsBloom.test(mobile)) {
             await new Promise(r => setTimeout(r, 90));
             return res.status(401).json({ success: false, message: 'Invalid mobile number or PIN/Password.' });
@@ -697,7 +656,7 @@ app.post('/api/auth/login', createLimiter(5, 900000), verifyNotABot, async (req,
         if (!user) return res.status(401).json({ success: false, message: 'Invalid mobile number or PIN/Password.' });
 
         if (user.accountStatus === 'blocked') {
-            return res.status(403).json({ success: false, message: 'Your account has been blocked by the administrator.' });
+            return res.status(403).json({ success: false, message: 'Your account has been blocked by the Administrator.' });
         }
         if (user.accountStatus === 'deleted') {
             return res.status(403).json({ success: false, message: 'This account has been deactivated.' });
@@ -707,19 +666,20 @@ app.post('/api/auth/login', createLimiter(5, 900000), verifyNotABot, async (req,
             const mins = Math.ceil((user.lockUntil - Date.now()) / 60000);
             return res.status(429).json({
                 success: false,
-                message: `Account locked due to multiple wrong attempts. Try again in ${mins} minutes.`
+                message: `Account temporarily locked due to failed attempts. Try again in ${mins} minutes.`
             });
         }
 
         const activeHash = user.credentialHash || user.pinHash;
         const isMatch = await bcrypt.compare(rawCred, activeHash);
         if (!isMatch) {
-            const updated = await User.findOneAndUpdate(
+            const updatedUser = await User.findOneAndUpdate(
                 { _id: user._id, tenantId: TENANT_ID },
                 { $inc: { failedLoginAttempts: 1 } },
                 { new: true }
             );
-            if (updated.failedLoginAttempts >= 5) {
+
+            if (updatedUser.failedLoginAttempts >= 5) {
                 await User.updateOne(
                     { _id: user._id, tenantId: TENANT_ID },
                     { $set: { lockUntil: new Date(Date.now() + 15 * 60000), failedLoginAttempts: 0 } }
@@ -739,7 +699,10 @@ app.post('/api/auth/login', createLimiter(5, 900000), verifyNotABot, async (req,
             deviceInfo: sanitizeInput(req.headers['user-agent'], 90) || 'Web Browser',
             ipAddress: sanitizeInput(req.ip, 45)
         });
-        if (user.activeSessions.length > 15) user.activeSessions = user.activeSessions.slice(-15);
+
+        if (user.activeSessions.length > 15) {
+            user.activeSessions = user.activeSessions.slice(-15);
+        }
         await user.save();
 
         const token = jwt.sign(
@@ -772,7 +735,7 @@ app.post('/api/auth/login', createLimiter(5, 900000), verifyNotABot, async (req,
             }
         });
     } catch (e) {
-        await logBackendError('Login', e, req);
+        await logCleanActivity('Login', req);
         res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
     }
 });
@@ -788,18 +751,19 @@ app.post('/api/auth/logout', authenticateUser, async (req, res) => {
     }
 });
 
-app.post('/api/auth/verify-and-reset', createLimiter(5, 900000), async (req, res) => {
+async function handleCredentialReset(req, res) {
     try {
         const mobile = sanitizeInput(req.body.mobile, 10);
         const registeredName = sanitizeInput(req.body.registeredName, 60).toLowerCase();
         const recoveryType = req.body.recoveryType === 'email' ? 'email' : 'cid';
-        const rawRecoveryVal = req.body.recoveryValue;
+        const rawRecoveryVal = req.body.recoveryValue !== undefined ? req.body.recoveryValue : req.body.consumerId;
 
         const newAuthType = req.body.newAuthType === 'password' ? 'password' : 'pin';
-        const credCheck = validateSecurityCredential(newAuthType, String(req.body.newCredential || ''));
+        const rawNewCred = req.body.newCredential !== undefined ? req.body.newCredential : req.body.newPin;
+        const credCheck = validateSecurityCredential(newAuthType, String(rawNewCred || ''));
 
         if (!/^[0-9]{10}$/.test(mobile) || registeredName.length < 2 || !credCheck.valid) {
-            return res.status(400).json({ success: false, message: 'Please enter valid details.' });
+            return res.status(400).json({ success: false, message: credCheck.message || 'Please enter valid details.' });
         }
 
         if (!emcsBloom.test(mobile)) {
@@ -834,12 +798,15 @@ app.post('/api/auth/verify-and-reset', createLimiter(5, 900000), async (req, res
         user.activeSessions = [];
         await user.save();
 
-        res.json({ success: true, message: 'Successfully updated! Please log in.' });
+        res.json({ success: true, message: 'Your PIN/Password has been reset! Please log in.' });
     } catch (e) {
-        await logBackendError('Account Recovery', e, req);
+        await logCleanActivity('Account Recovery', req);
         res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
     }
-});
+}
+
+app.post('/api/auth/verify-and-reset', loginLimiter, botHoneypotShield, handleCredentialReset);
+app.post('/api/auth/verify-and-reset-pin', loginLimiter, botHoneypotShield, handleCredentialReset);
 
 app.get('/api/auth/devices', authenticateUser, strictAntiIdorShield, (req, res) => {
     const FORTY_EIGHT_HRS = 48 * 3600 * 1000;
@@ -862,22 +829,190 @@ app.post('/api/auth/revoke-device', authenticateUser, strictAntiIdorShield, asyn
     try {
         const targetId = sanitizeInput(req.body.targetSessionId, 64);
         const target = req.user.activeSessions.find(s => s.sessionId === targetId);
+
         if (!target || targetId === req.sessionId) {
             return res.status(400).json({ success: false, message: 'Invalid device selection.' });
         }
+
         if (Date.now() - new Date(target.createdAt).getTime() < 48 * 3600 * 1000) {
             return res.status(403).json({ success: false, message: 'Other devices can be removed 48 hours after login.' });
         }
+
         req.user.activeSessions = req.user.activeSessions.filter(s => s.sessionId !== targetId);
         await req.user.save();
-        res.json({ success: true, message: 'Device logged out.' });
+        res.json({ success: true, message: 'Device removed.' });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
     }
 });
 
 // ===================================================================
-// USER DATA SYNC & ACCOUNT DELETION
+// 🔥 KAMABHI AI (EMCS AI) - STRICT IDENTITY, RAM LOCK & SPAM BLOCKER
+// ===================================================================
+const aiRamTimestamps = new Map(); // Tracks timestamps in RAM per Consumer ID
+const aiActiveWritingLocks = new Set(); // Ensures 1 question at a time per user
+
+async function queryKamAbhiAiModel(promptText) {
+    if (!GEMINI_API_KEY) {
+        return "Hello! I am KamAbhi AI (EMCS AI Assistant). Tip: Running heavy appliances like ACs at 24°C and shifting Geyser or Washing Machine usage to daytime hours (10 AM - 3 PM) can reduce your electricity bill by up to 20%. Always use a proper MCB and stabilizer for heavy loads.";
+    }
+
+    if (genAI) {
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const result = await model.generateContent(promptText);
+        return result.response.text();
+    }
+
+    // Fallback native REST call if @google/generative-ai package is not installed
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }] }]
+        })
+    });
+    const data = await response.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || 'I am KamAbhi AI. Please ask your electrical or energy-saving question again.';
+}
+
+app.get('/api/ai/history', authenticateUser, strictAntiIdorShield, async (req, res) => {
+    try {
+        const messages = await AiChat.find({
+            tenantId: TENANT_ID,
+            consumerId: req.user.consumerId
+        }).sort({ timestamp: 1 }).limit(100);
+        res.json({ success: true, messages });
+    } catch (e) {
+        res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
+    }
+});
+
+app.post('/api/ai/chat', authenticateUser, strictAntiIdorShield, async (req, res) => {
+    const cid = req.user.consumerId;
+
+    try {
+        // 1. Check if User is Permanently Blocked from AI
+        if (req.user.aiStatus === 'blocked') {
+            return res.status(403).json({
+                success: false,
+                reply: 'Your access to KamAbhi AI has been permanently blocked due to repeated spam violations.'
+            });
+        }
+
+        // 2. RAM-Based 10-Second Burst Detector (Warnings + Permanent Block on 10 hits in 10s)
+        const now = Date.now();
+        let hits = (aiRamTimestamps.get(cid) || []).filter(ts => now - ts < 10000);
+        hits.push(now);
+        aiRamTimestamps.set(cid, hits);
+
+        if (hits.length >= 10) {
+            req.user.aiStatus = 'blocked';
+            await req.user.save();
+            await dispatchEmergencyAlert(
+                'AI Spam DDoS Permanent Block',
+                `User ${cid} (${req.user.name}) sent ${hits.length} AI requests within 10 seconds. AI access permanently blocked.`,
+                req
+            );
+            return res.status(403).json({
+                success: false,
+                reply: 'Security Alert: You sent 10+ questions within 10 seconds. Your AI access has been permanently blocked.'
+            });
+        }
+
+        if (hits.length >= 5) {
+            req.user.aiSpamWarnings = (req.user.aiSpamWarnings || 0) + 1;
+            await req.user.save();
+
+            if (req.user.aiSpamWarnings <= 2) {
+                return res.status(429).json({
+                    success: false,
+                    reply: `Warning (${req.user.aiSpamWarnings}/2): Please slow down! Sending questions too rapidly will permanently block your AI access.`
+                });
+            } else {
+                req.user.aiStatus = 'blocked';
+                await req.user.save();
+                await dispatchEmergencyAlert(
+                    'AI Spam Repeat Offender Blocked',
+                    `User ${cid} (${req.user.name}) ignored 2 warnings and continued rapid AI spamming. Permanently blocked.`,
+                    req
+                );
+                return res.status(403).json({
+                    success: false,
+                    reply: 'Your access to KamAbhi AI has been permanently blocked after 2 spam warnings.'
+                });
+            }
+        }
+
+        // 3. Single-Question Concurrency Lock (Ignore new question while previous is generating)
+        if (aiActiveWritingLocks.has(cid)) {
+            return res.status(429).json({
+                success: false,
+                reply: 'Wait kro pichle question ka answer likh rhe hai. Uske baad dusra question bhejo.'
+            });
+        }
+
+        const userText = sanitizeInput(req.body.text, 500);
+        if (!userText) {
+            return res.status(400).json({ success: false, reply: 'Please enter a valid question.' });
+        }
+
+        aiActiveWritingLocks.add(cid);
+
+        try {
+            await new AiChat({
+                tenantId: TENANT_ID,
+                consumerId: cid,
+                sender: 'user',
+                text: userText
+            }).save();
+
+            const recentChats = await AiChat.find({ tenantId: TENANT_ID, consumerId: cid })
+                .sort({ timestamp: -1 })
+                .limit(6);
+            const chatContext = recentChats.reverse().map(c => `${c.sender === 'ai' ? 'KamAbhi AI' : 'User'}: ${c.text}`).join('\n');
+
+            const systemPrompt = `STRICT IDENTITY & BEHAVIOR INSTRUCTIONS:
+1. Your name is strictly "KamAbhi AI" or "EMCS AI".
+2. NEVER mention Gemini, Google, OpenAI, ChatGPT, or any other AI company or model name under any circumstance. If asked who made you or who you are, always state: "I am KamAbhi AI (EMCS AI), your electrical and energy management assistant powered by KamAbhi Tech Solutions."
+3. You are a friendly, human-like electrical guide and advisor. Only answer questions related to electricity bills, home appliances, inverters, solar panels, smart meters, Wi-Fi switches, wiring, and electrical safety.
+4. Always include clear, practical safety advice (such as turning off the main MCB before touching wires, using proper earthing, and avoiding wet hands) whenever giving hardware or electrical guidance.
+5. Keep your answers clear, easy to understand for normal homeowners, and free of complex technical jargon.
+
+Recent Conversation:
+${chatContext}
+
+User Question: ${userText}
+KamAbhi AI Answer:`;
+
+            let rawAiReply = await queryKamAbhiAiModel(systemPrompt);
+
+            // Scrub any accidental third-party AI model names
+            rawAiReply = String(rawAiReply || '')
+                .replace(/\bgemini\b|\bgoogle\s+ai\b|\bchatgpt\b|\bopenai\b|\blarge language model\b/gi, 'KamAbhi AI');
+
+            const cleanReply = sanitizeInput(rawAiReply, 2200) || 'I am KamAbhi AI. Please ask your electrical or energy question again.';
+
+            await new AiChat({
+                tenantId: TENANT_ID,
+                consumerId: cid,
+                sender: 'ai',
+                text: cleanReply
+            }).save();
+
+            res.json({ success: true, reply: cleanReply });
+        } finally {
+            aiActiveWritingLocks.delete(cid);
+        }
+    } catch (e) {
+        aiActiveWritingLocks.delete(cid);
+        await logCleanActivity('KamAbhi AI', req);
+        res.status(500).json({ success: false, reply: 'Something went wrong, try again later.' });
+    }
+});
+
+// ===================================================================
+// USER DATA SYNC & ACCOUNT DEACTIVATION (STRICT ANTI-IDOR ENFORCED)
 // ===================================================================
 app.use('/api/user', authenticateUser, strictAntiIdorShield);
 
@@ -899,13 +1034,23 @@ app.get('/api/user/get-cloud-data', (req, res) => {
     });
 });
 
-app.all('/api/user/:anyRoute/:consumerId', (req, res) => {
-    res.status(403).json({ success: false, message: 'Direct URL access is blocked.' });
+app.all('/api/user/:anyRoute/:consumerId', async (req, res) => {
+    await dispatchEmergencyAlert('URL Parameter Tampering', `Blocked direct URL access attempt by ${req.user?.consumerId}`, req);
+    res.status(403).json({ success: false, message: 'Access Denied.' });
 });
 
 app.post('/api/user/sync-cloud', async (req, res) => {
     try {
-        const { name, appliances, sanctionedLoadKw, budgetThreshold, tariffProvider, tariffCategory, tariffArea, customTariff } = req.body;
+        const {
+            name,
+            appliances,
+            sanctionedLoadKw,
+            budgetThreshold,
+            tariffProvider,
+            tariffCategory,
+            tariffArea,
+            customTariff
+        } = req.body;
 
         if (name !== undefined) {
             const cleanName = sanitizeInput(name, 60);
@@ -916,24 +1061,34 @@ app.post('/api/user/sync-cloud', async (req, res) => {
             req.user.appliances = appliances.slice(0, 50).map(a => {
                 const pwr = Math.min(50000, Math.max(1, Number(a.power) || 10));
                 const hrs = Math.min(24, Math.max(0.1, Number(a.hours) || 1));
-                const connMode = ALLOWED_CONN_MODES.has(a.connMode) ? a.connMode : 'manual';
+                const mode = ALLOWED_CONN_MODES.has(a.connMode) ? a.connMode : 'manual';
                 return {
                     id: Number(a.id) || Date.now(),
                     name: sanitizeInput(a.name, 40) || 'Appliance',
                     power: pwr,
                     hours: hrs,
                     monthlyKwh: Number(((pwr * hrs * 30) / 1000).toFixed(2)),
-                    connMode,
-                    state: Boolean(a.state)
+                    state: Boolean(a.state),
+                    connMode: mode
                 };
             });
         }
 
-        if (sanctionedLoadKw !== undefined) req.user.sanctionedLoadKw = Math.min(50, Math.max(0.5, Number(sanctionedLoadKw) || 2.0));
-        if (budgetThreshold !== undefined) req.user.budgetThreshold = Math.min(1000000, Math.max(100, Number(budgetThreshold) || 3000));
-        if (tariffProvider && ALLOWED_PROVIDERS.has(tariffProvider)) req.user.tariffProvider = tariffProvider;
-        if (tariffCategory && ALLOWED_CATEGORIES.has(tariffCategory)) req.user.tariffCategory = tariffCategory;
-        if (tariffArea && ALLOWED_AREAS.has(tariffArea)) req.user.tariffArea = tariffArea;
+        if (sanctionedLoadKw !== undefined) {
+            req.user.sanctionedLoadKw = Math.min(50, Math.max(0.5, Number(sanctionedLoadKw) || 2.0));
+        }
+        if (budgetThreshold !== undefined) {
+            req.user.budgetThreshold = Math.min(1000000, Math.max(100, Number(budgetThreshold) || 3000));
+        }
+        if (tariffProvider && ALLOWED_PROVIDERS.has(tariffProvider)) {
+            req.user.tariffProvider = tariffProvider;
+        }
+        if (tariffCategory && ALLOWED_CATEGORIES.has(tariffCategory)) {
+            req.user.tariffCategory = tariffCategory;
+        }
+        if (tariffArea && ALLOWED_AREAS.has(tariffArea)) {
+            req.user.tariffArea = tariffArea;
+        }
 
         if (customTariff && typeof customTariff === 'object') {
             req.user.customTariff = {
@@ -948,9 +1103,9 @@ app.post('/api/user/sync-cloud', async (req, res) => {
         }
 
         await req.user.save();
-        res.json({ success: true });
+        res.json({ success: true, message: 'Settings saved.' });
     } catch (e) {
-        await logBackendError('Cloud Sync', e, req);
+        await logCleanActivity('Profile Save', req);
         res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
     }
 });
@@ -961,179 +1116,26 @@ app.delete('/api/user/delete-account', async (req, res) => {
         req.user.deletionScheduledAt = new Date();
         req.user.activeSessions = [];
         await req.user.save();
+
         res.clearCookie('emcs_auth_token');
         res.json({ success: true, message: 'Account deactivated.' });
     } catch (e) {
+        await logCleanActivity('Account Deactivation', req);
         res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
     }
 });
 
 // ===================================================================
-// 🔥 KAMABHI AI (EMCS AI) - STRICT IDENTITY, CONCURRENCY & 10s/10-REQ BLOCKER
+// ADMIN MANAGEMENT PANEL, KYC, BLOCK/DELETE, AI HISTORY & ALERTS
 // ===================================================================
-const aiRamTimestamps = new Map(); // RAM Timestamp Tracker: cid -> [ts1, ts2, ...]
-const aiActiveQuestionLocks = new Set(); // RAM Single-Question Concurrency Lock
-
-// Scrub any accidental mention of third-party AI model names
-function enforceKamAbhiPersona(text) {
-    return String(text || '')
-        .replace(/\b(gemini|google\s+ai|google\s+deepmind|bard|chatgpt|openai)\b/gi, 'KamAbhi AI (EMCS AI)');
-}
-
-async function generateKamAbhiAiResponse(systemPrompt) {
-    if (genAI) {
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-        const result = await model.generateContent(systemPrompt);
-        return enforceKamAbhiPersona(result.response.text());
-    }
-    if (GEMINI_API_KEY && typeof fetch === 'function') {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-        const resp = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }] })
-        });
-        const json = await resp.json();
-        const raw = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        if (raw) return enforceKamAbhiPersona(raw);
-    }
-    return 'Namaste! I am KamAbhi AI (EMCS AI). For your electrical safety and lower monthly bills: keep AC at 24°C, switch off water geysers after 20 minutes, unplug idle chargers, and always turn off the main miniature circuit breaker (MCB) before touching any switchboard or smart relay.';
-}
-
-app.get('/api/ai/history', authenticateUser, strictAntiIdorShield, async (req, res) => {
-    try {
-        const messages = await AiChat.find({
-            tenantId: TENANT_ID,
-            consumerId: req.user.consumerId
-        }).sort({ timestamp: 1 }).limit(80);
-        res.json({ success: true, messages });
-    } catch (e) {
-        res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
-    }
-});
-
-app.post('/api/ai/chat', authenticateUser, strictAntiIdorShield, async (req, res) => {
-    const cid = req.user.consumerId;
-
-    if (req.user.aiStatus === 'blocked') {
-        return res.status(403).json({
-            success: false,
-            reply: 'Your AI access has been permanently blocked due to repeated spam violations.'
-        });
-    }
-
-    // 🛡️ 1. RAM TIMESTAMP ANTI-SPAM (10 Questions in 10 Seconds -> Permanent Block)
-    const now = Date.now();
-    let timestamps = aiRamTimestamps.get(cid) || [];
-    timestamps = timestamps.filter(ts => now - ts <= 10000); // Exact 10-second sliding window in RAM
-    timestamps.push(now);
-    aiRamTimestamps.set(cid, timestamps);
-
-    // Direct permanent block on 10+ requests within 10 seconds
-    if (timestamps.length >= 10) {
-        req.user.aiStatus = 'blocked';
-        await req.user.save();
-        await triggerEmergencyAlert(
-            'AI Spam Flood (10 Req / 10 Sec)',
-            `Consumer ${cid} (${req.user.name}) sent ${timestamps.length} AI questions within 10 seconds. AI access permanently blocked.`,
-            req
-        );
-        return res.status(403).json({
-            success: false,
-            reply: 'Permanent Block: You sent 10+ questions within 10 seconds. Your AI access has been permanently disabled.'
-        });
-    }
-
-    // 2 Warnings before permanent block for rapid fire bursts (e.g. 4+ messages within 10s)
-    if (timestamps.length >= 4) {
-        req.user.aiSpamWarnings = (req.user.aiSpamWarnings || 0) + 1;
-        if (req.user.aiSpamWarnings > 2) {
-            req.user.aiStatus = 'blocked';
-            await req.user.save();
-            await triggerEmergencyAlert(
-                'AI Spam Warnings Exceeded',
-                `Consumer ${cid} (${req.user.name}) ignored 2 spam warnings and was permanently blocked from AI.`,
-                req
-            );
-            return res.status(403).json({
-                success: false,
-                reply: 'Permanent Block: You exceeded the 2 spam warnings. Your AI access has been permanently disabled.'
-            });
-        }
-        await req.user.save();
-        return res.status(429).json({
-            success: false,
-            reply: `Warning (${req.user.aiSpamWarnings}/2): Please do not send questions too fast! After 2 warnings, your AI access will be permanently blocked.`
-        });
-    }
-
-    // 🛡️ 2. SINGLE QUESTION CONCURRENCY LOCK
-    if (aiActiveQuestionLocks.has(cid)) {
-        return res.status(429).json({
-            success: false,
-            isBusy: true,
-            reply: 'Wait kro pichle question ka answer likh rhe hai. Uske baad dusra question bhejo.'
-        });
-    }
-
-    const userText = sanitizeInput(req.body.text, 500);
-    if (!userText) return res.status(400).json({ success: false });
-
-    aiActiveQuestionLocks.add(cid);
-    try {
-        await new AiChat({
-            tenantId: TENANT_ID,
-            consumerId: cid,
-            userName: req.user.name,
-            sender: 'user',
-            text: userText
-        }).save();
-
-        const recentChats = await AiChat.find({ tenantId: TENANT_ID, consumerId: cid }).sort({ timestamp: -1 }).limit(6);
-        const context = recentChats.reverse().map(c => `${c.sender === 'user' ? 'User' : 'KamAbhi AI'}: ${c.text}`).join('\n');
-
-        const systemPrompt = `STRICT IDENTITY & ROLE COMMAND:
-You are strictly "KamAbhi AI" (also called "EMCS AI"), the official electrical and energy-saving assistant of EMCS.
-1. NEVER mention Gemini, Google, OpenAI, ChatGPT, or any other AI company or model name under any circumstance. If asked who you are or who made you, always state: "I am KamAbhi AI (EMCS AI), your electrical and energy management assistant."
-2. Only answer questions related to electricity bills, home appliances, energy saving, inverters, solar panels, smart meters, Wi-Fi switches, and electrical safety. If a user asks an unrelated topic, politely guide them back to electrical and energy topics.
-3. Always provide practical advice along with clear electrical safety instructions (e.g., turning off main power before touching wires, using proper earthing/MCB, avoiding wet hands).
-4. Keep your tone friendly, simple, human-like, and easy to understand.
-
-Recent Conversation:
-${context}
-
-Provide KamAbhi AI's response to the latest question:`;
-
-        const aiReply = sanitizeInput(await generateKamAbhiAiResponse(systemPrompt), 2200);
-
-        await new AiChat({
-            tenantId: TENANT_ID,
-            consumerId: cid,
-            userName: req.user.name,
-            sender: 'ai',
-            text: aiReply
-        }).save();
-
-        res.json({ success: true, reply: aiReply });
-    } catch (e) {
-        await logBackendError('AI Assistant', e, req);
-        res.status(500).json({ success: false, reply: 'Something went wrong, try again later.' });
-    } finally {
-        aiActiveQuestionLocks.delete(cid);
-    }
-});
-
-// ===================================================================
-// ADMIN MANAGEMENT, USER BLOCK/DELETE, AI HISTORY & CMS ROUTES
-// ===================================================================
-app.post('/api/admin/login', createLimiter(5, 900000), async (req, res) => {
+app.post('/api/admin/login', loginLimiter, async (req, res) => {
     try {
         const username = sanitizeInput(req.body.username, 40).toLowerCase();
         const password = sanitizeInput(req.body.password, 64);
 
         if (!username) {
             if (!MASTER_OWNER_KEY) {
-                return res.status(503).json({ success: false, message: 'Admin key is not configured.' });
+                return res.status(503).json({ success: false, message: 'Owner access key is not configured.' });
             }
             if (safeCompareStrings(password, MASTER_OWNER_KEY)) {
                 const perms = { canManageUsers: true, canChatSupport: true, canEditCMS: true, canDeleteChat: true };
@@ -1157,8 +1159,10 @@ app.post('/api/admin/login', createLimiter(5, 900000), async (req, res) => {
                 return res.json({ success: true, role: 'staff', name: staff.name, permissions: staff.permissions });
             }
         }
-        res.status(401).json({ success: false, message: 'Invalid admin credentials.' });
+
+        res.status(401).json({ success: false, message: 'Invalid Admin Key.' });
     } catch (e) {
+        await logCleanActivity('Admin Login', req);
         res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
     }
 });
@@ -1168,90 +1172,31 @@ app.post('/api/admin/logout', (req, res) => {
     res.json({ success: true });
 });
 
-app.get('/api/admin/user/:consumerId', authenticateAdmin, async (req, res) => {
+// Admin Emergency Alerts Routes
+app.get('/api/admin/emergency-alerts', authenticateAdmin, async (req, res) => {
     try {
-        const cid = sanitizeInput(req.params.consumerId, 12).toUpperCase();
-        const targetUser = await User.findOne({ tenantId: TENANT_ID, consumerId: cid }, '-credentialHash -pinHash');
-        if (!targetUser) return res.status(404).json({ success: false, message: 'User not found.' });
-
-        const createdTime = targetUser.createdAt ? new Date(targetUser.createdAt).getTime() : Date.now();
-        const monthsActive = Math.max(1, (Date.now() - createdTime) / (1000 * 60 * 60 * 24 * 30));
-        let monthlyKwh = 0;
-        (targetUser.appliances || []).forEach(a => {
-            if (a.state) monthlyKwh += parseFloat(a.monthlyKwh) || 0;
-        });
-        const lifetimeUsage = (monthsActive * monthlyKwh).toFixed(1);
-
-        const paymentLedger = [];
-        for (let i = 0; i < 24; i++) {
-            const d = new Date();
-            d.setMonth(d.getMonth() - i);
-            const monthLabel = d.toLocaleString('en-IN', { month: 'short', year: 'numeric' });
-            const deterministicHash = crypto.createHash('sha256').update(`${TENANT_ID}_${cid}_${monthLabel}`).digest('hex').slice(0, 8).toUpperCase();
-            const varianceFactor = 0.92 + ((i % 5) * 0.04);
-            const billedUnits = (monthlyKwh * varianceFactor).toFixed(1);
-            const fixedCharge = (targetUser.sanctionedLoadKw || 2.0) * 80;
-            const billedAmt = Math.round((parseFloat(billedUnits) * 6.85) + (monthlyKwh > 0 ? fixedCharge : 0));
-
-            paymentLedger.push({
-                month: monthLabel,
-                txnId: `REC-${deterministicHash}`,
-                units: billedUnits,
-                amount: billedAmt,
-                status: i === 0 && billedAmt > 0 ? 'Current Month' : 'Paid'
-            });
-        }
-
-        res.json({ success: true, user: targetUser, lifetimeUsage, paymentLedger });
+        const alerts = await EmergencyAlert.find({ tenantId: TENANT_ID }).sort({ timestamp: -1 }).limit(100);
+        res.json({ success: true, alerts });
     } catch (e) {
-        res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
+        res.status(500).json({ success: false });
     }
 });
 
-// Block or Unblock User Account (Also resets AI block when unblocking)
-app.put('/api/admin/user/:cid/status', authenticateAdmin, async (req, res) => {
+app.delete('/api/admin/emergency-alerts/clear', authenticateAdmin, async (req, res) => {
     try {
-        const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
-        const status = req.body.status === 'blocked' ? 'blocked' : 'active';
-        const updateFields = { accountStatus: status, activeSessions: [] };
-        if (status === 'active') {
-            updateFields.aiStatus = 'active';
-            updateFields.aiSpamWarnings = 0;
-        }
-        await User.updateOne({ tenantId: TENANT_ID, consumerId: cid }, { $set: updateFields });
-        res.json({ success: true, message: `User status updated to ${status}.` });
+        if (req.admin.role !== 'owner') return res.status(403).json({ success: false });
+        await EmergencyAlert.deleteMany({ tenantId: TENANT_ID });
+        res.json({ success: true });
     } catch (e) {
-        res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
+        res.status(500).json({ success: false });
     }
 });
 
-// Permanently Delete User Account & All Associated Data
-app.delete('/api/admin/user/:cid', authenticateAdmin, async (req, res) => {
-    try {
-        const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
-        await User.deleteOne({ tenantId: TENANT_ID, consumerId: cid });
-        await SupportMessage.deleteMany({ tenantId: TENANT_ID, consumerId: cid });
-        await AiChat.deleteMany({ tenantId: TENANT_ID, consumerId: cid });
-        res.json({ success: true, message: 'User account and all history deleted.' });
-    } catch (e) {
-        res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
-    }
-});
-
-// Admin AI Chat History Endpoints
+// Admin AI Chat History Routes
 app.get('/api/admin/ai-history/all', authenticateAdmin, async (req, res) => {
     try {
-        const cids = await AiChat.distinct('consumerId', { tenantId: TENANT_ID });
-        const users = await User.find({ tenantId: TENANT_ID, consumerId: { $in: cids } }, 'name consumerId aiStatus');
-        const userMap = {};
-        users.forEach(u => { userMap[u.consumerId] = { name: u.name, aiStatus: u.aiStatus }; });
-
-        const threads = cids.map(cid => ({
-            consumerId: cid,
-            name: userMap[cid]?.name || 'Consumer',
-            aiStatus: userMap[cid]?.aiStatus || 'active'
-        }));
-        res.json({ success: true, threads });
+        const users = await AiChat.distinct('consumerId', { tenantId: TENANT_ID });
+        res.json({ success: true, users });
     } catch (e) {
         res.status(500).json({ success: false });
     }
@@ -1271,7 +1216,106 @@ app.delete('/api/admin/ai-history/:cid', authenticateAdmin, async (req, res) => 
     try {
         const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
         await AiChat.deleteMany({ tenantId: TENANT_ID, consumerId: cid });
-        res.json({ success: true, message: 'AI chat history deleted.' });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+
+// Admin User KYC, 24-Month Billing & Login History
+app.get('/api/admin/user/:consumerId', authenticateAdmin, async (req, res) => {
+    try {
+        if (req.admin.role !== 'owner' && !req.admin.permissions?.canManageUsers) {
+            return res.status(403).json({ success: false, message: 'Insufficient permissions.' });
+        }
+
+        const cid = sanitizeInput(req.params.consumerId, 12).toUpperCase();
+        if (!/^[A-Z0-9]{12}$/.test(cid) || !emcsBloom.test(cid)) {
+            return res.status(404).json({ success: false, message: 'User not found.' });
+        }
+
+        const targetUser = await User.findOne({ tenantId: TENANT_ID, consumerId: cid }, '-credentialHash -pinHash');
+        if (!targetUser) return res.status(404).json({ success: false, message: 'User not found.' });
+
+        const createdTime = targetUser.createdAt ? new Date(targetUser.createdAt).getTime() : Date.now();
+        const monthsActive = Math.max(1, (Date.now() - createdTime) / (1000 * 60 * 60 * 24 * 30));
+        let monthlyKwh = 0;
+        (targetUser.appliances || []).forEach(a => {
+            if (a.state) monthlyKwh += parseFloat(a.monthlyKwh) || 0;
+        });
+        const lifetimeUsage = (monthsActive * monthlyKwh).toFixed(1);
+
+        const paymentLedger = [];
+        for (let i = 0; i < 24; i++) {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            const monthLabel = d.toLocaleString('en-IN', { month: 'short', year: 'numeric' });
+            const deterministicHash = crypto
+                .createHash('sha256')
+                .update(`${TENANT_ID}_${cid}_${monthLabel}`)
+                .digest('hex')
+                .slice(0, 8)
+                .toUpperCase();
+
+            const varianceFactor = 0.92 + ((i % 5) * 0.04);
+            const billedUnits = (monthlyKwh * varianceFactor).toFixed(1);
+            const fixedCharge = (targetUser.sanctionedLoadKw || 2.0) * 80;
+            const billedAmt = Math.round((parseFloat(billedUnits) * 6.85) + (monthlyKwh > 0 ? fixedCharge : 0));
+
+            paymentLedger.push({
+                month: monthLabel,
+                txnId: `REC-${deterministicHash}`,
+                units: billedUnits,
+                amount: billedAmt,
+                status: i === 0 && billedAmt > 0 ? 'Current Month' : 'Paid'
+            });
+        }
+
+        res.json({
+            success: true,
+            user: targetUser,
+            lifetimeUsage,
+            paymentLedger
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
+    }
+});
+
+// Admin Block / Unblock User (Also resets AI block when unblocking)
+app.put('/api/admin/user/:cid/status', authenticateAdmin, async (req, res) => {
+    try {
+        if (req.admin.role !== 'owner' && !req.admin.permissions?.canManageUsers) {
+            return res.status(403).json({ success: false });
+        }
+        const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
+        const newStatus = req.body.status === 'blocked' ? 'blocked' : 'active';
+        const updateFields = {
+            accountStatus: newStatus,
+            activeSessions: []
+        };
+        if (newStatus === 'active') {
+            updateFields.aiStatus = 'active';
+            updateFields.aiSpamWarnings = 0;
+        }
+        await User.updateOne({ tenantId: TENANT_ID, consumerId: cid }, { $set: updateFields });
+        res.json({ success: true, message: `User status updated to ${newStatus}.` });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+
+// Admin Permanently Delete User & All Associated Records
+app.delete('/api/admin/user/:cid', authenticateAdmin, async (req, res) => {
+    try {
+        if (req.admin.role !== 'owner' && !req.admin.permissions?.canManageUsers) {
+            return res.status(403).json({ success: false });
+        }
+        const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
+        await User.deleteOne({ tenantId: TENANT_ID, consumerId: cid });
+        await SupportMessage.deleteMany({ tenantId: TENANT_ID, consumerId: cid });
+        await AiChat.deleteMany({ tenantId: TENANT_ID, consumerId: cid });
+        res.json({ success: true, message: 'User permanently deleted.' });
     } catch (e) {
         res.status(500).json({ success: false });
     }
@@ -1290,9 +1334,11 @@ app.post('/api/admin/staff', authenticateAdmin, async (req, res) => {
         const name = sanitizeInput(req.body.name, 50);
         const username = sanitizeInput(req.body.username, 30).toLowerCase();
         const password = sanitizeInput(req.body.password, 64);
+
         if (!name || !username || password.length < 6) {
-            return res.status(400).json({ success: false, message: 'Please enter valid name, username, and password.' });
+            return res.status(400).json({ success: false, message: 'Please enter valid details.' });
         }
+
         const passwordHash = await bcrypt.hash(password, 12);
         await new Staff({
             tenantId: TENANT_ID,
@@ -1306,9 +1352,10 @@ app.post('/api/admin/staff', authenticateAdmin, async (req, res) => {
                 canDeleteChat: Boolean(req.body.permissions?.canDeleteChat)
             }
         }).save();
+
         res.json({ success: true, message: 'Team member added.' });
     } catch (e) {
-        res.status(400).json({ success: false, message: 'Could not add team member.' });
+        res.status(400).json({ success: false, message: 'Username already exists.' });
     }
 });
 
@@ -1318,7 +1365,6 @@ app.delete('/api/admin/staff/:id', authenticateAdmin, async (req, res) => {
     res.json({ success: true });
 });
 
-// Website Info & FAQs (CMS)
 app.get('/api/cms', async (req, res) => {
     try {
         const cms = await CmsConfig.findOne({ tenantId: TENANT_ID, key: 'global_cms' })
@@ -1349,21 +1395,29 @@ app.post('/api/admin/cms', authenticateAdmin, requireAdminPermission('canEditCMS
     }
 });
 
-// Support Desk Chat Routes
+// Two-Way Support Chat Routes
 app.get('/api/support/user/messages', authenticateUser, strictAntiIdorShield, async (req, res) => {
     try {
-        const messages = await SupportMessage.find({ tenantId: TENANT_ID, consumerId: req.user.consumerId }).sort({ timestamp: 1 }).limit(100);
+        const messages = await SupportMessage.find({
+            tenantId: TENANT_ID,
+            consumerId: req.user.consumerId
+        }).sort({ timestamp: 1 }).limit(100);
         res.json({ success: true, messages });
     } catch (e) {
         res.status(500).json({ success: false });
     }
 });
 
-app.post('/api/support/user/send', authenticateUser, strictAntiIdorShield, createLimiter(12, 60000), async (req, res) => {
+app.post('/api/support/user/send', authenticateUser, strictAntiIdorShield, chatLimiter, async (req, res) => {
     try {
         const text = sanitizeInput(req.body.text, 500);
         if (!text) return res.status(400).json({ success: false });
-        const msg = await new SupportMessage({ tenantId: TENANT_ID, consumerId: req.user.consumerId, sender: 'user', text }).save();
+        const msg = await new SupportMessage({
+            tenantId: TENANT_ID,
+            consumerId: req.user.consumerId,
+            sender: 'user',
+            text
+        }).save();
         res.json({ success: true, message: msg });
     } catch (e) {
         res.status(500).json({ success: false });
@@ -1372,6 +1426,9 @@ app.post('/api/support/user/send', authenticateUser, strictAntiIdorShield, creat
 
 app.get('/api/support/admin/threads', authenticateAdmin, async (req, res) => {
     try {
+        if (req.admin.role !== 'owner' && !req.admin.permissions?.canChatSupport && !req.admin.permissions?.canManageUsers) {
+            return res.status(403).json({ success: false });
+        }
         const users = await User.find(
             { tenantId: TENANT_ID },
             'name email consumerId mobile sanctionedLoadKw accountStatus aiStatus createdAt'
@@ -1385,6 +1442,7 @@ app.get('/api/support/admin/threads', authenticateAdmin, async (req, res) => {
 app.get('/api/support/admin/messages/:cid', authenticateAdmin, requireAdminPermission('canChatSupport'), async (req, res) => {
     try {
         const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
+        if (!emcsBloom.test(cid)) return res.json({ success: true, messages: [] });
         const messages = await SupportMessage.find({ tenantId: TENANT_ID, consumerId: cid }).sort({ timestamp: 1 });
         res.json({ success: true, messages });
     } catch (e) {
@@ -1396,7 +1454,7 @@ app.post('/api/support/admin/reply', authenticateAdmin, requireAdminPermission('
     try {
         const consumerId = sanitizeInput(req.body.consumerId, 12).toUpperCase();
         const text = sanitizeInput(req.body.text, 500);
-        if (!text) return res.status(400).json({ success: false });
+        if (!text || !emcsBloom.test(consumerId)) return res.status(400).json({ success: false });
         const msg = await new SupportMessage({ tenantId: TENANT_ID, consumerId, sender: 'admin', text }).save();
         res.json({ success: true, message: msg });
     } catch (e) {
@@ -1430,20 +1488,24 @@ app.get('/api/admin/master-database-dump', authenticateAdmin, async (req, res) =
         const users = await User.find({ tenantId: TENANT_ID }, '-credentialHash -pinHash');
         const messages = await SupportMessage.find({ tenantId: TENANT_ID });
         const aiChats = await AiChat.find({ tenantId: TENANT_ID });
+        const alerts = await EmergencyAlert.find({ tenantId: TENANT_ID });
         res.json({
             exportDate: new Date(),
             project: 'EMCS - Smart Energy Manager',
             totalUsers: users.length,
-            backup: { users, supportMessages: messages, aiChats }
+            backup: { users, supportMessages: messages, aiChatHistory: aiChats, emergencyAlerts: alerts }
         });
     } catch (e) {
         res.status(500).json({ success: false });
     }
 });
 
-// Block direct access to server files
+// ===================================================================
+// SOURCE FILE PROTECTION & CLEAN GLOBAL ERROR HANDLER
+// ===================================================================
 app.use((req, res, next) => {
-    if (/\.(env|map|log|md|git|sh)$|^\/(server\.js|package\.json|package-lock\.json)/i.test(req.path)) {
+    const blockedPattern = /\.(env|map|log|md|git|sh)$|^\/(server\.js|package\.json|package-lock\.json)/i;
+    if (blockedPattern.test(req.path)) {
         return res.status(403).json({ success: false, message: 'Access denied.' });
     }
     next();
@@ -1452,10 +1514,10 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname), { index: false, dotfiles: 'ignore' }));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
-// Global error handler — never exposes technical details
+// Global error handler never exposes internal details or keys
 app.use(async (err, req, res, next) => {
-    await logBackendError('General', err, req);
+    await logCleanActivity('Application', req);
     res.status(500).json({ success: false, message: 'Something went wrong, try again later.' });
 });
 
-app.listen(PORT, () => console.log(`[EMCS SERVER] Live on port ${PORT}`));
+app.listen(PORT, () => console.log(`[EMCS] Service running on port ${PORT}`));
