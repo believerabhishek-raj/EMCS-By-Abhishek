@@ -1,10 +1,3 @@
-// ===================================================================
-// EMCS FRONTEND SCRIPT (script.js) - FINAL HUMAN-FRIENDLY MASTER BUILD
-// Audited: Default English UI, Hardware Risk Tick-Box Lock, Zero Technical
-// Jargon, KamAbhi AI Concurrency Lock, Form Auto-Destroy, Anti-IDOR Guard,
-// Bot Honeypot Trap, Admin AI History, Emergency Alerts & 18-Board Tariffs
-// ===================================================================
-
 const $ = (id) => document.getElementById(id);
 const safeSetText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
 const safeGetVal = (id) => { const el = $(id); return el ? el.value : ''; };
