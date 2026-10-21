@@ -158,14 +158,15 @@ const UserSchema = new mongoose.Schema({
         type: [{
             name: String,
             power: Number,
-            hours: Number
+            hours: Number,
+            mode: { type: String, default: 'manual' }
         }],
         default: []
     },
     iotStates: {
         type: Map,
         of: Boolean,
-        default: { '1': false, '2': false, '3': false, '4': false }
+        default: { '1': false, '2': false, '3': false, '4': false, '16': false, '17': false }
     },
     activeSessions: {
         type: [{
@@ -787,7 +788,8 @@ app.put('/api/user/appliances', authenticateConsumer, async (req, res) => {
         const sanitized = appliances.map(a => ({
             name: String(a.name || 'Appliance').trim().substring(0, 50),
             power: Math.max(0, Math.min(50000, Number(a.power) || 0)),
-            hours: Math.max(0, Math.min(24, Number(a.hours) || 0))
+            hours: Math.max(0, Math.min(24, Number(a.hours) || 0)),
+            mode: String(a.mode || 'manual').trim().substring(0, 20)
         }));
 
         req.user.appliances = sanitized;
@@ -803,7 +805,7 @@ app.post('/api/user/iot-toggle', authenticateConsumer, async (req, res) => {
     try {
         const { nodeId, state } = req.body;
         const key = String(nodeId);
-        if (!['1', '2', '3', '4'].includes(key)) {
+        if (!['1', '2', '3', '4', '16', '17'].includes(key)) {
             return res.status(400).json({ success: false, message: 'Invalid hardware node.' });
         }
         req.user.iotStates.set(key, Boolean(state));
@@ -1298,7 +1300,7 @@ app.use(async (err, req, res, next) => {
 });
 
 // ============================================================================
-// 🤖 10. TELEGRAM GHOST-MODE REMOTE CONTROL BOT (Zero Dependency Polling)
+// 🤖 10. TELEGRAM GHOST-MODE REMOTE CONTROL BOT
 // ============================================================================
 let tgLastUpdateId = 0;
 
@@ -1306,15 +1308,18 @@ async function sendTelegramControlPanel(chatId) {
     const keyboard = {
         inline_keyboard: [
             [
-                { text: "🔴 Turn Maintenance ON", callback_data: "maint_on" },
-                { text: "🟢 Turn Maintenance OFF", callback_data: "maint_off" }
+                { text: "🔴 Maint ON", callback_data: "maint_on" },
+                { text: "🟢 Maint OFF", callback_data: "maint_off" }
             ],
             [
-                { text: "📊 Server Status", callback_data: "sys_status" },
-                { text: "👥 Total Users", callback_data: "total_users" }
+                { text: "📊 Status", callback_data: "sys_status" },
+                { text: "👥 Users", callback_data: "total_users" }
             ],
             [
-                { text: "⚠️ Get Last 3 Errors", callback_data: "last_errors" },
+                { text: "🧹 Clean RAM", callback_data: "clean_ram" },
+                { text: "⚠️ Last 3 Errors", callback_data: "last_errors" }
+            ],
+            [
                 { text: "🔄 Reboot Server", callback_data: "reboot_server" }
             ]
         ]
@@ -1354,12 +1359,11 @@ async function listenTelegramCommands() {
                 }
 
                 // 👻 GHOST MODE (BLACK HOLE SHIELD)
-                // If user ID does NOT match Render's TELEGRAM_ADMIN_CHAT_ID -> Complete Silence!
                 if (incomingUserId !== String(ADMIN_ID)) {
-                    continue;
+                    continue; // Unauthorized users get ignored completely
                 }
 
-                // 1. Authorized Text Command (Show Button Panel)
+                // 1. Authorized Text Command
                 if (update.message && update.message.text) {
                     const txt = update.message.text.trim().toLowerCase();
                     if (txt === '/start' || txt === '/menu' || txt === 'menu') {
@@ -1405,6 +1409,14 @@ async function listenTelegramCommands() {
                         const active = await User.countDocuments({ tenantId: TENANT_ID, accountStatus: 'active' });
                         popupMessage = `Total Users: ${total}`;
                         await sendTelegramAlert('USER DIRECTORY STATS', `👥 *Live Consumer Count*\n\n*Total Registered:* ${total}\n*Active Accounts:* ${active}`);
+                    }
+                    else if (action === 'clean_ram') {
+                        await SystemError.deleteMany({ tenantId: TENANT_ID });
+                        if (typeof global.gc === 'function') {
+                            global.gc(); // Force V8 garbage collection if enabled
+                        }
+                        popupMessage = "🧹 RAM & System Logs Cleared!";
+                        await sendTelegramAlert('SYSTEM CONTROL', '🧹 *Memory Cleared*\nPurged old system logs from database and freed Node.js memory successfully.');
                     }
                     else if (action === 'last_errors') {
                         const errors = await SystemError.find({ tenantId: TENANT_ID }).sort({ createdAt: -1 }).limit(3).lean();
