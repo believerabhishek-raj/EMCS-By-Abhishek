@@ -10,14 +10,218 @@
     <meta id="seoOgTitle" property="og:title" content="Smart Energy Manager (EMCS)">
     <meta id="seoOgDesc" property="og:description" content="Track your home appliances, control smart switches, and reduce your monthly electricity bill with EMCS.">
     <meta property="og:type" content="website">
-    <meta id="seoTwTitle" name="twitter:title" content="Smart Energy Manager (EMCS)">
-    <meta id="seoTwDesc" name="twitter:description" content="Track your home appliances, control smart switches, and reduce your monthly electricity bill with EMCS.">
 
-    <!-- 🎨 ORIGINAL FONTS, ICONS, CHART.JS & YOUR PURE STYLE.CSS -->
+    <!-- Fonts & Icons Engine -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="style.css">
+
+    <!-- =================================================================== -->
+    <!-- 🎨 EMBEDDED ORIGINAL STYLESHEET (style.css integrated)              -->
+    <!-- =================================================================== -->
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --accent: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+            --bg-color: #0b0f19;
+            --card-bg: #111827;
+            --card-border: #1f2937;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --sidebar-width: 260px;
+            --header-height: 64px;
+            --radius-lg: 14px;
+            --radius-md: 10px;
+            --radius-sm: 6px;
+            --shadow-glow: 0 0 25px rgba(99, 102, 241, 0.15);
+        }
+
+        body.light-theme {
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --card-border: #e5e7eb;
+            --text-main: #111827;
+            --text-muted: #6b7280;
+            --shadow-glow: 0 4px 20px rgba(0, 0, 0, 0.06);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', -apple-system, sans-serif; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            transition: background-color 0.25s ease, color 0.25s ease;
+        }
+
+        .broadcast-banner {
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            color: #ffffff;
+            text-align: center;
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            z-index: 1001;
+            position: relative;
+        }
+
+        .top-navbar {
+            height: var(--header-height);
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .brand-logo { display: flex; align-items: center; gap: 10px; font-size: 1.25rem; font-weight: 800; cursor: pointer; user-select: none; }
+        .nav-actions { display: flex; align-items: center; gap: 12px; }
+
+        .app-layout { display: flex; min-height: calc(100vh - var(--header-height)); }
+
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--card-bg);
+            border-right: 1px solid var(--card-border);
+            padding: 16px 12px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .nav-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 11px 14px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+        .nav-item i { width: 20px; text-align: center; }
+        .nav-item:hover { background: rgba(99, 102, 241, 0.08); color: var(--text-main); }
+        .nav-item.active { background: var(--primary); color: #ffffff; font-weight: 600; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); }
+
+        .main-content { flex: 1; padding: 24px; max-width: 1400px; margin: 0 auto; width: 100%; }
+
+        .clean-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+        @media (max-width: 1024px) {
+            .grid-4 { grid-template-columns: repeat(2, 1fr); }
+            .grid-3 { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 768px) {
+            .app-layout { flex-direction: column; }
+            .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--card-border); padding: 10px; }
+            .nav-list { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+            .nav-item { white-space: nowrap; padding: 8px 12px; font-size: 0.82rem; }
+            .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+            .hide-mobile { display: none !important; }
+        }
+
+        .text-primary { color: var(--primary) !important; }
+        .green-text { color: var(--accent) !important; }
+        .danger-text { color: var(--danger) !important; }
+        .warning-text { color: var(--warning) !important; }
+        .text-muted { color: var(--text-muted) !important; }
+        .small-text { font-size: 0.82rem; line-height: 1.4; }
+        .text-center { text-align: center; }
+
+        .flex-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .mt-1 { margin-top: 6px; } .mt-2 { margin-top: 12px; } .mt-3 { margin-top: 18px; }
+        .mb-1 { margin-bottom: 6px; } .mb-2 { margin-bottom: 12px; } .mb-3 { margin-bottom: 18px; }
+        .p-2 { padding: 10px; } .p-3 { padding: 16px; }
+        .w-100 { width: 100%; }
+        .hidden { display: none !important; }
+
+        .form-group { display: flex; flex-direction: column; gap: 6px; text-align: left; }
+        .form-group label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+        input[type="text"], input[type="number"], input[type="email"], input[type="password"], select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-color);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-sm);
+            color: var(--text-main);
+            font-size: 0.9rem;
+            outline: none;
+        }
+        input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2); }
+
+        .primary-btn, .secondary-btn, .danger-btn, .success-btn {
+            padding: 10px 18px;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+        .primary-btn { background: var(--primary); color: #fff; }
+        .primary-btn:hover { background: var(--primary-hover); }
+        .secondary-btn { background: transparent; border: 1px solid var(--card-border); color: var(--text-main); }
+        .danger-btn { background: var(--danger); color: #fff; }
+        .success-btn { background: var(--accent); color: #fff; }
+        .sm-btn { padding: 6px 12px; font-size: 0.8rem; }
+        .icon-btn { background: transparent; border: 1px solid var(--card-border); color: var(--text-main); width: 36px; height: 36px; border-radius: var(--radius-sm); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+
+        .badge-pill {
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            background: rgba(99, 102, 241, 0.15);
+            color: var(--primary);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+
+        .hover-pop { transition: transform 0.2s ease; }
+        .hover-pop:hover { transform: translateY(-2px); }
+        .live-pulse { animation: pulseGlow 2s infinite; }
+        @keyframes pulseGlow { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(6px);
+            display: flex; justify-content: center; align-items: center; z-index: 2000; padding: 16px;
+        }
+        .modal-box { width: 100%; max-width: 460px; max-height: 92vh; overflow-y: auto; }
+        .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: var(--bg-color); padding: 4px; border-radius: var(--radius-sm); }
+        .tab-btn { padding: 8px; border: none; background: transparent; color: var(--text-muted); font-weight: 600; font-size: 0.85rem; border-radius: 4px; cursor: pointer; }
+        .tab-btn.active { background: var(--primary); color: #fff; }
+    </style>
 </head>
 <body class="dark-theme">
 
@@ -70,17 +274,10 @@
 
             <!-- 2. CONSUMER REGISTRATION PANE -->
             <div id="registerPane" class="hidden">
-                <div class="form-group mb-2">
-                    <label>Full Name</label>
-                    <input type="text" id="regName" placeholder="e.g. Rahul Sharma">
-                </div>
+                <div class="form-group mb-2"><label>Full Name</label><input type="text" id="regName" placeholder="e.g. Rahul Sharma"></div>
                 <div class="grid-2 mb-2">
-                    <div class="form-group">
-                        <label>Mobile Number</label>
-                        <input type="text" id="regMobile" placeholder="10-digit mobile" maxlength="10">
-                    </div>
-                    <div class="form-group">
-                        <label>State / Discom</label>
+                    <div class="form-group"><label>Mobile Number</label><input type="text" id="regMobile" placeholder="10-digit mobile" maxlength="10"></div>
+                    <div class="form-group"><label>State / Discom</label>
                         <select id="regState">
                             <option value="BR">Bihar (NBPDCL / SBPDCL)</option>
                             <option value="UP">Uttar Pradesh (UPPCL)</option>
@@ -91,38 +288,19 @@
                     </div>
                 </div>
                 <div class="grid-2 mb-2">
-                    <div class="form-group">
-                        <label>Email Address</label>
-                        <input type="email" id="regEmail" placeholder="name@example.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Sanctioned Load (kW)</label>
-                        <input type="number" id="regSanctionedKw" value="2" min="1" max="50">
-                    </div>
+                    <div class="form-group"><label>Email Address</label><input type="email" id="regEmail" placeholder="name@example.com"></div>
+                    <div class="form-group"><label>Sanctioned Load (kW)</label><input type="number" id="regSanctionedKw" value="2" min="1" max="50"></div>
                 </div>
-                <div class="form-group mb-3">
-                    <label>Create Strong Password / PIN</label>
-                    <input type="password" id="regCredential" placeholder="Min 6 characters">
-                </div>
-                <button class="primary-btn w-100 hover-pop" onclick="submitConsumerRegistration()">
-                    <i class="fa-solid fa-user-plus"></i> Create Consumer Account
-                </button>
+                <div class="form-group mb-3"><label>Create Strong Password / PIN</label><input type="password" id="regCredential" placeholder="Min 6 characters"></div>
+                <button class="primary-btn w-100 hover-pop" onclick="submitConsumerRegistration()"><i class="fa-solid fa-user-plus"></i> Create Consumer Account</button>
             </div>
 
-            <!-- 3. ADMIN / STAFF LOGIN PANE -->
+            <!-- 3. ADMIN LOGIN PANE -->
             <div id="adminLoginPane" class="hidden">
                 <p class="small-text text-muted mb-2">Restricted Command Access. Unauthorized attempts are reported via Telegram.</p>
-                <div class="form-group mb-2">
-                    <label>Admin / Staff Username</label>
-                    <input type="text" id="adminUsernameInput" placeholder="Admin ID">
-                </div>
-                <div class="form-group mb-3">
-                    <label>Master Security Key</label>
-                    <input type="password" id="adminPasswordInput" placeholder="••••••••••••">
-                </div>
-                <button class="danger-btn w-100 hover-pop mb-2" onclick="submitAdminLogin()">
-                    <i class="fa-solid fa-lock"></i> Authorize Command Hub
-                </button>
+                <div class="form-group mb-2"><label>Admin / Staff Username</label><input type="text" id="adminUsernameInput" placeholder="Admin ID"></div>
+                <div class="form-group mb-3"><label>Master Security Key</label><input type="password" id="adminPasswordInput" placeholder="••••••••••••"></div>
+                <button class="danger-btn w-100 hover-pop mb-2" onclick="submitAdminLogin()"><i class="fa-solid fa-lock"></i> Authorize Command Hub</button>
                 <button class="secondary-btn sm-btn w-100" onclick="switchAuthMode('login')">Back to User Login</button>
             </div>
         </div>
@@ -157,7 +335,7 @@
     <!-- =================================================================== -->
     <div id="consumerSection" class="app-layout">
         
-        <!-- LEFT SIDEBAR NAVIGATION (Original Clean List) -->
+        <!-- LEFT SIDEBAR NAVIGATION -->
         <aside class="sidebar">
             <ul id="consumerNavLinks" class="nav-list">
                 <li class="nav-item active" onclick="showFeature('dashboard', this)"><i class="fa-solid fa-gauge-high"></i> <span>Dashboard</span></li>
@@ -180,7 +358,7 @@
         <!-- RIGHT CONTENT AREA -->
         <main class="main-content">
 
-            <!-- 1. TAB: DASHBOARD -->
+            <!-- 1. DASHBOARD -->
             <div id="dashboard" class="feature-content active-feature">
                 <div class="clean-card mb-3">
                     <div class="flex-between">
@@ -196,26 +374,10 @@
                 </div>
 
                 <div class="grid-4 mb-3">
-                    <div class="clean-card text-center">
-                        <p class="small-text">Monthly Est. Units</p>
-                        <h2 id="dashMonthlyUnits" class="text-primary">0.0 kWh</h2>
-                        <p class="small-text text-muted" id="dashDailyUnitsSub">0.00 kWh / day</p>
-                    </div>
-                    <div class="clean-card text-center">
-                        <p class="small-text">Projected Bill</p>
-                        <h2 id="dashMonthlyBill" class="danger-text">₹0</h2>
-                        <p class="small-text text-muted" id="dashFixedChargeSub">Incl. Fixed & Taxes</p>
-                    </div>
-                    <div class="clean-card text-center">
-                        <p class="small-text">Connected Load</p>
-                        <h2 id="dashTotalWatts" class="green-text">0 W</h2>
-                        <p class="small-text text-muted" id="dashAppCountSub">0 Appliances</p>
-                    </div>
-                    <div class="clean-card text-center">
-                        <p class="small-text">Active Tariff Rate</p>
-                        <h2 id="dashCurrentRate">₹6.50/u</h2>
-                        <p class="small-text text-muted" id="dashSlabStatusSub">Slab 1 (Normal)</p>
-                    </div>
+                    <div class="clean-card text-center"><p class="small-text">Monthly Est. Units</p><h2 id="dashMonthlyUnits" class="text-primary">0.0 kWh</h2><p class="small-text text-muted" id="dashDailyUnitsSub">0.00 kWh / day</p></div>
+                    <div class="clean-card text-center"><p class="small-text">Projected Bill</p><h2 id="dashMonthlyBill" class="danger-text">₹0</h2><p class="small-text text-muted" id="dashFixedChargeSub">Incl. Fixed & Taxes</p></div>
+                    <div class="clean-card text-center"><p class="small-text">Connected Load</p><h2 id="dashTotalWatts" class="green-text">0 W</h2><p class="small-text text-muted" id="dashAppCountSub">0 Appliances</p></div>
+                    <div class="clean-card text-center"><p class="small-text">Active Tariff Rate</p><h2 id="dashCurrentRate">₹6.50/u</h2><p class="small-text text-muted" id="dashSlabStatusSub">Slab 1 (Normal)</p></div>
                 </div>
 
                 <div class="clean-card mb-3">
@@ -247,27 +409,15 @@
                         <span class="badge-pill" id="slabAlertBadge">Safe Zone</span>
                     </div>
                     <div class="grid-4 text-center">
-                        <div class="p-2" style="background:var(--bg-color); border-radius:8px; border:1px solid var(--card-border);">
-                            <p class="small-text">0 – 100 Units</p>
-                            <strong id="slabRate1Text" class="green-text">₹5.50 / kWh</strong>
-                        </div>
-                        <div class="p-2" style="background:var(--bg-color); border-radius:8px; border:1px solid var(--card-border);">
-                            <p class="small-text">101 – 200 Units</p>
-                            <strong id="slabRate2Text" class="text-primary">₹6.50 / kWh</strong>
-                        </div>
-                        <div class="p-2" style="background:var(--bg-color); border-radius:8px; border:1px solid var(--card-border);">
-                            <p class="small-text">201 – 300 Units</p>
-                            <strong id="slabRate3Text">₹7.50 / kWh</strong>
-                        </div>
-                        <div class="p-2" style="background:var(--bg-color); border-radius:8px; border:1px solid var(--card-border);">
-                            <p class="small-text">Above 300 Units</p>
-                            <strong id="slabRate4Text" class="danger-text">₹8.50 / kWh</strong>
-                        </div>
+                        <div class="p-2" style="background:var(--bg-color); border-radius:8px; border:1px solid var(--card-border);"><p class="small-text">0 – 100 Units</p><strong id="slabRate1Text" class="green-text">₹5.50 / kWh</strong></div>
+                        <div class="p-2" style="background:var(--bg-color); border-radius:8px; border:1px solid var(--card-border);"><p class="small-text">101 – 200 Units</p><strong id="slabRate2Text" class="text-primary">₹6.50 / kWh</strong></div>
+                        <div class="p-2" style="background:var(--bg-color); border-radius:8px; border:1px solid var(--card-border);"><p class="small-text">201 – 300 Units</p><strong id="slabRate3Text">₹7.50 / kWh</strong></div>
+                        <div class="p-2" style="background:var(--bg-color); border-radius:8px; border:1px solid var(--card-border);"><p class="small-text">Above 300 Units</p><strong id="slabRate4Text" class="danger-text">₹8.50 / kWh</strong></div>
                     </div>
                 </div>
             </div>
 
-            <!-- 2. TAB: MY APPLIANCES -->
+            <!-- 2. MY APPLIANCES -->
             <div id="appliances" class="feature-content hidden">
                 <div class="clean-card">
                     <div class="flex-between mb-3">
@@ -280,48 +430,40 @@
                             <button class="primary-btn sm-btn hover-pop" onclick="saveAppliancesToCloud()"><i class="fa-solid fa-cloud-arrow-up"></i> Sync to Cloud</button>
                         </div>
                     </div>
-
                     <div class="grid-4 mb-3 p-3" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
                         <input type="text" id="appTabName" placeholder="Appliance Name">
                         <input type="number" id="appTabWatts" placeholder="Power (Watts)">
                         <input type="number" id="appTabHours" placeholder="Hours / Day" max="24">
                         <button class="primary-btn hover-pop" onclick="addApplianceFromTab()"><i class="fa-solid fa-plus"></i> Add Appliance</button>
                     </div>
-
-                    <div id="applianceListContainer">
-                        <p class="text-center small-text text-muted p-3">No appliances added yet.</p>
-                    </div>
+                    <div id="applianceListContainer"><p class="text-center small-text text-muted p-3">No appliances added yet.</p></div>
                 </div>
             </div>
 
-            <!-- 3. TAB: INSTANT ELECTRICAL CALCULATORS -->
+            <!-- 3. QUICK CALCULATORS -->
             <div id="quickCalcs" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
                     <h3><i class="fa-solid fa-calculator text-primary hover-pop"></i> Instant Electrical Calculators</h3>
                     <p class="small-text mb-3">Calculate estimates instantly without any server delays.</p>
-
                     <div class="p-3 mb-4" style="background:var(--bg-color); border:1px solid var(--card-border); border-radius:10px;">
                         <h4 class="text-primary mb-2"><i class="fa-solid fa-bolt"></i> Generic Estimator</h4>
                         <div class="grid-3 mb-3">
-                            <div class="form-group"><label>Power rating (Watts)</label><input type="number" id="calcPwr" placeholder="e.g. 100" value="100" oninput="calcGenericEstimator()"></div>
-                            <div class="form-group"><label>Hours per day</label><input type="number" id="calcHrs" placeholder="e.g. 8" value="8" oninput="calcGenericEstimator()"></div>
-                            <div class="form-group"><label>Rate (₹ per kWh)</label><input type="number" id="calcRate" placeholder="e.g. 8" value="8" oninput="calcGenericEstimator()"></div>
+                            <div class="form-group"><label>Power rating (Watts)</label><input type="number" id="calcPwr" value="100" oninput="calcGenericEstimator()"></div>
+                            <div class="form-group"><label>Hours per day</label><input type="number" id="calcHrs" value="8" oninput="calcGenericEstimator()"></div>
+                            <div class="form-group"><label>Rate (₹ per kWh)</label><input type="number" id="calcRate" value="8" oninput="calcGenericEstimator()"></div>
                         </div>
                         <button class="primary-btn sm-btn w-100 hover-pop mb-3" onclick="calcGenericEstimator()">Calculate</button>
-                        
                         <div class="grid-3 text-center p-2" style="background:var(--card-bg); border-radius:8px; border:1px dashed var(--primary);">
                             <div><p class="small-text">Daily Energy</p><strong id="calcDailyRes" class="text-primary">0.80 kWh</strong></div>
                             <div><p class="small-text">Monthly Energy</p><strong id="calcMonthlyRes" class="text-primary">24.00 kWh</strong></div>
                             <div><p class="small-text">Monthly Cost</p><strong id="calcCostRes" class="danger-text">₹192.00</strong></div>
                         </div>
                     </div>
-
                     <div class="p-3" style="background:var(--bg-color); border:1px solid var(--card-border); border-radius:10px;">
                         <div class="flex-between mb-2">
                             <h4 class="text-primary"><i class="fa-solid fa-microchip"></i> Ohm's Law Helper</h4>
                             <button class="secondary-btn sm-btn" onclick="resetOhmsLaw()">Reset</button>
                         </div>
-                        <p class="small-text mb-2 text-muted">Fill any 2 fields and click Solve to find the 3rd.</p>
                         <div class="grid-3 mb-3">
                             <div class="form-group"><label>Voltage (V)</label><input type="number" id="calcV" placeholder="Volts"></div>
                             <div class="form-group"><label>Current (A)</label><input type="number" id="calcI" placeholder="Amps"></div>
@@ -332,31 +474,25 @@
                 </div>
             </div>
 
-            <!-- 4. TAB: STANDBY POWER SAVER -->
+            <!-- 4. STANDBY POWER SAVER -->
             <div id="vampireCheck" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
                     <h3><i class="fa-solid fa-ghost text-primary hover-pop"></i> Standby Power Saver</h3>
-                    <p class="small-text mb-3">See how much power your <b>actual appliances</b> waste when turned off but left plugged in (Vampire Draw).</p>
-
+                    <p class="small-text mb-3">See how much power your actual appliances waste when turned off but left plugged in.</p>
                     <div class="grid-2 mb-3">
                         <div class="p-3 text-center" style="background:var(--bg-color); border-radius:10px; border:1px solid rgba(239, 68, 68, 0.3);">
-                            <p class="small-text">Monthly Wasted Power</p>
-                            <h2 id="vampWastedUnits" class="danger-text live-pulse">0.0 Units</h2>
+                            <p class="small-text">Monthly Wasted Power</p><h2 id="vampWastedUnits" class="danger-text live-pulse">0.0 Units</h2>
                         </div>
                         <div class="p-3 text-center" style="background:var(--bg-color); border-radius:10px; border:1px solid rgba(239, 68, 68, 0.3);">
-                            <p class="small-text">Money Down The Drain</p>
-                            <h2 id="vampWastedCost" class="danger-text live-pulse">₹0</h2>
+                            <p class="small-text">Money Down The Drain</p><h2 id="vampWastedCost" class="danger-text live-pulse">₹0</h2>
                         </div>
                     </div>
-
-                    <h5 class="mb-2 text-primary"><i class="fa-solid fa-plug-circle-exclamation"></i> Your Connected Appliances</h5>
-                    <div id="vampireAppList" style="max-height: 400px; overflow-y: auto; padding-right:5px;">
-                        <div class="text-center p-3 small-text">Loading appliances...</div>
-                    </div>
+                    <h5 class="mb-2 text-primary"><i class="fa-solid fa-plug-circle-exclamation"></i> Connected Appliances</h5>
+                    <div id="vampireAppList" style="max-height: 400px; overflow-y: auto;"><div class="text-center p-3 small-text">Loading appliances...</div></div>
                 </div>
             </div>
 
-            <!-- 5. TAB: INVERTER BACKUP CALCULATOR -->
+            <!-- 5. INVERTER BACKUP CALCULATOR -->
             <div id="inverterAssistant" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
                     <h3><i class="fa-solid fa-car-battery text-primary"></i> Inverter & Battery Backup Assistant</h3>
@@ -365,41 +501,26 @@
                         <div class="form-group"><label>Battery Capacity (Ah)</label><input type="number" id="invAh" value="150"></div>
                         <div class="form-group"><label>Battery Voltage (V)</label><input type="number" id="invVolts" value="12"></div>
                     </div>
-                    <div class="form-group mb-3">
-                        <label>Running Load During Power Cut (Watts)</label>
-                        <input type="number" id="invLoadWatts" value="300">
-                    </div>
+                    <div class="form-group mb-3"><label>Running Load (Watts)</label><input type="number" id="invLoadWatts" value="300"></div>
                     <div style="display:flex; gap:8px;" class="mb-3">
                         <button class="secondary-btn sm-btn" onclick="syncInverterWithAppliances()">Sync My Load</button>
                         <button class="primary-btn w-100 hover-pop" onclick="calculateInverterBackup()">Calculate Backup Time</button>
                     </div>
                     <div class="grid-2 text-center p-3" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
-                        <div>
-                            <p class="small-text">Estimated Backup Duration</p>
-                            <h2 id="invResultHours" class="green-text">4.8 Hours</h2>
-                        </div>
-                        <div>
-                            <p class="small-text">Usable Battery Energy</p>
-                            <h2 id="invUsableWh" class="text-primary">1,440 Wh</h2>
-                        </div>
+                        <div><p class="small-text">Estimated Backup</p><h2 id="invResultHours" class="green-text">4.8 Hours</h2></div>
+                        <div><p class="small-text">Usable Energy</p><h2 id="invUsableWh" class="text-primary">1,440 Wh</h2></div>
                     </div>
                 </div>
             </div>
 
-            <!-- 6. TAB: SOLAR ROI CALCULATOR -->
+            <!-- 6. SOLAR ROI CALCULATOR -->
             <div id="solarRoi" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
                     <h3><i class="fa-solid fa-solar-panel text-primary"></i> Rooftop Solar ROI Calculator</h3>
                     <p class="small-text mb-3">Check required solar capacity and payback period based on your monthly bill.</p>
                     <div class="grid-2 mb-3">
-                        <div class="form-group">
-                            <label>Average Monthly Electricity Bill (₹)</label>
-                            <input type="number" id="solarBillInput" placeholder="e.g. 3500" value="3000">
-                        </div>
-                        <div class="form-group">
-                            <label>Available Roof Area (Sq. Ft.)</label>
-                            <input type="number" id="solarRoofInput" placeholder="e.g. 350" value="350">
-                        </div>
+                        <div class="form-group"><label>Average Monthly Bill (₹)</label><input type="number" id="solarBillInput" value="3000"></div>
+                        <div class="form-group"><label>Available Roof Area (Sq. Ft.)</label><input type="number" id="solarRoofInput" value="350"></div>
                     </div>
                     <button class="primary-btn w-100 hover-pop mb-3" onclick="calculateSolarRoi()">Calculate Solar Plan</button>
                     <div class="grid-4 text-center">
@@ -411,186 +532,135 @@
                 </div>
             </div>
 
-            <!-- 7. TAB: SMART HARDWARE -->
+            <!-- 7. SMART HARDWARE -->
             <div id="iotControl" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
                     <div class="flex-between mb-3">
-                        <div>
-                            <h3><i class="fa-solid fa-microchip text-primary"></i> Smart Hardware & WiFi Switches</h3>
-                            <p class="small-text">Preview connected smart relays. (Toggling switches requires consumer authentication).</p>
-                        </div>
+                        <div><h3><i class="fa-solid fa-microchip text-primary"></i> Smart Hardware & WiFi Switches</h3><p class="small-text">Preview connected smart relays.</p></div>
                         <span class="badge-pill">MQTT / Local WS</span>
                     </div>
                     <div class="grid-2">
                         <div class="p-3 flex-between" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
-                            <div><strong>Living Room Heavy AC Plug</strong><p class="small-text text-muted">Node #101 • 1520W</p></div>
+                            <div><strong>Living Room AC</strong><p class="small-text text-muted">Node #101 • 1520W</p></div>
                             <input type="checkbox" id="iotRelay1" onchange="toggleSmartRelay(1, this)" style="width:22px; height:22px; cursor:pointer;">
                         </div>
                         <div class="p-3 flex-between" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
-                            <div><strong>Water Heater Geyser Relay</strong><p class="small-text text-muted">Node #102 • 2000W</p></div>
+                            <div><strong>Water Geyser</strong><p class="small-text text-muted">Node #102 • 2000W</p></div>
                             <input type="checkbox" id="iotRelay2" onchange="toggleSmartRelay(2, this)" style="width:22px; height:22px; cursor:pointer;">
                         </div>
                         <div class="p-3 flex-between" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
-                            <div><strong>Submersible Water Pump</strong><p class="small-text text-muted">Node #103 • 750W</p></div>
+                            <div><strong>Water Pump</strong><p class="small-text text-muted">Node #103 • 750W</p></div>
                             <input type="checkbox" id="iotRelay3" onchange="toggleSmartRelay(3, this)" style="width:22px; height:22px; cursor:pointer;">
                         </div>
                         <div class="p-3 flex-between" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
-                            <div><strong>EV / Scooter Smart Socket</strong><p class="small-text text-muted">Node #104 • 650W</p></div>
+                            <div><strong>EV Socket</strong><p class="small-text text-muted">Node #104 • 650W</p></div>
                             <input type="checkbox" id="iotRelay4" onchange="toggleSmartRelay(4, this)" style="width:22px; height:22px; cursor:pointer;">
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 8. TAB: VOLTAGE & GRID SAFETY -->
+            <!-- 8. VOLTAGE & GRID SAFETY -->
             <div id="gridSafety" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
                     <div class="flex-between mb-3">
-                        <div>
-                            <h3><i class="fa-solid fa-shield-halved text-primary"></i> Live Voltage & Grid Safety Monitor</h3>
-                            <p class="small-text">Protect compressors and heavy motors from high/low voltage fluctuations.</p>
-                        </div>
+                        <div><h3><i class="fa-solid fa-shield-halved text-primary"></i> Live Voltage & Grid Safety</h3><p class="small-text">Protect compressors from voltage fluctuations.</p></div>
                         <button class="secondary-btn sm-btn" onclick="simulateGridVoltageTest()">Test Surge</button>
                     </div>
                     <div class="grid-2 text-center mb-3">
                         <div class="p-3 clean-card"><p class="small-text">Grid Voltage</p><h2 id="liveGridVoltage" class="green-text">232 V</h2></div>
-                        <div class="p-3 clean-card"><p class="small-text">Surge Risk Status</p><h2 id="gridSurgeStatus" class="green-text">SAFE</h2><p class="small-text text-muted" id="gridRelayActionText">Normal Grid Operation</p></div>
-                    </div>
-                    <div class="p-3" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
-                        <label class="small-text">Check Custom Stabilizer / Meter Voltage:</label>
-                        <div style="display:flex; gap:8px;" class="mt-2">
-                            <input type="number" id="manualVoltInput" value="232" placeholder="Enter Volts">
-                            <button class="primary-btn sm-btn" onclick="evaluateCustomVoltage()">Check</button>
-                        </div>
+                        <div class="p-3 clean-card"><p class="small-text">Surge Risk Status</p><h2 id="gridSurgeStatus" class="green-text">SAFE</h2><p class="small-text text-muted" id="gridRelayActionText">Normal Operation</p></div>
                     </div>
                 </div>
             </div>
 
-            <!-- 9. TAB: TIME OF DAY (ToD) OPTIMIZER -->
+            <!-- 9. TIME OF DAY (ToD) OPTIMIZER -->
             <div id="todOptimizer" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-clock text-primary"></i> Time-of-Day (ToD) Tariff Optimizer</h3>
+                    <h3><i class="fa-solid fa-clock text-primary"></i> Time-of-Day (ToD) Optimizer</h3>
                     <p class="small-text mb-3">Run heavy appliances during solar off-peak hours (10 AM - 4 PM) to save up to 20%.</p>
                     <div class="p-3 mb-3" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
-                        <p><strong>🟢 Off-Peak (10:00 AM - 04:00 PM):</strong> 15% Discount (Best for Washing Machine, EV Charging, Water Pump)</p>
+                        <p><strong>🟢 Off-Peak (10 AM - 4 PM):</strong> 15% Discount</p>
                         <hr style="border-color:var(--card-border); margin:10px 0;">
-                        <p><strong>🔴 Peak Penalty (06:00 PM - 10:00 PM):</strong> +20% Surcharge (Avoid Ironing, Geysers, Heavy Motors)</p>
-                    </div>
-                    <div class="grid-3 p-3" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
-                        <div class="form-group"><label>Shifted Load (W)</label><input type="number" id="todShiftWatts" value="2000" oninput="calculateTodSavings()"></div>
-                        <div class="form-group"><label>Hours / Day</label><input type="number" id="todShiftHours" value="2" oninput="calculateTodSavings()"></div>
-                        <div class="form-group"><label>Est. Rebate</label><input type="text" id="todMonthlySavedRes" value="₹270 / Month" readonly></div>
+                        <p><strong>🔴 Peak (6 PM - 10 PM):</strong> +20% Surcharge</p>
                     </div>
                 </div>
             </div>
 
-            <!-- 10. TAB: REPORTS & HISTORY -->
+            <!-- 10. REPORTS & GRAPHS -->
             <div id="audit" class="feature-content hidden">
                 <div class="clean-card" style="max-width:750px; margin:0 auto;">
                     <div class="flex-between mb-3">
-                        <div>
-                            <h3><i class="fa-solid fa-chart-line text-primary hover-pop"></i> Energy Reports & Trends</h3>
-                            <p class="small-text">Visualize your daily power consumption trends.</p>
-                        </div>
-                        <button class="secondary-btn sm-btn hover-pop" id="chartToggleBtn" onclick="toggleChartType(this)"><i class="fa-solid fa-rotate"></i> Switch to Flowgraph</button>
+                        <div><h3><i class="fa-solid fa-chart-line text-primary"></i> Energy Reports & Trends</h3><p class="small-text">Visualize daily power trends.</p></div>
+                        <button class="secondary-btn sm-btn" id="chartToggleBtn" onclick="toggleChartType(this)"><i class="fa-solid fa-rotate"></i> Switch to Flowgraph</button>
                     </div>
-                    
                     <div style="background:var(--bg-color); padding:10px; border-radius:10px; border:1px solid var(--card-border); margin-bottom: 20px; height:300px;">
                         <canvas id="usageChart"></canvas>
                     </div>
-
                     <div class="grid-3 text-center">
-                        <div class="p-3 clean-card"><p class="small-text">Total Est. Consumption</p><h3 id="reportTotalUnits" class="text-primary">0 Units</h3></div>
-                        <div class="p-3 clean-card"><p class="small-text">Highest Usage Appliance</p><h3 id="reportMaxApp" class="danger-text">None</h3></div>
+                        <div class="p-3 clean-card"><p class="small-text">Consumption</p><h3 id="reportTotalUnits" class="text-primary">0 Units</h3></div>
+                        <div class="p-3 clean-card"><p class="small-text">Highest Load</p><h3 id="reportMaxApp" class="danger-text">None</h3></div>
                         <div class="p-3 clean-card"><p class="small-text">Carbon Footprint</p><h3 id="reportCarbonKg" class="green-text">0 kg CO₂</h3></div>
                     </div>
                 </div>
             </div>
 
-            <!-- 11. TAB: SAVINGS SIMULATOR -->
+            <!-- 11. SAVINGS SIMULATOR -->
             <div id="simulator" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
                     <h3><i class="fa-solid fa-sliders text-primary"></i> Appliance Savings Simulator</h3>
-                    <p class="small-text mb-3">Reduce AC or Geyser runtime by 1–2 hours daily to see annual compounding savings.</p>
+                    <p class="small-text mb-3">Reduce AC or Geyser runtime by 1–2 hours daily to see annual savings.</p>
                     <div class="p-3 mb-3" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
-                        <div class="flex-between mb-1">
-                            <label class="small-text">Cut Daily Heavy Usage By:</label>
-                            <strong id="simHoursCutLabel" class="text-primary">2 Hours / Day</strong>
-                        </div>
+                        <div class="flex-between mb-1"><label class="small-text">Cut Daily Usage By:</label><strong id="simHoursCutLabel" class="text-primary">2 Hours</strong></div>
                         <input type="range" id="simHoursCut" min="1" max="6" step="0.5" value="2" oninput="runSavingsSimulator()">
-                        
-                        <div class="flex-between mt-3 mb-1">
-                            <label class="small-text">AC Thermostat Setting:</label>
-                            <strong id="simAcTempLabel" class="green-text">24 °C</strong>
-                        </div>
-                        <input type="range" id="simAcTemp" min="18" max="28" value="24" oninput="runSavingsSimulator()">
                     </div>
                     <div class="grid-2 text-center">
-                        <div class="p-3 clean-card">
-                            <p class="small-text">Monthly Savings</p>
-                            <h2 id="simMonthlySavings" class="text-primary">₹390 / mo</h2>
-                        </div>
-                        <div class="p-3 clean-card">
-                            <p class="small-text">Projected Annual Savings</p>
-                            <h2 id="simAnnualSavings" class="green-text">₹4,680 / yr</h2>
-                        </div>
+                        <div class="p-3 clean-card"><p class="small-text">Monthly Savings</p><h2 id="simMonthlySavings" class="text-primary">₹390 / mo</h2></div>
+                        <div class="p-3 clean-card"><p class="small-text">Annual Savings</p><h2 id="simAnnualSavings" class="green-text">₹4,680 / yr</h2></div>
                     </div>
                 </div>
             </div>
 
-            <!-- 12. TAB: PAY ELECTRICITY BILL -->
+            <!-- 12. PAY BILL -->
             <div id="payment" class="feature-content hidden">
                 <div class="clean-card" style="max-width:550px; margin:0 auto;">
                     <h3><i class="fa-solid fa-credit-card text-primary"></i> Online Bill Settlement</h3>
-                    <p class="small-text mb-3">Pay securely via Verified Payment Gateway.</p>
+                    <p class="small-text mb-3">Pay securely via verified gateway.</p>
                     <div class="p-3 mb-3" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
                         <div class="flex-between mb-2"><span>Consumer ID:</span><strong id="payConsumerId">Guest</strong></div>
-                        <div class="flex-between mb-2"><span>Est. Monthly Units:</span><strong id="payTotalUnits">0.0 kWh</strong></div>
-                        <div class="flex-between"><span>Current Payable Estimate:</span><strong id="payBillAmount" class="text-primary" style="font-size:1.3rem;">₹0.00</strong></div>
-                    </div>
-                    <div class="form-group mb-3">
-                        <label>Payment Method</label>
-                        <select id="paymentMethodSelect">
-                            <option value="UPI">Instant UPI (GPay / PhonePe / Paytm)</option>
-                            <option value="CARD">Debit / Credit Card</option>
-                            <option value="NETBANKING">NetBanking</option>
-                        </select>
+                        <div class="flex-between"><span>Payable Amount:</span><strong id="payBillAmount" class="text-primary" style="font-size:1.3rem;">₹0.00</strong></div>
                     </div>
                     <button class="primary-btn w-100 hover-pop mb-3" onclick="initiateBillPayment()"><i class="fa-solid fa-lock"></i> Proceed to Secure Payment</button>
                     <div id="paymentHistoryContainer" class="small-text text-muted"></div>
                 </div>
             </div>
 
-            <!-- 13. TAB: AI & CUSTOMER SUPPORT CHAT -->
+            <!-- 13. AI SUPPORT CHAT -->
             <div id="userSupportChat" class="feature-content hidden">
                 <div class="clean-card" style="max-width:680px; margin:0 auto;">
                     <h3><i class="fa-solid fa-headset text-primary"></i> AI Energy Advisor & Support Desk</h3>
-                    <p class="small-text mb-3">Ask our AI Assistant about electricity bill reduction or raise a ticket with Admin.</p>
+                    <p class="small-text mb-3">Ask our AI Assistant about electricity bill reduction.</p>
                     <div id="chatMessagesBox" class="p-3 mb-3" style="height:280px; overflow-y:auto; background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
                         <div class="small-text text-muted">Welcome! How can I help optimize your power usage today?</div>
                     </div>
                     <div style="display:flex; gap:8px;">
-                        <input type="text" id="supportChatInput" placeholder="Ask about tariffs, solar, or billing issue..." onkeydown="if(event.key==='Enter') sendUserSupportMessage()">
+                        <input type="text" id="supportChatInput" placeholder="Ask about tariffs, solar, or billing..." onkeydown="if(event.key==='Enter') sendUserSupportMessage()">
                         <button class="primary-btn hover-pop" onclick="sendUserSupportMessage()"><i class="fa-solid fa-paper-plane"></i></button>
                     </div>
                 </div>
             </div>
 
-            <!-- 14. TAB: PROFILE & ACTIVE SECURITY SESSIONS -->
+            <!-- 14. PROFILE -->
             <div id="profile" class="feature-content hidden">
                 <div class="clean-card" style="max-width:650px; margin:0 auto;">
                     <div class="flex-between mb-3">
-                        <div>
-                            <h3><i class="fa-solid fa-user-shield text-primary"></i> Account & Device Security</h3>
-                            <p class="small-text">Device-bound session protection is active on your account.</p>
-                        </div>
+                        <div><h3><i class="fa-solid fa-user-shield text-primary"></i> Account & Security</h3><p class="small-text">Device-bound session protection active.</p></div>
                         <button class="danger-btn sm-btn" onclick="logoutAllDevices()">Logout All Devices</button>
                     </div>
                     <div class="p-3 mb-3" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
                         <p class="mb-1"><strong>Consumer ID:</strong> <span id="profCid">-</span></p>
                         <p class="mb-1"><strong>Name:</strong> <span id="profName">-</span></p>
-                        <p class="mb-1"><strong>Registered Mobile:</strong> <span id="profMobile">-</span></p>
-                        <p><strong>Email & Grid:</strong> <span id="profEmailState">-</span></p>
+                        <p><strong>Mobile:</strong> <span id="profMobile">-</span></p>
                     </div>
                     <h5>Active Logged-In Devices</h5>
                     <div id="activeSessionsList" class="mt-2 small-text"></div>
@@ -601,154 +671,60 @@
     </div>
 
     <!-- =================================================================== -->
-    <!-- 🛡️ GOD-MODE ADMIN & STAFF COMMAND HUB                              -->
+    <!-- 🛡️ GOD-MODE ADMIN COMMAND HUB                                       -->
     <!-- =================================================================== -->
     <div id="adminSection" class="app-layout hidden">
         <aside class="sidebar">
             <ul class="nav-list">
                 <li class="nav-item active" onclick="switchAdminSubTab('overviewTab', this)"><i class="fa-solid fa-chart-pie"></i> <span>Overview</span></li>
-                <li class="nav-item" id="navAdminUsers" onclick="switchAdminSubTab('usersTab', this)"><i class="fa-solid fa-users"></i> <span>Consumers</span></li>
-                <li class="nav-item" id="navAdminCms" onclick="switchAdminSubTab('adminCmsSubPane', this)"><i class="fa-solid fa-sliders"></i> <span>God-Mode CMS</span></li>
-                <li class="nav-item" id="navAdminSupport" onclick="switchAdminSubTab('supportTab', this)"><i class="fa-solid fa-comments"></i> <span>Support Desk</span></li>
-                <li class="nav-item" id="navAdminStaff" onclick="switchAdminSubTab('staffTab', this)"><i class="fa-solid fa-user-tie"></i> <span>Staff & Access</span></li>
-                <li class="nav-item" id="navAdminLogs" onclick="switchAdminSubTab('logsTab', this)"><i class="fa-solid fa-bug"></i> <span>Audit & Security Logs</span></li>
-                <li class="nav-item danger-text" onclick="logoutAdmin()"><i class="fa-solid fa-right-from-bracket"></i> <span>Exit Admin Hub</span></li>
+                <li class="nav-item" onclick="switchAdminSubTab('usersTab', this)"><i class="fa-solid fa-users"></i> <span>Consumers</span></li>
+                <li class="nav-item" onclick="switchAdminSubTab('adminCmsSubPane', this)"><i class="fa-solid fa-sliders"></i> <span>God-Mode CMS</span></li>
+                <li class="nav-item" onclick="switchAdminSubTab('supportTab', this)"><i class="fa-solid fa-comments"></i> <span>Support Desk</span></li>
+                <li class="nav-item" onclick="switchAdminSubTab('staffTab', this)"><i class="fa-solid fa-user-tie"></i> <span>Staff & Access</span></li>
+                <li class="nav-item" onclick="switchAdminSubTab('logsTab', this)"><i class="fa-solid fa-bug"></i> <span>Audit Logs</span></li>
+                <li class="nav-item danger-text" onclick="logoutAdmin()"><i class="fa-solid fa-right-from-bracket"></i> <span>Exit Admin</span></li>
             </ul>
         </aside>
 
         <main class="main-content">
-            <!-- ADMIN OVERVIEW -->
             <div id="overviewTab" class="admin-sub-pane">
                 <div class="clean-card mb-3 flex-between">
-                    <div>
-                        <h3><i class="fa-solid fa-shield-halved text-primary"></i> EMCS Master Command Center</h3>
-                        <p class="small-text">Protected by Fort-Knox MongoDB Pooling, Device-Bound JWTs & Telegram Ghost-Mode Bot.</p>
-                    </div>
+                    <div><h3><i class="fa-solid fa-shield-halved text-primary"></i> EMCS Master Command Center</h3><p class="small-text">Protected by Fort-Knox & Telegram Ghost-Mode Bot.</p></div>
                     <span class="badge-pill green-text" id="adminRoleBadge">SUPER ADMIN</span>
                 </div>
                 <div class="grid-4">
-                    <div class="clean-card text-center"><p class="small-text">Total Consumers</p><h2 id="admTotalUsers" class="text-primary">0</h2></div>
+                    <div class="clean-card text-center"><p class="small-text">Total Users</p><h2 id="admTotalUsers" class="text-primary">0</h2></div>
                     <div class="clean-card text-center"><p class="small-text">Active Accounts</p><h2 id="admActiveUsers" class="green-text">0</h2></div>
                     <div class="clean-card text-center"><p class="small-text">Open Tickets</p><h2 id="admPendingTickets">0</h2></div>
                     <div class="clean-card text-center"><p class="small-text">Security Alerts</p><h2 id="admTotalErrors" class="danger-text">0</h2></div>
                 </div>
             </div>
 
-            <!-- ADMIN CONSUMERS LIST -->
             <div id="usersTab" class="admin-sub-pane hidden">
                 <div class="clean-card">
-                    <div class="flex-between mb-3">
-                        <h4>Registered Consumers Directory</h4>
-                        <input type="text" id="adminUserSearchInput" placeholder="Search Consumer..." oninput="filterAdminUsersTable()" style="max-width:240px;">
-                    </div>
-                    <div id="adminUsersTableContainer" class="mt-2">
-                        <div id="adminUsersTableBody"></div>
-                    </div>
+                    <div class="flex-between mb-3"><h4>Consumers Directory</h4><input type="text" id="adminUserSearchInput" placeholder="Search..." oninput="filterAdminUsersTable()" style="max-width:240px;"></div>
+                    <div id="adminUsersTableBody"></div>
                 </div>
             </div>
 
-            <!-- GOD-MODE CMS -->
             <div id="adminCmsSubPane" class="admin-sub-pane hidden">
                 <div class="clean-card">
-                    <h3><i class="fa-solid fa-wand-magic-sparkles text-primary"></i> Zero-Code-Touch Platform Controls</h3>
-                    <p class="small-text mb-3">Modify branding, live electricity slabs, payment keys, AI instructions, and feature switches dynamically.</p>
-
-                    <div class="grid-2 mb-3">
-                        <div class="form-group"><label>Platform Brand Name</label><input type="text" id="cmsSiteNameInput" placeholder="EMCS"></div>
-                        <div class="form-group"><label>Global Broadcast Banner</label><input type="text" id="cmsBroadcastInput" placeholder="Leave blank to hide"></div>
+                    <h3><i class="fa-solid fa-wand-magic-sparkles text-primary"></i> Zero-Code-Touch Controls</h3>
+                    <div class="grid-2 mb-3 mt-3">
+                        <div class="form-group"><label>Brand Name</label><input type="text" id="cmsSiteNameInput"></div>
+                        <div class="form-group"><label>Broadcast Banner</label><input type="text" id="cmsBroadcastInput"></div>
                     </div>
-
-                    <div class="grid-2 mb-3">
-                        <div class="form-group"><label>Hero Heading</label><input type="text" id="cmsHeroHeadingInput"></div>
-                        <div class="form-group"><label>Hero Subtext</label><input type="text" id="cmsHeroSubtextInput"></div>
-                    </div>
-
-                    <div class="grid-2 mb-3">
-                        <div class="form-group"><label>Primary Brand Color</label><input type="color" id="cmsPrimaryColor" value="#6366f1"></div>
-                        <div class="form-group"><label>Accent Highlight Color</label><input type="color" id="cmsAccentColor" value="#10b981"></div>
-                    </div>
-
-                    <h5 class="mb-2 text-primary">Feature Kill-Switches (Instant URL & Sidebar Lock)</h5>
-                    <div class="grid-3 mb-3 p-3" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
-                        <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="cmsSwGrid" checked style="width:auto;"> Voltage Safety</label>
-                        <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="cmsSwInverter" checked style="width:auto;"> Inverter Backup</label>
-                        <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="cmsSwVampire" checked style="width:auto;"> Standby Power Saver</label>
-                        <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="cmsSwTod" checked style="width:auto;"> ToD Optimizer</label>
-                        <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="cmsSwSolar" checked style="width:auto;"> Solar Calculator</label>
-                        <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="cmsSwIot" checked style="width:auto;"> Smart Hardware</label>
-                    </div>
-
-                    <h5 class="mb-2 text-primary">Live Tariff Slabs & Fixed Charges</h5>
-                    <div class="grid-4 mb-3">
-                        <div class="form-group"><label>Slab 1 (0-100u)</label><input type="number" id="cmsSlab1Rate" value="5.5" step="0.1"></div>
-                        <div class="form-group"><label>Slab 2 (101-200u)</label><input type="number" id="cmsSlab2Rate" value="6.5" step="0.1"></div>
-                        <div class="form-group"><label>Slab 3 (201-300u)</label><input type="number" id="cmsSlab3Rate" value="7.5" step="0.1"></div>
-                        <div class="form-group"><label>Slab 4 (300u+)</label><input type="number" id="cmsSlab4Rate" value="8.5" step="0.1"></div>
-                    </div>
-                    <div class="grid-2 mb-3">
-                        <div class="form-group"><label>Fixed Charge (₹)</label><input type="number" id="cmsFixedChargeInput" value="120"></div>
-                        <div class="form-group"><label>Govt Duty (%)</label><input type="number" id="cmsTaxPercentInput" value="5"></div>
-                    </div>
-
-                    <div class="grid-3 mb-3">
-                        <div class="form-group"><label>Online Payment</label><select id="cmsPaymentEnabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
-                        <div class="form-group"><label>Payment Gateway Key ID</label><input type="text" id="cmsPaymentKey" placeholder="rzp_live_xxxxx"></div>
-                        <div class="form-group"><label>Payment Secret Key (Shielded)</label><input type="password" id="cmsPaymentSecret" placeholder="••••••••••••"></div>
-                    </div>
-
-                    <div class="form-group mb-3">
-                        <label>AI Assistant System Prompt (Hidden from Public API)</label>
-                        <textarea id="cmsAiPromptInput" rows="3" placeholder="You are the official EMCS Energy Advisor..."></textarea>
-                    </div>
-
-                    <button class="primary-btn w-100 hover-pop" onclick="saveCmsContent()"><i class="fa-solid fa-floppy-disk"></i> Save & Publish Live Changes</button>
+                    <button class="primary-btn w-100 hover-pop" onclick="saveCmsContent()"><i class="fa-solid fa-floppy-disk"></i> Save & Publish Changes</button>
                 </div>
             </div>
 
-            <!-- ADMIN SUPPORT DESK -->
-            <div id="supportTab" class="admin-sub-pane hidden">
-                <div class="clean-card">
-                    <h4>Consumer Support Tickets</h4>
-                    <div id="adminSupportList" class="mt-3"></div>
-                </div>
-            </div>
-
-            <!-- ADMIN GRANULAR STAFF PERMISSIONS -->
-            <div id="staffTab" class="admin-sub-pane hidden">
-                <div class="clean-card">
-                    <h4>Granular Staff Access Control</h4>
-                    <p class="small-text mb-3">Create staff accounts and toggle their exact module permissions.</p>
-                    <div class="p-3 mb-3" style="background:var(--bg-color); border-radius:10px; border:1px solid var(--card-border);">
-                        <div class="grid-3 mb-2">
-                            <input type="text" id="newStaffUsername" placeholder="Staff Username">
-                            <input type="password" id="newStaffPassword" placeholder="Password (min 6 chars)">
-                            <input type="text" id="newStaffRoleTitle" placeholder="Role (e.g. Support)">
-                        </div>
-                        <div class="grid-4 mb-2 small-text">
-                            <label><input type="checkbox" id="permManageUsers" checked style="width:auto;"> Users</label>
-                            <label><input type="checkbox" id="permManageCms" style="width:auto;"> CMS</label>
-                            <label><input type="checkbox" id="permManageSupport" checked style="width:auto;"> Support</label>
-                            <label><input type="checkbox" id="permViewLogs" style="width:auto;"> Logs</label>
-                        </div>
-                        <button class="primary-btn sm-btn" onclick="createNewStaffAccount()">Create Staff</button>
-                    </div>
-                    <div id="adminStaffListContainer"></div>
-                </div>
-            </div>
-
-            <!-- ADMIN AUDIT TRAIL & SECURITY LOGS -->
-            <div id="logsTab" class="admin-sub-pane hidden">
-                <div class="clean-card">
-                    <div class="flex-between mb-3">
-                        <h4>System Errors & Insider Admin Audit Trail</h4>
-                        <button class="danger-btn sm-btn" onclick="clearAdminSecurityLogs()">Clear Logs</button>
-                    </div>
-                    <div id="adminLogsContainer" class="mt-2"></div>
-                </div>
-            </div>
+            <div id="supportTab" class="admin-sub-pane hidden"><div class="clean-card"><h4>Support Tickets</h4><div id="adminSupportList" class="mt-3"></div></div></div>
+            <div id="staffTab" class="admin-sub-pane hidden"><div class="clean-card"><h4>Staff Access Control</h4><div id="adminStaffListContainer"></div></div></div>
+            <div id="logsTab" class="admin-sub-pane hidden"><div class="clean-card"><div class="flex-between mb-3"><h4>Security Audit Trail</h4><button class="danger-btn sm-btn" onclick="clearAdminSecurityLogs()">Clear Logs</button></div><div id="adminLogsContainer"></div></div></div>
         </main>
     </div>
 
+    <!-- Script Engine Link -->
     <script src="script.js"></script>
 </body>
 </html>
