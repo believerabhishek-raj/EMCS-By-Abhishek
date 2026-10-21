@@ -23,7 +23,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.js"></script>
 
     <style>
         :root {
@@ -298,8 +297,6 @@
             <li class="nav-item" onclick="showFeature('gridSafety', this)"><i class="fa-solid fa-gauge-high text-warning"></i> <span data-i18n="navVoltage">Voltage Safety</span></li>
             <li class="nav-item" onclick="showFeature('inverterAssistant', this)"><i class="fa-solid fa-car-battery text-warning"></i> <span data-i18n="navInverter">Inverter Backup</span></li>
             <li class="nav-item" onclick="showFeature('vampireCheck', this)"><i class="fa-solid fa-shield-virus text-danger"></i> <span data-i18n="navVampire">Standby Power Saver</span></li>
-            <li class="nav-item" onclick="showFeature('ocrScanner', this)"><i class="fa-solid fa-file-arrow-up"></i> <span data-i18n="navOcr">Scan Electricity Bill</span></li>
-            <li class="nav-item" onclick="showFeature('smartMeterCsv', this)"><i class="fa-solid fa-file-csv green-text"></i> <span data-i18n="navCsv">Smart Meter File</span></li>
             <li class="nav-item" onclick="showFeature('todOptimizer', this)"><i class="fa-solid fa-clock-rotate-left"></i> <span data-i18n="navTod">Best Time to Use</span></li>
             <li class="nav-item" onclick="showFeature('solarRoi', this)"><i class="fa-solid fa-sun text-warning"></i> <span data-i18n="navSolar">Solar Calculator</span></li>
             <li class="nav-item" onclick="showFeature('iotControl', this)"><i class="fa-solid fa-microchip"></i> <span data-i18n="navIoT">Smart Hardware Control</span></li>
@@ -327,6 +324,9 @@
                 <i class="fa-solid fa-clipboard-list text-warning"></i>
                 <span style="flex:1;">Activity Logs</span>
                 <span id="adminErrorCountBadge" class="badge light-red-bg">0</span>
+            </li>
+            <li class="nav-item" id="adminSysTabBtn" onclick="switchAdminSubTab('sysTab', this)">
+                <i class="fa-solid fa-server text-danger"></i> <span>System Controls</span>
             </li>
             <li class="nav-item" id="masterDumpBtn" onclick="downloadAdminMasterDatabase()" style="margin-top:12px; border:1px dashed var(--savings-green); background:rgba(16,185,129,0.06);">
                 <i class="fa-solid fa-download green-text"></i> <span class="green-text" style="font-weight:600;">Download Backup</span>
@@ -550,6 +550,41 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 8. SYSTEM CONTROLS PANE -->
+            <div id="adminSysSubPane" class="admin-sub-pane hidden">
+                <div class="clean-card">
+                    <h3><i class="fa-solid fa-server text-danger hover-pop"></i> System Controls & Master Panel</h3>
+                    <p class="small-text mb-3">Manage server status, memory, and maintenance mode directly via Telegram bot integration.</p>
+                    <div class="grid-3">
+                        <div class="p-2 clean-card text-center">
+                            <h4><i class="fa-solid fa-power-off text-danger"></i> Maintenance Mode</h4>
+                            <p class="small-text mb-2">Toggle global maintenance screen</p>
+                            <button class="danger-btn sm-btn hover-pop w-100" onclick="toggleMaintenanceMode()"><i class="fa-solid fa-toggle-on"></i> Enable / Disable</button>
+                        </div>
+                        <div class="p-2 clean-card text-center">
+                            <h4><i class="fa-solid fa-broom text-primary"></i> RAM Cleaner</h4>
+                            <p class="small-text mb-2">Clear junk logs to free memory</p>
+                            <button class="primary-btn sm-btn hover-pop w-100" onclick="cleanServerRAM()"><i class="fa-solid fa-memory"></i> Clean RAM</button>
+                        </div>
+                        <div class="p-2 clean-card text-center">
+                            <h4><i class="fa-solid fa-users text-primary"></i> Total Users</h4>
+                            <p class="small-text mb-2">Live active & total user count</p>
+                            <button class="secondary-btn sm-btn hover-pop w-100" onclick="fetchLiveUserCount()"><i class="fa-solid fa-rotate"></i> Check Users</button>
+                        </div>
+                        <div class="p-2 clean-card text-center">
+                            <h4><i class="fa-solid fa-bug text-warning"></i> Last 3 Errors</h4>
+                            <p class="small-text mb-2">Fetch recent system bugs</p>
+                            <button class="sm-btn hover-pop w-100" style="background:var(--warning); color:#fff;" onclick="fetchLastErrors()"><i class="fa-solid fa-triangle-exclamation"></i> Get Errors</button>
+                        </div>
+                        <div class="p-2 clean-card text-center">
+                            <h4><i class="fa-solid fa-signal text-primary"></i> Server Status</h4>
+                            <p class="small-text mb-2">Check if server is live</p>
+                            <button class="primary-btn sm-btn hover-pop w-100" style="background:#10B981;" onclick="checkServerStatus()"><i class="fa-solid fa-check-circle"></i> Check Status</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- ======================================================= -->
@@ -712,7 +747,7 @@
                 </div>
             </div>
 
-            <!-- TAB 2: MY APPLIANCES (Table + Live Block Diagram Restored; 2D/Flowgraph Charts Removed) -->
+            <!-- TAB 2: MY APPLIANCES -->
             <div id="appliances" class="feature-content hidden">
                 <div class="clean-card mb-3">
                     <h3><i class="fa-solid fa-plug-circle-plus text-primary hover-pop"></i> Add Home Appliance</h3>
@@ -783,7 +818,7 @@
                     </div>
                 </div>
 
-                <!-- LIVE POWER DISTRIBUTION BLOCK DIAGRAM (RESTORED) -->
+                <!-- LIVE POWER DISTRIBUTION BLOCK DIAGRAM -->
                 <div class="clean-card mb-3">
                     <div class="flex-between mb-2">
                         <h4><i class="fa-solid fa-diagram-project text-primary hover-pop"></i> Live Power Distribution Block Diagram</h4>
@@ -849,8 +884,14 @@
                         <h3><i class="fa-solid fa-shield-virus text-danger hover-pop"></i> Standby Power Saver</h3>
                         <span class="badge light-green-bg" id="vampireTotalSavedBadge">Saved: ₹0/month</span>
                     </div>
-                    <p class="small-text mb-3">Appliances left plugged in with the main switch ON still consume electricity. Turn off wall switches to save money.</p>
-                    <div class="flex-between p-2 mb-2" style="background:var(--bg-color); border-radius:10px; transition: transform 0.2s ease;">
+                    <p class="small-text mb-3">Auto-synced with your My Appliances list. Check how much your actual appliances waste in standby mode when turned off from remote but plugged in.</p>
+                    
+                    <div id="dynamicVampireList">
+                        <div class="text-center small-text p-2">Syncing with your appliances... Add appliances to see standby waste.</div>
+                    </div>
+                    
+                    <!-- Fallback static items for demonstration -->
+                    <div class="flex-between p-2 mb-2 mt-3" style="background:var(--bg-color); border-radius:10px; transition: transform 0.2s ease;">
                         <div><strong>Switch off Microwave & Induction main plug</strong><p class="small-text">Stops continuous digital display power drain</p></div>
                         <label class="switch"><input type="checkbox" onchange="toggleVampireItem(45, this)"><span class="slider"></span></label>
                     </div>
@@ -861,36 +902,7 @@
                 </div>
             </div>
 
-            <!-- TAB 6: SCAN ELECTRICITY BILL -->
-            <div id="ocrScanner" class="feature-content hidden">
-                <div class="clean-card" style="max-width:650px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-file-arrow-up text-primary hover-pop"></i> Scan Paper Electricity Bill</h3>
-                    <p class="small-text mb-2">Upload a clear photo of your electricity bill to read units automatically.</p>
-                    <input type="file" id="billImageInput" accept="image/jpeg,image/png,image/webp" class="mb-2" style="padding: 6px;">
-                    <button class="primary-btn" onclick="processBillOcr()"><i class="fa-solid fa-wand-magic-sparkles"></i> Read Bill Photo</button>
-                    <div id="ocrLoader" class="hidden text-center mt-2"><i class="fa-solid fa-spinner fa-spin text-primary"></i> Reading your bill photo...</div>
-                    <div id="ocrResultBox" class="hidden mt-2 p-2" style="background:var(--accent-light); border-radius:10px; animation: fadeUp 0.4s ease;">
-                        <p><b>Consumer ID:</b> <span id="ocrConsumerId">—</span> | <b>Units Read:</b> <span id="ocrUnits">—</span> Units | <b>Estimated Bill:</b> <span id="ocrAmount">—</span></p>
-                        <button class="primary-btn sm-btn mt-2 hover-pop" onclick="applyOcrToSimulator()">Check Savings on This Bill</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB 7: SMART METER FILE -->
-            <div id="smartMeterCsv" class="feature-content hidden">
-                <div class="clean-card" style="max-width:700px; margin:0 auto;">
-                    <h3><i class="fa-solid fa-file-csv green-text hover-pop"></i> Smart Meter File Reader</h3>
-                    <p class="small-text mb-2">Upload your smart meter usage file (.csv or .txt) to see your total and peak usage.</p>
-                    <input type="file" id="meterCsvInput" accept=".csv,.txt" onchange="handleSmartMeterCsv(event)" style="padding: 6px;">
-                    <div id="csvSummaryBox" class="hidden mt-3 grid-3 text-center">
-                        <div class="p-2 clean-card" style="animation: fadeUp 0.3s ease;"><p class="small-text">Total Usage</p><h3 class="text-primary" id="csvTotalKwh">0 Units</h3></div>
-                        <div class="p-2 clean-card" style="animation: fadeUp 0.4s ease;"><p class="small-text">Highest Usage</p><h3 class="danger-text" id="csvPeakHour">--</h3></div>
-                        <div class="p-2 clean-card" style="animation: fadeUp 0.5s ease;"><p class="small-text">Daily Average</p><h3 class="green-text" id="csvAvgDaily">0 Units</h3></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB 8: BEST TIME TO USE -->
+            <!-- TAB 8: BEST TIME TO USE (Renumbered visually in thoughts, it's just 'todOptimizer' div) -->
             <div id="todOptimizer" class="feature-content hidden">
                 <div class="clean-card" style="max-width:780px; margin:0 auto;">
                     <h3><i class="fa-solid fa-clock-rotate-left text-primary hover-pop"></i> Best Time to Run Heavy Appliances</h3>
@@ -932,7 +944,7 @@
                 </div>
             </div>
 
-            <!-- TAB 10: SMART HARDWARE CONTROL (With Mandatory Risk Consent Tick-Box) -->
+            <!-- TAB 10: SMART HARDWARE CONTROL -->
             <div id="iotControl" class="feature-content hidden">
                 <div class="clean-card" style="max-width:850px; margin:0 auto;">
                     <div class="flex-between mb-2">
@@ -1008,9 +1020,9 @@
                 </div>
             </div>
 
-            <!-- TAB 12: SAVINGS CALCULATOR -->
+            <!-- TAB 12: SAVINGS CALCULATOR + INSTANT RAM CALCULATORS -->
             <div id="simulator" class="feature-content hidden">
-                <div class="clean-card text-center" style="max-width:650px; margin:0 auto;">
+                <div class="clean-card text-center" style="max-width:750px; margin:0 auto;">
                     <h3><i class="fa-solid fa-sliders text-primary hover-pop"></i> Monthly Savings Calculator</h3>
                     <div class="grid-2 text-left mt-2">
                         <div class="form-group"><label>Monthly Units</label><input type="number" id="simUserUnits" value="300" oninput="calculateSimulator()"></div>
@@ -1018,11 +1030,38 @@
                     </div>
                     <div class="p-2 mt-2" style="background:var(--bg-color); border-radius:10px;">
                         <label>If I reduce usage by: <b id="simPctVal" class="text-primary">15</b>%</label>
-                        <input type="range" id="simSlider" min="5" max="50" value="15" oninput="calculateSimulator()" class="mt-1" style="cursor: pointer;">
+                        <input type="range" id="simSlider" min="5" max="50" value="15" oninput="calculateSimulator()" class="mt-1" style="cursor: pointer; width: 100%;">
                     </div>
                     <div class="grid-2 mt-2">
                         <div class="p-2 clean-card"><p class="small-text">Electricity Saved</p><h2 class="green-text" id="simUnitsResult">45 Units</h2></div>
                         <div class="p-2 clean-card"><p class="small-text">Money Saved</p><h2 class="text-primary" id="simSavingsResult">₹338</h2></div>
+                    </div>
+
+                    <hr style="border: 0; border-top: 1px solid var(--card-border); margin: 24px 0;">
+                    
+                    <h3 class="text-center mb-2"><i class="fa-solid fa-bolt text-warning"></i> Instant RAM Calculators</h3>
+                    <p class="small-text mb-3">Calculate instantly without sending data to the server (Zero Server Load).</p>
+                    <div class="grid-2 text-left">
+                        <div class="p-2 clean-card">
+                            <h4>Generic Power Estimator</h4>
+                            <p class="small-text mb-2">Calculate Watts (W = V × I)</p>
+                            <div class="grid-2 mb-2" style="gap:10px;">
+                                <input type="number" id="calcVolts" placeholder="Voltage (V)">
+                                <input type="number" id="calcAmps" placeholder="Current (A)">
+                            </div>
+                            <button class="primary-btn sm-btn hover-pop w-100" onclick="calcPower()">Calculate Watts</button>
+                            <h3 class="mt-2 text-primary text-center" id="calcPowerResult">0 W</h3>
+                        </div>
+                        <div class="p-2 clean-card">
+                            <h4>Ohm's Law Helper</h4>
+                            <p class="small-text mb-2">Calculate Voltage (V = I × R)</p>
+                            <div class="grid-2 mb-2" style="gap:10px;">
+                                <input type="number" id="calcOhmAmps" placeholder="Current (A)">
+                                <input type="number" id="calcOhmOhms" placeholder="Resistance (Ω)">
+                            </div>
+                            <button class="primary-btn sm-btn hover-pop w-100" onclick="calcOhmsLaw()">Calculate Volts</button>
+                            <h3 class="mt-2 text-warning text-center" id="calcOhmResult">0 V</h3>
+                        </div>
                     </div>
                 </div>
             </div>
