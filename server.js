@@ -1,4 +1,4 @@
-try { require('dotenv').config(); } catch (e) {}
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
