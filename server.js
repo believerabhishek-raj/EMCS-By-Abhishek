@@ -1,62 +1,74 @@
-require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
+const cors = require('cors');
 const crypto = require('crypto');
-const path = require('path');
-const fs = require('fs');
 
 const app = express();
-
-// ============================================================================
-// ⚙️ 1. CORE ENVIRONMENT & GLOBAL CONFIGURATION
-// ============================================================================
-const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI || '';
-const JWT_SECRET = process.env.JWT_SECRET || 'emcs_ultra_fallback_secret_key_change_in_prod_998877';
-const TENANT_ID = process.env.TENANT_ID || 'EMCS_MAIN_01';
+const PORT = process.env.PORT || 5000;
 const IS_PROD = process.env.NODE_ENV === 'production';
 
-// Master Admin Credentials (Can be overridden via Render Env Vars)
-const MASTER_ADMIN_USER = process.env.MASTER_ADMIN_USER || 'admin';
-const MASTER_ADMIN_PASS = process.env.MASTER_ADMIN_PASS || 'Admin@12345';
+// Trust reverse proxy (Render / Cloudflare) for accurate client IP
+app.set('trust proxy', 1);
+app.disable('x-powered-by'); // Prevent Express version leakage
 
-// Gemini AI API Key (Optional for AI Support Advisor)
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+// ===================================================================
+// SECRETS MANAGEMENT (NO HARDCODED PRODUCTION SECRETS)
+// ===================================================================
+const MONGO_URI = process.env.MONGO_URI || (IS_PROD ? '' : 'mongodb://127.0.0.1:27017/emcs_project_db');
+const MASTER_OWNER_KEY = process.env.MASTER_OWNER_KEY || '';
+const JWT_SECRET = process.env.JWT_SECRET || (
+    MASTER_OWNER_KEY
+        ? crypto.createHash('sha256').update(MASTER_OWNER_KEY + '_emcs_prod_vault').digest('hex')
+        : crypto.randomBytes(32).toString('hex')
+);
 
 // Telegram Bot Credentials (Strictly Verified Against Render Env)
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || '';
-
-// Global Maintenance Flag (Synced with DB & Telegram Bot)
 global.MAINTENANCE_MODE = false;
 
+if (!MASTER_OWNER_KEY) {
+    console.warn('[SECURITY WARNING] MASTER_OWNER_KEY is not set in Environment Variables! Master Owner login will remain disabled until configured.');
+}
+
+// Strict payload size limit (10kb) to prevent memory exhaustion
+app.use(express.json({ limit: '10kb' }));
+app.use(cookieParser());
+
+const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:5000',
+    'http://127.0.0.1:5500',
+    'http://localhost:5500',
+    process.env.FRONTEND_URL
+].filter(Boolean);
+
+app.use(cors({
+    origin: (origin, cb) => {
+        if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+        return cb(null, false);
+    },
+    credentials: true
+}));
+
 // ============================================================================
-// 🤖 2. TELEGRAM ALERT ENGINE & SENSITIVE DATA MASKING
+// 🤖 TELEGRAM ALERT ENGINE & SENSITIVE DATA MASKING
 // ============================================================================
 
-/**
- * Strips passwords, secret keys, JWTs, and Bcrypt hashes before sending any log to Telegram
- */
 function maskSensitiveData(text) {
     if (!text) return 'No details provided.';
     let safeText = String(text);
-    // Mask JSON or Query key-value pairs containing sensitive keywords
     safeText = safeText.replace(/(password|secret|apikey|api_key|credential|token|pin|auth)\s*[:=]\s*["']?[^"'\s,}&]*/gi, '$1: [HIDDEN_FOR_SECURITY]');
-    // Mask JWT Tokens
     safeText = safeText.replace(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/g, '[JWT_HIDDEN]');
-    // Mask Bcrypt Hashes
     safeText = safeText.replace(/\$2[abxy]\$\d+\$[./A-Za-z0-9]{53}/g, '[HASH_HIDDEN]');
-    // Mask MongoDB SRV Connection Strings with Passwords
     safeText = safeText.replace(/mongodb(\+srv)?:\/\/([^:]+):([^@]+)@/gi, 'mongodb$1://$2:[DB_PASS_HIDDEN]@');
     return safeText;
 }
 
-/**
- * Sends instant alert to Admin Telegram. Automatically sends DOUBLE notification for DB issues.
- */
 async function sendTelegramAlert(type, message, req = null) {
     const ADMIN_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || TELEGRAM_ADMIN_CHAT_ID;
     if (!TELEGRAM_BOT_TOKEN || !ADMIN_ID) return;
@@ -70,258 +82,202 @@ async function sendTelegramAlert(type, message, req = null) {
     const typeStr = String(type).toLowerCase();
     const msgStr = String(safeMessage).toLowerCase();
 
-    // Detect if the problem is related to Database, MongoDB, or Injection Hacking
     const isDatabaseIssue =
-        typeStr.includes('database') ||
-        typeStr.includes('mongo') ||
-        typeStr.includes('nosql') ||
-        typeStr.includes('injection') ||
-        typeStr.includes('pollution') ||
-        msgStr.includes('database') ||
-        msgStr.includes('mongo') ||
-        msgStr.includes('unauthorized');
+        typeStr.includes('database') || typeStr.includes('mongo') || typeStr.includes('nosql') ||
+        typeStr.includes('injection') || typeStr.includes('pollution') || msgStr.includes('database') ||
+        msgStr.includes('mongo') || msgStr.includes('unauthorized');
 
-    // Send 2 times if it's a critical Database issue, else 1 time
     const alertCount = isDatabaseIssue ? 2 : 1;
-
     let text = `🚨 *EMCS SYSTEM ALERT* 🚨\n\n*Type:* ${type}\n*Time:* ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n*Source IP:* \`${ipInfo}\`\n\n*Details:*\n${safeMessage}`;
 
-    if (isDatabaseIssue) {
-        text = `‼️ *URGENT DATABASE SECURITY / HEALTH ALERT* ‼️\n\n` + text;
-    }
+    if (isDatabaseIssue) text = `‼️ *URGENT DATABASE SECURITY / HEALTH ALERT* ‼️\n\n` + text;
 
     for (let i = 0; i < alertCount; i++) {
         try {
             await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chat_id: ADMIN_ID,
-                    text: text,
-                    parse_mode: 'Markdown'
-                })
+                body: JSON.stringify({ chat_id: ADMIN_ID, text: text, parse_mode: 'Markdown' })
             });
-
-            // 1-second delay between double alerts to respect Telegram rate limits
-            if (i < alertCount - 1) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
+            if (i < alertCount - 1) await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (e) {
             console.error('[EMCS] Telegram Dispatch Error:', e.message);
         }
     }
 }
 
-// ============================================================================
-// 🛡️ 3. FORT-KNOX MONGODB SETUP, SCHEMAS & GLOBAL DATA-LEAK SHIELD
-// ============================================================================
+// Security Headers & Anti-CSRF Verification
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' http://192.168.* http://10.* http://172.* ws: wss:; img-src 'self' data: blob:;"
+    );
 
-// Harden Mongoose against Query Selector Injection & Unindexed Queries
+    if (req.headers['via'] || req.headers['x-proxy-id'] || req.headers['forwarded']) {
+        req.isSuspiciousProxy = true;
+    }
+
+    if (['POST', 'DELETE', 'PUT', 'PATCH'].includes(req.method) && req.path.startsWith('/api/')) {
+        const csrf = req.headers['x-emcs-csrf'];
+        if (csrf !== 'emcs-verified-client') {
+            return res.status(403).json({ success: false, message: 'Forbidden: Invalid request signature.' });
+        }
+    }
+    next();
+});
+
+// Global Under-Maintenance Traffic Blocker
+app.use((req, res, next) => {
+    if (global.MAINTENANCE_MODE) {
+        if (req.path.startsWith('/api/')) {
+            return res.status(503).json({ success: false, message: 'System Under Maintenance ⚠️' });
+        }
+        return res.status(503).send(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head><meta charset="UTF-8"><title>Under Maintenance | EMCS</title></head>
+            <body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;background:#0b0f19;color:#f9fafb;text-align:center;">
+                <div><h1 style="font-size:3.5rem;">⚠️</h1><h2 style="color:#ef4444;">Under Maintenance ⚠️</h2><p>We are currently upgrading the EMCS Smart Grid servers.</p></div>
+            </body>
+            </html>
+        `);
+    }
+    next();
+});
+
+// Ultimate NoSQL Injection & Prototype Pollution Shield
+app.use(async (req, res, next) => {
+    const forbiddenKeys = ['__proto__', 'constructor', 'prototype'];
+    const hasMaliciousKeys = (obj) => {
+        if (!obj || typeof obj !== 'object') return false;
+        for (const key of Object.keys(obj)) {
+            if (key.includes('$') || key.includes('.') || forbiddenKeys.includes(key.toLowerCase())) return true;
+            if (typeof obj[key] === 'object' && hasMaliciousKeys(obj[key])) return true;
+        }
+        return false;
+    };
+
+    if (hasMaliciousKeys(req.body) || hasMaliciousKeys(req.query) || hasMaliciousKeys(req.params)) {
+        await sendTelegramAlert('NoSQL / Prototype Pollution Blocked', `Malicious payload keys blocked on ${req.method} ${req.originalUrl}`, req);
+        return res.status(403).json({ success: false, message: 'Security Block: Malicious payload structure detected.' });
+    }
+    next();
+});
+
+
+// ===================================================================
+// STRICT INPUT VALIDATION & SANITIZATION HELPERS
+// ===================================================================
+const sanitizeInput = (val, max = 150) => {
+    if (typeof val === 'string' || typeof val === 'number') {
+        return String(val).replace(/[\0$]/g, '').trim().slice(0, max);
+    }
+    return '';
+};
+
+const ALLOWED_PROVIDERS = new Set([
+    'bihar', 'up', 'maharashtra', 'delhi', 'karnataka', 'rajasthan',
+    'wb', 'tn', 'gujarat', 'punjab', 'haryana', 'mp',
+    'tata_delhi', 'bses_delhi', 'tata_mumbai', 'adani_mumbai',
+    'cesc_kolkata', 'torrent', 'national', 'custom'
+]);
+const ALLOWED_CATEGORIES = new Set(['domestic', 'commercial']);
+const ALLOWED_AREAS = new Set(['urban', 'rural']);
+
+function safeCompareStrings(a, b) {
+    if (!a || !b) return false;
+    const bufA = Buffer.from(String(a));
+    const bufB = Buffer.from(String(b));
+    if (bufA.length !== bufB.length) {
+        crypto.timingSafeEqual(bufA, bufA);
+        return false;
+    }
+    return crypto.timingSafeEqual(bufA, bufB);
+}
+
+// ===================================================================
+// MULTI-TIER RATE LIMITING (PER-IP & MEMORY GUARDED)
+// ===================================================================
+const rateLimits = new Map();
+setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of rateLimits.entries()) {
+        if (now > v.resetAt) rateLimits.delete(k);
+    }
+}, 300000);
+
+function createLimiter(maxReqs, windowMs, customMsg) {
+    return (req, res, next) => {
+        const key = `${req.ip}_${req.baseUrl || req.path}`;
+        const now = Date.now();
+        let rec = rateLimits.get(key) || { count: 0, resetAt: now + windowMs };
+        if (now > rec.resetAt) rec = { count: 0, resetAt: now + windowMs };
+
+        const allowedMax = req.isSuspiciousProxy ? Math.max(1, Math.floor(maxReqs / 2)) : maxReqs;
+        rec.count++;
+
+        // Prevent memory exhaustion from spoofed IP floods
+        if (rateLimits.size > 5000 && !rateLimits.has(key)) {
+            rateLimits.clear();
+        }
+        rateLimits.set(key, rec);
+
+        if (rec.count > allowedMax) {
+            return res.status(429).json({
+                success: false,
+                message: customMsg || 'Too many requests. Please wait a moment and try again.'
+            });
+        }
+        next();
+    };
+}
+
+const globalApiLimiter = createLimiter(60, 60 * 1000, 'API rate limit exceeded. Please slow down.');
+const strictRegisterLimiter = createLimiter(3, 24 * 60 * 60 * 1000, 'Maximum 3 accounts can be created from a single IP within 24 hours.');
+const loginLimiter = createLimiter(5, 15 * 60 * 1000, 'Too many login attempts. Please wait 15 minutes.');
+const chatLimiter = createLimiter(12, 60 * 1000, 'Sending messages too fast. Please wait a moment.');
+const errorReportLimiter = createLimiter(15, 60 * 1000, 'Telemetry limit reached.');
+
+app.use('/api', globalApiLimiter);
+
+// ===================================================================
+// FORT-KNOX MONGODB SETUP, SCHEMAS & GLOBAL DATA-LEAK SHIELD
+// ===================================================================
+
 mongoose.set('sanitizeFilter', true);
 mongoose.set('strictQuery', true);
 
-// Global Schema Transform: NEVER allow credentialHash or internal keys to leak in JSON responses
 mongoose.plugin((schema) => {
     schema.set('toJSON', {
         transform: (doc, ret) => {
-            delete ret.credentialHash;
+            delete ret.pinHash;
+            delete ret.passwordHash;
             delete ret.__v;
             return ret;
         }
     });
     schema.set('toObject', {
         transform: (doc, ret) => {
-            delete ret.credentialHash;
+            delete ret.pinHash;
+            delete ret.passwordHash;
             delete ret.__v;
             return ret;
         }
     });
 });
 
-// Fast In-Memory Bloom Set for Pre-Checking Existing Users
-const emcsBloom = new Set();
-
-// --- SCHEMA 1: CONSUMER USER ---
-const UserSchema = new mongoose.Schema({
-    tenantId: { type: String, default: TENANT_ID, index: true },
-    consumerId: { type: String, required: true, unique: true, index: true },
-    name: { type: String, required: true, trim: true },
-    mobile: { type: String, required: true, unique: true, index: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    state: { type: String, default: 'BR' },
-    sanctionedKw: { type: Number, default: 2 },
-    credentialHash: { type: String, required: true, select: false },
-    accountStatus: { type: String, enum: ['active', 'suspended'], default: 'active' },
-    failedLoginAttempts: { type: Number, default: 0 },
-    lockUntil: { type: Date, default: null },
-    appliances: {
-        type: [{
-            name: String,
-            power: Number,
-            hours: Number,
-            mode: { type: String, default: 'manual' }
-        }],
-        default: []
-    },
-    iotStates: {
-        type: Map,
-        of: Boolean,
-        default: { '1': false, '2': false, '3': false, '4': false, '16': false, '17': false }
-    },
-    activeSessions: {
-        type: [{
-            sessionId: String,
-            uaHash: String,
-            deviceLabel: String,
-            ip: String,
-            lastActive: { type: Date, default: Date.now }
-        }],
-        default: []
-    }
-}, { timestamps: true });
-
-const User = mongoose.model('User', UserSchema);
-
-// --- SCHEMA 2: GOD-MODE CMS & TARIFF CONFIG ---
-const CmsSchema = new mongoose.Schema({
-    tenantId: { type: String, default: TENANT_ID, index: true },
-    key: { type: String, default: 'global_cms', unique: true },
-    siteName: { type: String, default: 'EMCS' },
-    broadcastBanner: { type: String, default: '' },
-    heroHeading: { type: String, default: 'Smart Energy Control & Bill Optimizer' },
-    heroSubtext: { type: String, default: 'Real-time load monitoring, progressive tariff slab alerts, and AI bill reduction.' },
-    themeColors: {
-        primary: { type: String, default: '#6366f1' },
-        accent: { type: String, default: '#10b981' }
-    },
-    featureSwitches: {
-        gridSafety: { type: Boolean, default: true },
-        inverter: { type: Boolean, default: true },
-        vampire: { type: Boolean, default: true },
-        tod: { type: Boolean, default: true },
-        solar: { type: Boolean, default: true },
-        iot: { type: Boolean, default: true }
-    },
-    liveTariffs: {
-        slabs: {
-            type: [{
-                min: Number,
-                max: Number,
-                rate: Number
-            }],
-            default: [
-                { min: 0, max: 100, rate: 5.5 },
-                { min: 101, max: 200, rate: 6.5 },
-                { min: 201, max: 300, rate: 7.5 },
-                { min: 301, max: 999999, rate: 8.5 }
-            ]
-        },
-        fixedCharge: { type: Number, default: 120 },
-        taxPercent: { type: Number, default: 5 }
-    },
-    paymentConfig: {
-        enabled: { type: Boolean, default: true },
-        apiKey: { type: String, default: '' },
-        apiSecret: { type: String, default: '' } // 🚨 Strictly stripped on public routes
-    },
-    aiPrompt: {
-        type: String,
-        default: 'You are the official EMCS Smart Grid AI Engineer. Provide concise, practical electricity bill reduction advice for Indian households.'
-    },
-    maintenanceMode: { type: Boolean, default: false }
-}, { timestamps: true });
-
-const CmsConfig = mongoose.model('CmsConfig', CmsSchema);
-
-// --- SCHEMA 3: STAFF OPERATORS & GRANULAR PERMISSIONS ---
-const StaffSchema = new mongoose.Schema({
-    tenantId: { type: String, default: TENANT_ID, index: true },
-    username: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    roleTitle: { type: String, default: 'Support Executive' },
-    credentialHash: { type: String, required: true, select: false },
-    permissions: {
-        manageUsers: { type: Boolean, default: true },
-        manageCms: { type: Boolean, default: false },
-        manageSupport: { type: Boolean, default: true },
-        viewLogs: { type: Boolean, default: false }
-    },
-    isActive: { type: Boolean, default: true }
-}, { timestamps: true });
-
-const Staff = mongoose.model('Staff', StaffSchema);
-
-// --- SCHEMA 4: SUPPORT TICKETS & AI CHAT ---
-const SupportTicketSchema = new mongoose.Schema({
-    tenantId: { type: String, default: TENANT_ID, index: true },
-    consumerId: { type: String, required: true, index: true },
-    consumerName: { type: String, default: 'Consumer' },
-    status: { type: String, enum: ['open', 'resolved'], default: 'open' },
-    messages: [{
-        sender: { type: String, enum: ['user', 'ai', 'admin'] },
-        text: String,
-        timestamp: { type: Date, default: Date.now }
-    }]
-}, { timestamps: true });
-
-const SupportTicket = mongoose.model('SupportTicket', SupportTicketSchema);
-
-// --- SCHEMA 5: BILL PAYMENT RECEIPTS ---
-const PaymentSchema = new mongoose.Schema({
-    tenantId: { type: String, default: TENANT_ID, index: true },
-    consumerId: { type: String, required: true, index: true },
-    txnId: { type: String, required: true, unique: true },
-    amount: { type: Number, required: true },
-    unitsBilled: { type: Number, default: 0 },
-    method: { type: String, default: 'UPI' },
-    status: { type: String, default: 'SUCCESS' }
-}, { timestamps: true });
-
-const PaymentReceipt = mongoose.model('PaymentReceipt', PaymentSchema);
-
-// --- SCHEMA 6: SYSTEM ERRORS & ADMIN AUDIT TRAIL ---
-const SystemErrorSchema = new mongoose.Schema({
-    tenantId: { type: String, default: TENANT_ID, index: true },
-    source: { type: String, required: true },
-    message: { type: String, required: true },
-    location: { type: String, default: 'Backend' },
-    userOrIp: { type: String, default: 'System' }
-}, { timestamps: true });
-
-const SystemError = mongoose.model('SystemError', SystemErrorSchema);
-
-/**
- * Central Emergency Alert Dispatcher (Saves to DB + Fires Telegram Alert)
- */
-async function dispatchEmergencyAlert(source, message, req = null) {
-    try {
-        const ip = req ? (req.headers['x-forwarded-for'] || req.ip) : 'System';
-        const safeMsg = maskSensitiveData(message);
-        if (mongoose.connection.readyState === 1) {
-            await new SystemError({
-                tenantId: TENANT_ID,
-                source,
-                message: safeMsg,
-                location: req ? req.originalUrl : 'Server',
-                userOrIp: ip
-            }).save();
-        }
-        await sendTelegramAlert(source, safeMsg, req);
-    } catch (e) {
-        console.error('[EMCS] Failed to log emergency alert:', e.message);
-    }
-}
-
-// ============================================================================
-// 🔌 4. ACTIVE DATABASE CONNECTION & LIVE HEALTH LISTENERS
-// ============================================================================
 mongoose.connection.on('error', async (err) => {
     console.error('[EMCS] MongoDB Runtime Error:', err.message);
-    await dispatchEmergencyAlert('Database Runtime Error', `MongoDB error or unauthorized access attempt: ${err.message}`);
+    await sendTelegramAlert('Database Runtime Error', `MongoDB error: ${err.message}`);
 });
 
 mongoose.connection.on('disconnected', async () => {
     console.warn('[EMCS] MongoDB Disconnected!');
-    await dispatchEmergencyAlert('Database Disconnected', 'Critical: MongoDB connection was lost or dropped.');
+    await sendTelegramAlert('Database Disconnected', 'Critical: MongoDB connection was lost or dropped.');
 });
 
 if (MONGO_URI) {
@@ -332,453 +288,492 @@ if (MONGO_URI) {
         autoIndex: !IS_PROD,
         family: 4
     };
-
-    mongoose.connect(MONGO_URI, dbSecurityOptions).then(async () => {
-        console.log('[EMCS] 🛡️ MongoDB Connected & Fort-Knox Security Pool Active.');
-        const users = await User.find({ tenantId: TENANT_ID }, 'mobile email consumerId').lean();
-        users.forEach(u => {
-            if (u.mobile) emcsBloom.add(u.mobile);
-            if (u.email) emcsBloom.add(u.email);
-            if (u.consumerId) emcsBloom.add(u.consumerId);
+    mongoose.connect(MONGO_URI, dbSecurityOptions)
+        .then(() => console.log('[EMCS VAULT] Connected to database successfully.'))
+        .catch(err => {
+            console.error('[EMCS VAULT] Connection failed:', err.message);
+            sendTelegramAlert('FATAL: Database Connection Failed', `MongoDB Refused Connection: ${err.message}`);
         });
-    }).catch(async (err) => {
-        console.error('[EMCS] ❌ Initial Database Connection Failed:', err.message);
-        await sendTelegramAlert('FATAL: Database Connection Failed', `MongoDB Refused Connection: ${err.message}`);
-    });
 } else {
     console.warn('[EMCS] ⚠️ MONGO_URI not set in environment variables!');
 }
 
-// ============================================================================
-// 🧱 5. BANK-GRADE SECURITY MIDDLEWARE STACK
-// ============================================================================
+// ===================================================================
+// DATABASE SCHEMAS & 2-YEAR TTL INDEX
+// ===================================================================
+const UserSchema = new mongoose.Schema({
+    mobile: { type: String, required: true, unique: true, index: true },
+    consumerId: { type: String, required: true, unique: true, minlength: 12, maxlength: 12, index: true },
+    name: { type: String, required: true },
+    pinHash: { type: String, required: true },
+    termsAccepted: { type: Boolean, default: true },
+    termsAcceptedAt: { type: Date, default: Date.now },
+    failedLoginAttempts: { type: Number, default: 0 },
+    lockUntil: { type: Date, default: null },
+    activeSessions: [{
+        sessionId: String,
+        deviceInfo: String,
+        ipAddress: String,
+        createdAt: { type: Date, default: Date.now }
+    }],
+    appliances: { type: Array, default: [] },
+    sanctionedLoadKw: { type: Number, default: 2.0 },
+    budgetThreshold: { type: Number, default: 3000 },
+    tariffProvider: { type: String, default: 'bihar' },
+    tariffCategory: { type: String, default: 'domestic' },
+    tariffArea: { type: String, default: 'urban' },
+    customTariff: {
+        fixedPerKw: { type: Number, default: 0 },
+        fppcaPct: { type: Number, default: 0 },
+        dutyPct: { type: Number, default: 0.05 },
+        slabs: [{ limit: mongoose.Schema.Types.Mixed, rate: Number }]
+    },
+    accountStatus: { type: String, default: 'active', enum: ['active', 'deleted', 'suspended'] },
+    deletionScheduledAt: { type: Date, default: null }
+}, { timestamps: true });
 
-app.set('trust proxy', 1);
-app.disable('x-powered-by'); // Camouflage Express fingerprint
+UserSchema.index({ deletionScheduledAt: 1 }, { expireAfterSeconds: 63072000 });
 
-// Body & URL Payload Crash Guards (10KB strict memory cap)
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: true, limit: '10kb' }));
-app.use(cookieParser());
-
-// 5A. Enterprise Security Headers (HSTS, CSP, Clickjacking, MIME Sniffing)
-app.use((req, res, next) => {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-    res.setHeader(
-        'Content-Security-Policy',
-        "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; img-src 'self' data: https:; connect-src 'self';"
-    );
-    next();
+const StaffSchema = new mongoose.Schema({
+    username: { type: String, required: true, unique: true },
+    passwordHash: { type: String, required: true },
+    name: { type: String, required: true },
+    role: { type: String, default: 'staff', enum: ['staff'] },
+    permissions: {
+        canManageUsers: { type: Boolean, default: false },
+        canChatSupport: { type: Boolean, default: true },
+        canEditCMS: { type: Boolean, default: false },
+        canDeleteChat: { type: Boolean, default: false }
+    }
 });
 
-// 5B. Global Under-Maintenance Traffic Blocker (Controlled via Telegram Bot)
-app.use((req, res, next) => {
-    if (global.MAINTENANCE_MODE) {
-        if (req.path.startsWith('/api/')) {
-            return res.status(503).json({ success: false, message: 'System Under Maintenance ⚠️' });
-        }
-        return res.status(503).send(`
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <title>Under Maintenance | EMCS</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            </head>
-            <body style="display:flex; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; background:#0b0f19; color:#f9fafb; text-align:center; margin:0;">
-                <div style="padding:28px; border:1px solid #1f2937; border-radius:14px; background:#111827; max-width:420px;">
-                    <h1 style="font-size:3.5rem; margin:0 0 10px;">⚠️</h1>
-                    <h2 style="color:#ef4444; margin:0 0 10px;">Under Maintenance ⚠️</h2>
-                    <p style="color:#9ca3af; font-size:0.95rem; line-height:1.5;">We are currently upgrading the EMCS Smart Grid servers. Normal operations will resume shortly.</p>
-                </div>
-            </body>
-            </html>
-        `);
-    }
-    next();
+const SupportMessageSchema = new mongoose.Schema({
+    consumerId: { type: String, required: true, index: true },
+    sender: { type: String, enum: ['user', 'admin'], required: true },
+    text: { type: String, required: true, maxlength: 500 },
+    timestamp: { type: Date, default: Date.now, expires: 2592000 }
 });
 
-// 5C. Ultimate NoSQL Injection & Prototype Pollution Shield
-app.use(async (req, res, next) => {
-    const forbiddenKeys = ['__proto__', 'constructor', 'prototype'];
-    const hasMaliciousKeys = (obj) => {
-        if (!obj || typeof obj !== 'object') return false;
-        for (const key of Object.keys(obj)) {
-            if (key.includes('$') || key.includes('.') || forbiddenKeys.includes(key.toLowerCase())) {
-                return true;
-            }
-            if (typeof obj[key] === 'object' && hasMaliciousKeys(obj[key])) {
-                return true;
-            }
-        }
-        return false;
-    };
-
-    if (hasMaliciousKeys(req.body) || hasMaliciousKeys(req.query) || hasMaliciousKeys(req.params)) {
-        await dispatchEmergencyAlert('NoSQL / Prototype Pollution Blocked', `Malicious payload keys blocked on ${req.method} ${req.originalUrl}`, req);
-        return res.status(403).json({ success: false, message: 'Security Block: Malicious payload structure detected.' });
+const CmsSchema = new mongoose.Schema({
+    key: { type: String, default: 'global_cms', unique: true },
+    broadcast: { type: String, default: '' },
+    about: {
+        type: String,
+        default: 'EMCS (Energy Management Control System) is an intelligent energy monitoring, tariff estimation, and load automation platform.'
+    },
+    privacy: {
+        type: String,
+        default: '1. DATA COLLECTION (DPDP Act 2023 Compliance): We collect minimal data (Mobile, Consumer ID, Name) strictly for authentication and load monitoring. We do not sell your data to third parties.\n\n2. OCR & FILE UPLOADS: Bill images uploaded for OCR and CSV files are processed securely in memory. We do not permanently store images of your physical electricity bills.\n\n3. DATA RETENTION & ERASURE: Upon account deactivation, all sessions are revoked, and records enter a secured 2-year retention archive for compliance before automatic permanent erasure.\n\n4. COOKIES: We use HTTP-only cookies strictly for session authorization.'
+    },
+    terms: {
+        type: String,
+        default: '1. ACCEPTANCE OF TERMS: By using EMCS, you agree to these legal terms.\n\n2. NO FINANCIAL LIABILITY: The electricity bills, solar ROI, and tariff calculations provided by EMCS are "Estimates" based on standard utility slabs. EMCS is not an official billing authority. You must pay your actual utility provider based on their official meter readings.\n\n3. HARDWARE & IOT SAFETY WAIVER: The hardware relay control, voltage surge guard, and IoT features are provided "AS IS". EMCS and its developers are NOT liable for any electrical damage, short circuits, hardware failure, fire hazards, or personal injury resulting from automated appliance switching. Use IoT features at your own risk.\n\n4. PAYMENTS: EMCS provides a simulated settlement ledger. No real financial transactions are processed on this platform.'
+    },
+    faqs: {
+        type: Array,
+        default: [
+            { q: 'Are the electricity bills shown here official?', a: 'No. All bills and solar ROI figures are estimates calculated using state/private DISCOM tariff slabs for planning and energy-saving purposes.' },
+            { q: 'How does the 2-year account deletion policy work?', a: 'When you deactivate your account, all active devices are logged out immediately and your records are automatically erased after 2 years.' },
+            { q: 'Is it safe to connect my ESP32 / Arduino relay?', a: 'Yes, local hardware triggers use HMAC-SHA256 signatures, but always ensure qualified electrical insulation when dealing with 230V AC loads.' }
+        ]
     }
-    next();
 });
 
-// 5D. Strict Origin CSRF Guard for Mutating API Requests
-app.use((req, res, next) => {
-    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method) && req.path.startsWith('/api/')) {
-        const origin = req.headers.origin || req.headers.referer || '';
-        const host = req.headers.host || '';
-        if (IS_PROD && origin && !origin.includes(host)) {
-            dispatchEmergencyAlert('CSRF Origin Mismatch', `Blocked cross-origin ${req.method} from ${origin}`, req);
-            return res.status(403).json({ success: false, message: 'CSRF Security Block: Invalid Origin.' });
-        }
-    }
-    next();
+const SystemErrorSchema = new mongoose.Schema({
+    timestamp: { type: Date, default: Date.now, expires: 2592000 },
+    source: { type: String, default: 'Secure Storage Layer' },
+    message: { type: String, required: true },
+    location: { type: String, default: '' },
+    userOrIp: { type: String, default: '' }
 });
 
-// 5E. In-Memory API Rate Limiter (Anti-DDoS & Anti-Scraping)
-const ipRateMap = new Map();
-app.use('/api/', (req, res, next) => {
-    const ip = req.headers['x-forwarded-for'] || req.ip || 'unknown';
-    const now = Date.now();
-    const windowMs = 60 * 1000; // 1 Minute Window
-    const maxReqs = 90;
+const User = mongoose.model('User', UserSchema);
+const Staff = mongoose.model('Staff', StaffSchema);
+const SupportMessage = mongoose.model('SupportMessage', SupportMessageSchema);
+const CmsConfig = mongoose.model('CmsConfig', CmsSchema);
+const SystemError = mongoose.model('SystemError', SystemErrorSchema);
 
-    const record = ipRateMap.get(ip) || { count: 0, resetAt: now + windowMs };
-    if (now > record.resetAt) {
-        record.count = 1;
-        record.resetAt = now + windowMs;
-    } else {
-        record.count++;
-    }
-    ipRateMap.set(ip, record);
+// Internal server-side error logger (Never leaks stack traces to client)
+async function logBackendError(source, err, req = null) {
+    try {
+        const safeMsg = sanitizeInput(err?.message || String(err), 300);
+        await new SystemError({
+            source: sanitizeInput(source || 'Secure Storage Layer', 50),
+            message: safeMsg,
+            location: sanitizeInput(req ? `${req.method}${req.originalUrl}` : 'Internal', 150),
+            userOrIp: sanitizeInput(req ? (req.user?.consumerId || req.ip) : 'System', 60)
+        }).save();
+        await sendTelegramAlert(source, safeMsg, req);
+    } catch (ignore) {}
+}
 
-    if (record.count > maxReqs) {
-        return res.status(429).json({ success: false, message: 'Too many requests. Please slow down.' });
-    }
-    next();
-});
-// ============================================================================
-// 🔐 6. DEVICE-BOUND AUTHENTICATION & GRANULAR PERMISSION MIDDLEWARES
-// ============================================================================
+// ===================================================================
+// AUTHENTICATION & AUTHORIZATION (RBAC & OWNERSHIP)
+// ===================================================================
 
-/**
- * Generates SHA-256 fingerprint of the client's User-Agent string
- */
 function getUaHash(req) {
     const ua = String(req.headers['user-agent'] || 'unknown_device');
     return crypto.createHash('sha256').update(ua).digest('hex');
 }
 
-/**
- * Consumer Session Verification (HttpOnly Cookie + Device Fingerprint + Anti-IDOR)
- */
-async function authenticateConsumer(req, res, next) {
-    const token = req.cookies.emcs_user_token;
-    if (!token) {
-        return res.status(401).json({ success: false, message: 'Authentication required. Please login.' });
-    }
+async function authenticateUser(req, res, next) {
+    const token = req.cookies.emcs_auth_token;
+    if (!token) return res.status(401).json({ success: false, message: 'Authentication required. Please log in.' });
 
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
+        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
         const currentUaHash = getUaHash(req);
 
-        // Device-Binding Check: Prevent stolen cookie replay on another browser/device
         if (decoded.uaHash && decoded.uaHash !== currentUaHash) {
-            res.clearCookie('emcs_user_token');
-            await dispatchEmergencyAlert('Consumer Session Hijack Blocked', `Token for ${decoded.consumerId} used from mismatched device!`, req);
+            res.clearCookie('emcs_auth_token');
+            await logBackendError('Consumer Session Hijack Blocked', `Token for ${decoded.userId} used from mismatched device!`, req);
             return res.status(403).json({ success: false, message: 'Security Alert: Device mismatch. Session terminated.' });
         }
 
-        const user = await User.findOne({ tenantId: TENANT_ID, consumerId: decoded.consumerId });
-        if (!user || user.accountStatus !== 'active') {
-            res.clearCookie('emcs_user_token');
-            return res.status(403).json({ success: false, message: 'Account suspended or not found.' });
-        }
+        const user = await User.findById(decoded.userId);
 
-        // Verify session exists in activeSessions array
-        const sessionExists = user.activeSessions.some(s => s.sessionId === decoded.sessionId);
-        if (!sessionExists) {
-            res.clearCookie('emcs_user_token');
-            return res.status(401).json({ success: false, message: 'Session expired or revoked.' });
+        if (!user || user.accountStatus === 'deleted' || user.accountStatus === 'suspended' || !user.activeSessions.some(s => s.sessionId === decoded.sessionId)) {
+            res.clearCookie('emcs_auth_token');
+            return res.status(401).json({ success: false, message: 'Session expired, invalid, or account suspended.' });
         }
 
         req.user = user;
         req.sessionId = decoded.sessionId;
         next();
     } catch (e) {
-        res.clearCookie('emcs_user_token');
-        return res.status(401).json({ success: false, message: 'Invalid or expired session.' });
+        return res.status(403).json({ success: false, message: 'Invalid session credentials.' });
     }
 }
 
-/**
- * Admin / Staff Command Hub Verification (Device-Bound HttpOnly Cookie)
- */
 async function authenticateAdmin(req, res, next) {
     const token = req.cookies.emcs_admin_token;
-    if (!token) {
-        return res.status(401).json({ success: false, message: 'Admin authorization required.' });
-    }
+    if (!token) return res.status(401).json({ success: false, message: 'Admin authentication required.' });
 
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
+        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
         const currentUaHash = getUaHash(req);
-
+        
         if (decoded.uaHash && decoded.uaHash !== currentUaHash) {
             res.clearCookie('emcs_admin_token');
-            await dispatchEmergencyAlert('Admin Session Hijack Blocked', `Admin token (${decoded.username}) used from unauthorized device!`, req);
-            return res.status(403).json({ success: false, message: 'Device mismatch. Admin logged out.' });
+            await logBackendError('Admin Session Hijack Blocked', `Admin token used from mismatched device!`, req);
+            return res.status(403).json({ success: false, message: 'Security Alert: Device mismatch. Session terminated.' });
         }
-
-        req.admin = decoded; // Contains { username, role, permissions, uaHash }
+        
+        req.admin = decoded;
         next();
     } catch (e) {
-        res.clearCookie('emcs_admin_token');
-        return res.status(403).json({ success: false, message: 'Admin session expired.' });
+        return res.status(403).json({ success: false, message: 'Invalid admin session.' });
     }
 }
 
-/**
- * Granular Staff Permission Guard (Super Admin bypasses all checks; Staff checked per module)
- */
 function requireAdminPermission(permKey) {
     return (req, res, next) => {
-        if (!req.admin) {
-            return res.status(401).json({ success: false, message: 'Unauthorized.' });
-        }
-        if (req.admin.role === 'SUPER_ADMIN') {
+        if (!req.admin) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+        if (req.admin.role === 'owner') return next();
+        if (permKey && req.admin.permissions && req.admin.permissions[permKey] === true) {
             return next();
         }
-        if (req.admin.permissions && req.admin.permissions[permKey] === true) {
-            return next();
-        }
-        return res.status(403).json({
-            success: false,
-            message: `Access Denied: Your staff profile lacks '${permKey}' permission.`
-        });
+        return res.status(403).json({ success: false, message: 'Forbidden: Insufficient role permissions.' });
     };
 }
 
-// ============================================================================
-// 🌐 7. PUBLIC & CONSUMER API ROUTES (Zero File Uploads, Strict Validation)
-// ============================================================================
+// ===================================================================
+// HEALTH CHECK & ERROR TELEMETRY ROUTES
+// ===================================================================
+app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok', uptime: Math.floor(process.uptime()) });
+});
 
-// 7A. Public CMS & Tariff Fetch (Sanitized - Strips Payment Secret & AI Prompt)
-app.get('/api/cms', async (req, res) => {
+app.post('/api/errors/report', errorReportLimiter, async (req, res) => {
     try {
-        let cms = await CmsConfig.findOne({ tenantId: TENANT_ID, key: 'global_cms' }).lean();
-        if (!cms) {
-            cms = await new CmsConfig({ tenantId: TENANT_ID, key: 'global_cms' }).save();
-            cms = cms.toObject();
-        }
+        const source = sanitizeInput(req.body.source || 'Client Component', 50);
+        const message = sanitizeInput(req.body.message, 300);
+        const location = sanitizeInput(req.body.location, 150);
+        const userOrIp = sanitizeInput(req.body.userOrIp || req.ip, 60);
 
-        // 🚨 CRITICAL SECURITY STRIP: Never expose Payment Secret or AI Prompt in Network Tab
-        if (cms.paymentConfig) {
-            delete cms.paymentConfig.apiSecret;
-        }
-        delete cms.aiPrompt;
-
-        res.json({ success: true, cms });
+        if (!message) return res.status(400).json({ success: false });
+        await new SystemError({ source, message, location, userOrIp }).save();
+        res.json({ success: true });
     } catch (e) {
-        res.status(500).json({ success: false, message: 'Failed to load configuration.' });
+        res.status(500).json({ success: false });
     }
 });
 
-// 7B. Consumer Registration (With Honeypot Trap & Bcrypt-12 Military Hashing)
-app.post('/api/auth/register', async (req, res) => {
+app.get('/api/admin/errors', authenticateAdmin, async (req, res) => {
     try {
-        const { name, mobile, email, state, sanctionedKw, credential, honeypot } = req.body;
+        const errors = await SystemError.find({}).sort({ timestamp: -1 }).limit(100);
+        res.json({ success: true, errors });
+    } catch (e) {
+        res.status(500).json({ success: false, message: 'Could not retrieve error logs.' });
+    }
+});
 
-        // 🍯 Honeypot Check
-        if (honeypot && String(honeypot).trim().length > 0) {
-            await dispatchEmergencyAlert('Bot Registration Blocked', `Honeypot triggered by IP ${req.ip}`, req);
-            return res.status(400).json({ success: false, message: ' Automated bot registration blocked.' });
+app.delete('/api/admin/errors/clear', authenticateAdmin, requireAdminPermission(null), async (req, res) => {
+    try {
+        if (req.admin.role !== 'owner') {
+            return res.status(403).json({ success: false, message: 'Only Master Owner can clear system error logs.' });
+        }
+        await SystemError.deleteMany({});
+        res.json({ success: true, message: 'All error logs cleared.' });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+
+// ===================================================================
+// USER AUTHENTICATION & REGISTRATION ROUTES
+// ===================================================================
+app.post('/api/auth/register', strictRegisterLimiter, async (req, res) => {
+    try {
+        if (req.body._bot_honeypot && String(req.body._bot_honeypot).length > 0) {
+            await logBackendError('Bot Registration Blocked', `Honeypot triggered on register`, req);
+            return res.status(403).json({ success: false, message: 'Automated registration blocked.' });
         }
 
-        if (!name || !mobile || !email || !credential) {
-            return res.status(400).json({ success: false, message: 'All fields are required.' });
+        if (req.body.termsAccepted !== true) {
+            return res.status(400).json({ success: false, message: 'You must accept the Privacy Policy and Terms & Conditions.' });
         }
 
-        const cleanMobile = String(mobile).trim();
-        const cleanEmail = String(email).trim().toLowerCase();
+        const mobile = sanitizeInput(req.body.mobile, 10);
+        const consumerId = sanitizeInput(req.body.consumerId, 12).toUpperCase();
+        const pin = sanitizeInput(req.body.pin, 4);
+        const name = sanitizeInput(req.body.name, 60);
 
-        if (!/^\d{10}$/.test(cleanMobile)) {
-            return res.status(400).json({ success: false, message: 'Enter a valid 10-digit mobile number.' });
+        if (!/^[0-9]{10}$/.test(mobile) || !/^[A-Z0-9]{12}$/.test(consumerId) || !/^[0-9]{4}$/.test(pin) || name.length < 2) {
+            return res.status(400).json({ success: false, message: 'Invalid input format. Check mobile, 12-char alphanumeric ID, and 4-digit PIN.' });
         }
-        if (String(credential).length < 6) {
-            return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
-        }
 
-        const existing = await User.findOne({
-            tenantId: TENANT_ID,
-            $or: [{ mobile: cleanMobile }, { email: cleanEmail }]
-        }).lean();
-
+        const existing = await User.findOne({ $or: [{ mobile }, { consumerId }] });
         if (existing) {
-            return res.status(409).json({ success: false, message: 'Mobile or Email already registered.' });
+            return res.status(400).json({ success: false, message: 'Registration failed: Mobile or Consumer ID is already in use.' });
         }
 
-        // Generate Unique Consumer ID (e.g., EMCS-849201)
-        const randomDigits = Math.floor(100000 + Math.random() * 900000);
-        const consumerId = `EMCS-${randomDigits}`;
-
-        // 🔥 Bcrypt 12 Salt Rounds
-        const credentialHash = await bcrypt.hash(String(credential), 12);
-
-        const sessionId = crypto.randomBytes(16).toString('hex');
-        const uaHash = getUaHash(req);
-        const deviceLabel = String(req.headers['user-agent'] || 'Web Browser').substring(0, 65);
-
+        const pinHash = await bcrypt.hash(pin, 12);
         const newUser = await new User({
-            tenantId: TENANT_ID,
+            mobile,
             consumerId,
-            name: String(name).trim().substring(0, 60),
-            mobile: cleanMobile,
-            email: cleanEmail,
-            state: String(state || 'BR').substring(0, 10),
-            sanctionedKw: Number(sanctionedKw) || 2,
-            credentialHash,
-            appliances: [
-                { name: 'LED Bulb (Living Room)', power: 12, hours: 8 },
-                { name: 'Ceiling Fan', power: 75, hours: 12 }
-            ],
-            activeSessions: [{ sessionId, uaHash, deviceLabel, ip: req.ip }]
+            name,
+            pinHash,
+            termsAccepted: true,
+            termsAcceptedAt: new Date()
         }).save();
 
-        emcsBloom.add(cleanMobile);
-        emcsBloom.add(cleanEmail);
-        emcsBloom.add(consumerId);
-
-        const token = jwt.sign({ consumerId, sessionId, uaHash }, JWT_SECRET, { expiresIn: '7d' });
-
-        res.cookie('emcs_user_token', token, {
-            httpOnly: true,
-            secure: IS_PROD,
-            sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000
-        });
-
-        res.json({ success: true, user: newUser });
+        res.json({ success: true, message: 'Account created successfully.', user: { name: newUser.name, consumerId: newUser.consumerId }});
     } catch (e) {
-        res.status(500).json({ success: false, message: 'Registration failed.' });
+        await logBackendError('Register Route', e, req);
+        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
     }
 });
 
-// 7C. Consumer Login (With 5-Attempt 15-Minute Brute-Force Lockout)
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
     try {
-        const { identifier, credential, honeypot } = req.body;
-
-        if (honeypot && String(honeypot).trim().length > 0) {
-            await dispatchEmergencyAlert('Bot Login Blocked', `Honeypot triggered on login`, req);
+        if (req.body._bot_honeypot && String(req.body._bot_honeypot).length > 0) {
+            await logBackendError('Bot Login Blocked', `Honeypot triggered on login`, req);
             return res.status(403).json({ success: false, message: 'Access denied.' });
         }
+        
+        const mobile = sanitizeInput(req.body.mobile, 10);
+        const pin = sanitizeInput(req.body.pin, 4);
 
-        if (!identifier || !credential) {
-            return res.status(400).json({ success: false, message: 'Enter login ID and password.' });
+        if (!/^[0-9]{10}$/.test(mobile) || !/^[0-9]{4}$/.test(pin)) {
+            return res.status(400).json({ success: false, message: 'Invalid mobile number or PIN.' });
         }
 
-        const cleanId = String(identifier).trim().toLowerCase();
+        const user = await User.findOne({ mobile });
+        if (!user) return res.status(401).json({ success: false, message: 'Invalid mobile number or PIN.' });
 
-        const user = await User.findOne({
-            tenantId: TENANT_ID,
-            $or: [{ mobile: cleanId }, { email: cleanId }, { consumerId: cleanId.toUpperCase() }]
-        }).select('+credentialHash');
-
-        if (!user) {
-            return res.status(401).json({ success: false, message: 'Invalid credentials.' });
+        if (user.accountStatus === 'deleted') {
+            return res.status(403).json({ success: false, message: 'This account has been deactivated.' });
         }
-
         if (user.accountStatus === 'suspended') {
             return res.status(403).json({ success: false, message: 'Account suspended by administration.' });
         }
 
-        // Check Brute-Force Lockout Timer
-        if (user.lockUntil && user.lockUntil > new Date()) {
-            const minsLeft = Math.ceil((user.lockUntil - new Date()) / 60000);
+        if (user.lockUntil && user.lockUntil > Date.now()) {
+            const mins = Math.ceil((user.lockUntil - Date.now()) / 60000);
             return res.status(429).json({
                 success: false,
-                message: `Account locked due to multiple failed attempts. Try again in ${minsLeft} minutes.`
+                isLocked: true,
+                message: `Account temporarily locked. Please try again in ${mins} minutes.`
             });
         }
 
-        const isMatch = await bcrypt.compare(String(credential), user.credentialHash);
+        const isMatch = await bcrypt.compare(pin, user.pinHash);
         if (!isMatch) {
-            user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
-            if (user.failedLoginAttempts >= 5) {
-                user.lockUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 Min Lockout
-                await user.save();
-                await dispatchEmergencyAlert('Brute-Force Lockout Triggered', `Consumer ${user.consumerId} locked for 15m after 5 failed attempts.`, req);
+            const updatedUser = await User.findOneAndUpdate(
+                { _id: user._id },
+                { $inc: { failedLoginAttempts: 1 } },
+                { new: true }
+            );
+
+            if (updatedUser.failedLoginAttempts >= 5) {
+                await User.updateOne(
+                    { _id: user._id },
+                    { $set: { lockUntil: new Date(Date.now() + 15 * 60000), failedLoginAttempts: 0 } }
+                );
+                await logBackendError('Brute-Force Lockout Triggered', `Consumer ${user.consumerId} locked for 15m after 5 failed attempts.`, req);
                 return res.status(429).json({ success: false, message: '5 failed attempts! Account locked for 15 minutes.' });
             }
-            await user.save();
-            return res.status(401).json({
-                success: false,
-                message: `Invalid password. (${5 - user.failedLoginAttempts} attempts remaining)`
-            });
+            return res.status(401).json({ success: false, message: `Invalid PIN. (${5 - updatedUser.failedLoginAttempts} attempts remaining)` });
         }
 
-        // Reset lockout counters on valid login
-        user.failedLoginAttempts = 0;
-        user.lockUntil = null;
+        await User.updateOne(
+            { _id: user._id },
+            { $set: { failedLoginAttempts: 0, lockUntil: null } }
+        );
 
-        const sessionId = crypto.randomBytes(16).toString('hex');
+        const sessionId = crypto.randomBytes(24).toString('hex');
         const uaHash = getUaHash(req);
-        const deviceLabel = String(req.headers['user-agent'] || 'Web Browser').substring(0, 65);
+        
+        user.activeSessions.push({
+            sessionId,
+            deviceInfo: sanitizeInput(req.headers['user-agent'], 70),
+            ipAddress: req.ip
+        });
 
-        // Keep max 5 recent active device sessions
-        user.activeSessions.push({ sessionId, uaHash, deviceLabel, ip: req.ip });
         if (user.activeSessions.length > 5) {
             user.activeSessions = user.activeSessions.slice(-5);
         }
         await user.save();
 
-        const token = jwt.sign({ consumerId: user.consumerId, sessionId, uaHash }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jwt.sign({ userId: user._id, sessionId, uaHash }, JWT_SECRET, { expiresIn: '7d', algorithm: 'HS256' });
 
-        res.cookie('emcs_user_token', token, {
+        res.cookie('emcs_auth_token', token, {
             httpOnly: true,
             secure: IS_PROD,
             sameSite: 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
-        const safeUser = user.toObject();
-        delete safeUser.credentialHash;
-
-        res.json({ success: true, user: safeUser });
+        res.json({
+            success: true,
+            user: {
+                name: user.name,
+                mobile: user.mobile,
+                consumerId: user.consumerId,
+                appliances: user.appliances,
+                sanctionedLoadKw: user.sanctionedLoadKw,
+                budgetThreshold: user.budgetThreshold,
+                tariffProvider: user.tariffProvider,
+                tariffCategory: user.tariffCategory,
+                tariffArea: user.tariffArea,
+                customTariff: user.customTariff
+            }
+        });
     } catch (e) {
-        res.status(500).json({ success: false, message: 'Login error occurred.' });
+        await logBackendError('Login Route', e, req);
+        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
     }
 });
 
-// 7D. Get Current Logged-in Consumer Session (`/api/auth/me`)
-app.get('/api/auth/me', authenticateConsumer, async (req, res) => {
-    res.json({ success: true, user: req.user });
+app.get('/api/auth/me', authenticateUser, async (req, res) => {
+    res.json({ success: true, user: { name: req.user.name, consumerId: req.user.consumerId, appliances: req.user.appliances } });
 });
 
-// 7E. Consumer Logout (Current Device or All Devices)
-app.post('/api/auth/logout', authenticateConsumer, async (req, res) => {
+app.post('/api/auth/logout', authenticateUser, async (req, res) => {
     try {
         const { allDevices } = req.body;
-        if (allDevices) {
+        if(allDevices) {
             req.user.activeSessions = [];
         } else {
             req.user.activeSessions = req.user.activeSessions.filter(s => s.sessionId !== req.sessionId);
         }
         await req.user.save();
-        res.clearCookie('emcs_user_token');
+        res.clearCookie('emcs_auth_token');
         res.json({ success: true });
     } catch (e) {
-        res.clearCookie('emcs_user_token');
-        res.json({ success: true });
+        res.status(500).json({ success: false });
     }
 });
 
-// 7F. Sync User Appliances (Feeds Dashboard, Standby Power Saver & Graph Reports)
-app.put('/api/user/appliances', authenticateConsumer, async (req, res) => {
+app.post('/api/auth/verify-and-reset-pin', loginLimiter, async (req, res) => {
+    try {
+        const mobile = sanitizeInput(req.body.mobile, 10);
+        const consumerId = sanitizeInput(req.body.consumerId, 12).toUpperCase();
+        const registeredName = sanitizeInput(req.body.registeredName, 60).toLowerCase();
+        const newPin = sanitizeInput(req.body.newPin, 4);
+
+        if (!/^[0-9]{10}$/.test(mobile) || !/^[A-Z0-9]{12}$/.test(consumerId) || !/^[0-9]{4}$/.test(newPin)) {
+            return res.status(400).json({ success: false, message: 'Invalid recovery details provided.' });
+        }
+
+        const user = await User.findOne({ mobile, consumerId, accountStatus: 'active' });
+        if (!user || user.name.toLowerCase() !== registeredName) {
+            return res.status(400).json({ success: false, message: 'Verification failed. Details do not match our records.' });
+        }
+
+        user.pinHash = await bcrypt.hash(newPin, 12);
+        user.failedLoginAttempts = 0;
+        user.lockUntil = null;
+        user.activeSessions = [];
+        await user.save();
+
+        res.json({ success: true, message: 'PIN reset successful! Please log in.' });
+    } catch (e) {
+        await logBackendError('PIN Reset Route', e, req);
+        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
+    }
+});
+
+app.get('/api/auth/devices', authenticateUser, (req, res) => {
+    const FORTY_EIGHT_HRS = 48 * 3600 * 1000;
+    const sessions = req.user.activeSessions.map(s => {
+        const age = Date.now() - new Date(s.createdAt).getTime();
+        const isCurrent = s.sessionId === req.sessionId;
+        return {
+            sessionId: s.sessionId,
+            deviceInfo: s.deviceInfo,
+            createdAt: s.createdAt,
+            isCurrent,
+            canRevoke: !isCurrent && age >= FORTY_EIGHT_HRS,
+            hoursRemaining: !isCurrent && age < FORTY_EIGHT_HRS ? Math.ceil((FORTY_EIGHT_HRS - age) / 3600000) : 0
+        };
+    });
+    res.json({ success: true, sessions });
+});
+
+app.post('/api/auth/revoke-device', authenticateUser, async (req, res) => {
+    try {
+        const targetId = sanitizeInput(req.body.targetSessionId, 64);
+        const target = req.user.activeSessions.find(s => s.sessionId === targetId);
+
+        if (!target || targetId === req.sessionId) {
+            return res.status(400).json({ success: false, message: 'Invalid device session.' });
+        }
+
+        if (Date.now() - new Date(target.createdAt).getTime() < 48 * 3600 * 1000) {
+            return res.status(403).json({ success: false, message: 'Secondary devices can only be revoked 48 hours after login.' });
+        }
+
+        req.user.activeSessions = req.user.activeSessions.filter(s => s.sessionId !== targetId);
+        await req.user.save();
+        res.json({ success: true, message: 'Device session revoked.' });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+
+// ===================================================================
+// USER DATA SYNC & ACCOUNT DELETION (OWNERSHIP ENFORCED)
+// ===================================================================
+app.get('/api/user/get-cloud-data', authenticateUser, (req, res) => {
+    res.json({
+        success: true,
+        data: {
+            name: req.user.name,
+            consumerId: req.user.consumerId,
+            appliances: req.user.appliances,
+            sanctionedLoadKw: req.user.sanctionedLoadKw,
+            budgetThreshold: req.user.budgetThreshold,
+            tariffProvider: req.user.tariffProvider,
+            tariffCategory: req.user.tariffCategory,
+            tariffArea: req.user.tariffArea,
+            customTariff: req.user.customTariff
+        }
+    });
+});
+
+app.put('/api/user/appliances', authenticateUser, async (req, res) => {
     try {
         const { appliances } = req.body;
         if (!Array.isArray(appliances) || appliances.length > 60) {
@@ -800,220 +795,127 @@ app.put('/api/user/appliances', authenticateConsumer, async (req, res) => {
     }
 });
 
-// 7G. Toggle Smart Hardware IoT Relay (Requires Verified Login)
-app.post('/api/user/iot-toggle', authenticateConsumer, async (req, res) => {
+app.post('/api/user/sync-cloud', authenticateUser, async (req, res) => {
     try {
-        const { nodeId, state } = req.body;
-        const key = String(nodeId);
-        if (!['1', '2', '3', '4', '16', '17'].includes(key)) {
-            return res.status(400).json({ success: false, message: 'Invalid hardware node.' });
-        }
-        req.user.iotStates.set(key, Boolean(state));
-        await req.user.save();
-        res.json({ success: true, nodeId: key, state: Boolean(state) });
-    } catch (e) {
-        res.status(500).json({ success: false, message: 'Hardware relay timeout.' });
-    }
-});
+        const {
+            name,
+            appliances,
+            sanctionedLoadKw,
+            budgetThreshold,
+            tariffProvider,
+            tariffCategory,
+            tariffArea,
+            customTariff
+        } = req.body;
 
-// 7H. Process Bill Payment & Generate Receipt
-app.post('/api/user/pay-bill', authenticateConsumer, async (req, res) => {
-    try {
-        const cms = await CmsConfig.findOne({ tenantId: TENANT_ID, key: 'global_cms' }).lean();
-        if (cms && cms.paymentConfig && cms.paymentConfig.enabled === false) {
-            return res.status(403).json({ success: false, message: 'Online payments are temporarily paused by Admin.' });
+        if (name !== undefined) {
+            const cleanName = sanitizeInput(name, 60);
+            if (cleanName.length >= 2) req.user.name = cleanName;
         }
 
-        const { amount, unitsBilled, method } = req.body;
-        const numAmount = Number(amount) || 0;
-        if (numAmount <= 0) {
-            return res.status(400).json({ success: false, message: 'Payable amount must be greater than ₹0.' });
-        }
-
-        const txnId = 'TXN' + Date.now() + Math.floor(100 + Math.random() * 900);
-        const receipt = await new PaymentReceipt({
-            tenantId: TENANT_ID,
-            consumerId: req.user.consumerId,
-            txnId,
-            amount: numAmount,
-            unitsBilled: Number(unitsBilled) || 0,
-            method: String(method || 'UPI').substring(0, 20)
-        }).save();
-
-        res.json({ success: true, receipt });
-    } catch (e) {
-        res.status(500).json({ success: false, message: 'Payment transaction failed.' });
-    }
-});
-
-app.get('/api/user/payments', authenticateConsumer, async (req, res) => {
-    try {
-        const receipts = await PaymentReceipt.find({
-            tenantId: TENANT_ID,
-            consumerId: req.user.consumerId
-        }).sort({ createdAt: -1 }).limit(10).lean();
-        res.json({ success: true, receipts });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
-
-// 7I. Consumer Support Chat & Gemini AI Energy Advisor
-app.get('/api/user/support', authenticateConsumer, async (req, res) => {
-    try {
-        let ticket = await SupportTicket.findOne({
-            tenantId: TENANT_ID,
-            consumerId: req.user.consumerId
-        }).lean();
-        res.json({ success: true, messages: ticket ? ticket.messages : [] });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
-
-app.post('/api/user/support', authenticateConsumer, async (req, res) => {
-    try {
-        const { text } = req.body;
-        if (!text || !String(text).trim()) {
-            return res.status(400).json({ success: false, message: 'Message cannot be empty.' });
-        }
-        const cleanText = String(text).trim().substring(0, 600);
-
-        let ticket = await SupportTicket.findOne({
-            tenantId: TENANT_ID,
-            consumerId: req.user.consumerId
-        });
-
-        if (!ticket) {
-            ticket = new SupportTicket({
-                tenantId: TENANT_ID,
-                consumerId: req.user.consumerId,
-                consumerName: req.user.name,
-                messages: []
+        if (Array.isArray(appliances)) {
+            req.user.appliances = appliances.slice(0, 50).map(a => {
+                const pwr = Math.min(50000, Math.max(1, Number(a.power) || 10));
+                const hrs = Math.min(24, Math.max(0.1, Number(a.hours) || 1));
+                return {
+                    id: Number(a.id) || Date.now(),
+                    name: sanitizeInput(a.name, 40) || 'Appliance',
+                    power: pwr,
+                    hours: hrs,
+                    monthlyKwh: Number(((pwr * hrs * 30) / 1000).toFixed(2)),
+                    state: Boolean(a.state),
+                    mode: String(a.mode || 'manual').trim().substring(0,20)
+                };
             });
         }
 
-        ticket.messages.push({ sender: 'user', text: cleanText });
-        ticket.status = 'open';
+        if (sanctionedLoadKw !== undefined) {
+            req.user.sanctionedLoadKw = Math.min(50, Math.max(0.5, Number(sanctionedLoadKw) || 2.0));
+        }
+        if (budgetThreshold !== undefined) {
+            req.user.budgetThreshold = Math.min(1000000, Math.max(100, Number(budgetThreshold) || 3000));
+        }
+        if (tariffProvider && ALLOWED_PROVIDERS.has(tariffProvider)) {
+            req.user.tariffProvider = tariffProvider;
+        }
+        if (tariffCategory && ALLOWED_CATEGORIES.has(tariffCategory)) {
+            req.user.tariffCategory = tariffCategory;
+        }
+        if (tariffArea && ALLOWED_AREAS.has(tariffArea)) {
+            req.user.tariffArea = tariffArea;
+        }
 
-        // Generate Smart AI Advisor Reply (Uses Gemini if configured, else intelligent rule engine)
-        let aiReply = "Thank you! Your query has been logged for our grid engineering desk. Tip: Shifting heavy loads (Geyser/Washing Machine) between 10 AM - 4 PM saves up to 15% under ToD tariffs.";
+        if (customTariff && typeof customTariff === 'object') {
+            req.user.customTariff = {
+                fixedPerKw: Math.min(5000, Math.max(0, Number(customTariff.fixedPerKw) || 0)),
+                fppcaPct: Math.min(1.0, Math.max(0, Number(customTariff.fppcaPct) || 0)),
+                dutyPct: Math.min(1.0, Math.max(0, Number(customTariff.dutyPct) || 0)),
+                slabs: Array.isArray(customTariff.slabs) ? customTariff.slabs.slice(0, 5).map(s => ({
+                    limit: s.limit === 'Infinity' || s.limit === Infinity || s.limit === null ? Infinity : Math.max(1, Number(s.limit) || 100),
+                    rate: Math.min(100, Math.max(0, Number(s.rate) || 0))
+                })) : []
+            };
+        }
 
-        const cms = await CmsConfig.findOne({ tenantId: TENANT_ID, key: 'global_cms' }).lean();
-        const sysPrompt = cms?.aiPrompt || 'You are an Indian Electricity Bill Optimization Expert.';
+        await req.user.save();
+        res.json({ success: true, message: 'Settings synced.' });
+    } catch (e) {
+        await logBackendError('Cloud Sync Route', e, req);
+        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
+    }
+});
 
-        if (GEMINI_API_KEY) {
-            try {
-                const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: `${sysPrompt}\n\nConsumer (${req.user.name}) asks: ${cleanText}` }] }]
-                    })
-                });
-                const geminiData = await geminiRes.json();
-                const candidate = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (candidate) aiReply = candidate.substring(0, 800);
-            } catch (aiErr) {
-                console.warn('[EMCS] Gemini API fallback used.');
+app.delete('/api/user/delete-account', authenticateUser, async (req, res) => {
+    try {
+        req.user.accountStatus = 'deleted';
+        req.user.deletionScheduledAt = new Date();
+        req.user.activeSessions = [];
+        await req.user.save();
+
+        res.clearCookie('emcs_auth_token');
+        res.json({
+            success: true,
+            message: 'Account deactivated. Records will be automatically erased after 2 years.'
+        });
+    } catch (e) {
+        await logBackendError('Account Delete Route', e, req);
+        res.status(500).json({ success: false });
+    }
+});
+
+// ===================================================================
+// ADMIN, STAFF RBAC, CMS & SUPPORT DESK ROUTES
+// ===================================================================
+app.post('/api/admin/login', loginLimiter, async (req, res) => {
+    try {
+        const username = sanitizeInput(req.body.username, 40);
+        const password = sanitizeInput(req.body.password, 64);
+
+        if (!username) {
+            if (!MASTER_OWNER_KEY) {
+                return res.status(503).json({ success: false, message: 'Master Owner key is not configured on the server.' });
+            }
+            if (safeCompareStrings(password, MASTER_OWNER_KEY)) {
+                const perms = { canManageUsers: true, canChatSupport: true, canEditCMS: true, canDeleteChat: true };
+                const uaHash = getUaHash(req);
+                const token = jwt.sign({ role: 'owner', name: 'Master Owner', permissions: perms, uaHash }, JWT_SECRET, { expiresIn: '8h', algorithm: 'HS256' });
+                res.cookie('emcs_admin_token', token, { httpOnly: true, secure: IS_PROD, sameSite: 'lax', maxAge: 28800000 });
+                return res.json({ success: true, admin: { role: 'owner', username: 'Master Owner', permissions: perms } });
+            }
+        } else {
+            const staff = await Staff.findOne({ username });
+            if (staff && await bcrypt.compare(password, staff.passwordHash)) {
+                const uaHash = getUaHash(req);
+                const token = jwt.sign({ role: 'staff', name: staff.name, permissions: staff.permissions, uaHash }, JWT_SECRET, { expiresIn: '8h', algorithm: 'HS256' });
+                res.cookie('emcs_admin_token', token, { httpOnly: true, secure: IS_PROD, sameSite: 'lax', maxAge: 28800000 });
+                return res.json({ success: true, admin: { role: 'staff', username: staff.username, permissions: staff.permissions } });
             }
         }
 
-        ticket.messages.push({ sender: 'ai', text: aiReply });
-        await ticket.save();
-
-        res.json({ success: true, messages: ticket.messages });
+        res.status(401).json({ success: false, message: 'Invalid administrative credentials.' });
     } catch (e) {
-        res.status(500).json({ success: false, message: 'Could not send message.' });
-    }
-});
-
-// ============================================================================
-// 🛡️ 8. GOD-MODE ADMIN & STAFF COMMAND HUB API ROUTES
-// ============================================================================
-
-// 8A. Admin / Staff Login (Device-Bound HttpOnly JWT)
-app.post('/api/admin/login', async (req, res) => {
-    try {
-        const { username, password, honeypot } = req.body;
-        if (honeypot) {
-            return res.status(403).json({ success: false });
-        }
-
-        const cleanUser = String(username || '').trim();
-        const cleanPass = String(password || '');
-        const uaHash = getUaHash(req);
-
-        // 1. Check Master Super Admin
-        if (cleanUser === MASTER_ADMIN_USER && cleanPass === MASTER_ADMIN_PASS) {
-            const allPermissions = { manageUsers: true, manageCms: true, manageSupport: true, viewLogs: true };
-            const token = jwt.sign(
-                { username: MASTER_ADMIN_USER, role: 'SUPER_ADMIN', permissions: allPermissions, uaHash },
-                JWT_SECRET,
-                { expiresIn: '4h' }
-            );
-
-            res.cookie('emcs_admin_token', token, {
-                httpOnly: true,
-                secure: IS_PROD,
-                sameSite: 'lax',
-                maxAge: 4 * 60 * 60 * 1000
-            });
-
-            await new SystemError({
-                tenantId: TENANT_ID,
-                source: 'Admin Audit Trail',
-                message: `SUPER_ADMIN (${MASTER_ADMIN_USER}) logged into Command Hub.`,
-                location: '/api/admin/login',
-                userOrIp: req.ip
-            }).save();
-
-            return res.json({
-                success: true,
-                admin: { username: MASTER_ADMIN_USER, role: 'SUPER_ADMIN', permissions: allPermissions }
-            });
-        }
-
-        // 2. Check Granular Staff Database
-        const staff = await Staff.findOne({ tenantId: TENANT_ID, username: cleanUser.toLowerCase(), isActive: true }).select('+credentialHash');
-        if (!staff) {
-            await dispatchEmergencyAlert('Failed Admin Login', `Invalid Admin/Staff username attempted: ${cleanUser}`, req);
-            return res.status(401).json({ success: false, message: 'Unauthorized credentials.' });
-        }
-
-        const validStaffPass = await bcrypt.compare(cleanPass, staff.credentialHash);
-        if (!validStaffPass) {
-            await dispatchEmergencyAlert('Failed Staff Password', `Wrong password for staff account: ${cleanUser}`, req);
-            return res.status(401).json({ success: false, message: 'Unauthorized credentials.' });
-        }
-
-        const token = jwt.sign(
-            { username: staff.username, role: staff.roleTitle, permissions: staff.permissions, uaHash },
-            JWT_SECRET,
-            { expiresIn: '4h' }
-        );
-
-        res.cookie('emcs_admin_token', token, {
-            httpOnly: true,
-            secure: IS_PROD,
-            sameSite: 'lax',
-            maxAge: 4 * 60 * 60 * 1000
-        });
-
-        await new SystemError({
-            tenantId: TENANT_ID,
-            source: 'Admin Audit Trail',
-            message: `Staff Operator '${staff.username}' (${staff.roleTitle}) logged in.`,
-            location: '/api/admin/login',
-            userOrIp: req.ip
-        }).save();
-
-        res.json({
-            success: true,
-            admin: { username: staff.username, role: staff.roleTitle, permissions: staff.permissions }
-        });
-    } catch (e) {
-        res.status(500).json({ success: false, message: 'Admin authentication error.' });
+        await logBackendError('Admin Login Route', e, req);
+        res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
     }
 });
 
@@ -1022,285 +924,221 @@ app.post('/api/admin/logout', (req, res) => {
     res.json({ success: true });
 });
 
-// 8B. Admin Overview Telemetry
 app.get('/api/admin/overview', authenticateAdmin, async (req, res) => {
     try {
-        const [totalUsers, activeUsers, pendingTickets, totalErrors] = await Promise.all([
-            User.countDocuments({ tenantId: TENANT_ID }),
-            User.countDocuments({ tenantId: TENANT_ID, accountStatus: 'active' }),
-            SupportTicket.countDocuments({ tenantId: TENANT_ID, status: 'open' }),
-            SystemError.countDocuments({ tenantId: TENANT_ID })
-        ]);
-        res.json({
-            success: true,
-            stats: { totalUsers, activeUsers, pendingTickets, totalErrors },
-            adminProfile: req.admin
-        });
+        const totalUsers = await User.countDocuments({});
+        const activeUsers = await User.countDocuments({ accountStatus: 'active' });
+        res.json({ success: true, stats: { totalUsers, activeUsers, pendingTickets: 0, totalErrors: 0 }, adminProfile: req.admin });
     } catch (e) {
         res.status(500).json({ success: false });
     }
 });
 
-// 8C. Admin Full CMS Fetch & Update (Protected by 'manageCms' Permission)
-app.get('/api/admin/cms-full', authenticateAdmin, requireAdminPermission('manageCms'), async (req, res) => {
-    try {
-        const cms = await CmsConfig.findOne({ tenantId: TENANT_ID, key: 'global_cms' }).lean();
-        res.json({ success: true, cms: cms || {} });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
+
+// Staff RBAC Management (Owner Only)
+app.get('/api/admin/staff', authenticateAdmin, async (req, res) => {
+    if (req.admin.role !== 'owner') return res.status(403).json({ success: false });
+    const staffList = await Staff.find({}, '-passwordHash');
+    res.json({ success: true, staffList });
 });
 
-app.put('/api/admin/cms', authenticateAdmin, requireAdminPermission('manageCms'), async (req, res) => {
+app.post('/api/admin/staff', authenticateAdmin, async (req, res) => {
     try {
-        const payload = req.body;
-        const updateDoc = {
-            siteName: String(payload.siteName || 'EMCS').substring(0, 30),
-            broadcastBanner: String(payload.broadcastBanner || '').substring(0, 200),
-            heroHeading: String(payload.heroHeading || 'Smart Energy Control & Bill Optimizer').substring(0, 120),
-            heroSubtext: String(payload.heroSubtext || '').substring(0, 220),
-            themeColors: {
-                primary: String(payload.themeColors?.primary || '#6366f1'),
-                accent: String(payload.themeColors?.accent || '#10b981')
-            },
-            featureSwitches: {
-                gridSafety: Boolean(payload.featureSwitches?.gridSafety ?? true),
-                inverter: Boolean(payload.featureSwitches?.inverter ?? true),
-                vampire: Boolean(payload.featureSwitches?.vampire ?? true),
-                tod: Boolean(payload.featureSwitches?.tod ?? true),
-                solar: Boolean(payload.featureSwitches?.solar ?? true),
-                iot: Boolean(payload.featureSwitches?.iot ?? true)
-            },
-            liveTariffs: payload.liveTariffs,
-            paymentConfig: {
-                enabled: Boolean(payload.paymentConfig?.enabled ?? true),
-                apiKey: String(payload.paymentConfig?.apiKey || '').trim()
+        if (req.admin.role !== 'owner') return res.status(403).json({ success: false, message: 'Owner privilege required.' });
+        const name = sanitizeInput(req.body.name, 50);
+        const username = sanitizeInput(req.body.username, 30).toLowerCase();
+        const password = sanitizeInput(req.body.password, 64);
+        const roleTitle = sanitizeInput(req.body.roleTitle, 50) || 'Operator';
+
+        if (!username || password.length < 6) {
+            return res.status(400).json({ success: false, message: 'Valid username, and password (min 6 chars) required.' });
+        }
+
+        const passwordHash = await bcrypt.hash(password, 12);
+        await new Staff({
+            name: name || username,
+            username,
+            passwordHash,
+            role: roleTitle,
+            permissions: {
+                canManageUsers: Boolean(req.body.permissions?.manageUsers),
+                canChatSupport: Boolean(req.body.permissions?.manageSupport),
+                canEditCMS: Boolean(req.body.permissions?.manageCms),
+                canDeleteChat: Boolean(req.body.permissions?.viewLogs)
             }
-        };
-
-        // Only overwrite Secret Key & AI Prompt if Admin explicitly typed a non-empty value
-        if (payload.paymentConfig?.apiSecret && payload.paymentConfig.apiSecret.trim() !== '') {
-            updateDoc['paymentConfig.apiSecret'] = String(payload.paymentConfig.apiSecret).trim();
-        }
-        if (typeof payload.aiPrompt === 'string' && payload.aiPrompt.trim() !== '') {
-            updateDoc.aiPrompt = payload.aiPrompt.trim();
-        }
-
-        const updated = await CmsConfig.findOneAndUpdate(
-            { tenantId: TENANT_ID, key: 'global_cms' },
-            { $set: updateDoc },
-            { new: true, upsert: true }
-        ).lean();
-
-        await new SystemError({
-            tenantId: TENANT_ID,
-            source: 'Admin Audit Trail',
-            message: `${req.admin.username} updated God-Mode CMS & Live Tariff Settings.`,
-            location: '/api/admin/cms',
-            userOrIp: req.ip
         }).save();
 
-        if (updated.paymentConfig) delete updated.paymentConfig.apiSecret;
-        res.json({ success: true, cms: updated });
+        res.json({ success: true, message: 'Staff account created.' });
     } catch (e) {
-        res.status(500).json({ success: false, message: 'Failed to update CMS.' });
+        res.status(400).json({ success: false, message: 'Could not create staff account (username may already exist).' });
     }
 });
 
-// 8D. Admin Consumers Directory & Account Status Toggle ('manageUsers' Permission)
-app.get('/api/admin/users', authenticateAdmin, requireAdminPermission('manageUsers'), async (req, res) => {
+app.delete('/api/admin/staff/:id', authenticateAdmin, async (req, res) => {
+    if (req.admin.role !== 'owner') return res.status(403).json({ success: false });
+    await Staff.findByIdAndDelete(sanitizeInput(req.params.id, 40));
+    res.json({ success: true });
+});
+
+app.get('/api/admin/users', authenticateAdmin, requireAdminPermission('canManageUsers'), async (req, res) => {
     try {
-        const users = await User.find({ tenantId: TENANT_ID }).sort({ createdAt: -1 }).limit(200).lean();
+        const users = await User.find({}, '-pinHash');
         res.json({ success: true, users });
     } catch (e) {
         res.status(500).json({ success: false });
     }
 });
 
-app.put('/api/admin/users/:consumerId/status', authenticateAdmin, requireAdminPermission('manageUsers'), async (req, res) => {
+app.get('/api/cms', async (req, res) => {
     try {
-        const { status } = req.body;
-        if (!['active', 'suspended'].includes(status)) {
-            return res.status(400).json({ success: false });
-        }
-        const user = await User.findOneAndUpdate(
-            { tenantId: TENANT_ID, consumerId: req.params.consumerId },
-            { $set: { accountStatus: status, failedLoginAttempts: 0, lockUntil: null } },
-            { new: true }
-        );
-
-        await new SystemError({
-            tenantId: TENANT_ID,
-            source: 'Admin Audit Trail',
-            message: `${req.admin.username} changed status of ${req.params.consumerId} to ${status}.`,
-            location: '/api/admin/users',
-            userOrIp: req.ip
-        }).save();
-
-        res.json({ success: true, user });
+        const cms = await CmsConfig.findOne({ key: 'global_cms' }) || await new CmsConfig().save();
+        res.json({ success: true, cms });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+app.get('/api/admin/cms-full', authenticateAdmin, requireAdminPermission('canEditCMS'), async (req, res) => {
+    try {
+        const cms = await CmsConfig.findOne({ key: 'global_cms' }) || await new CmsConfig().save();
+        res.json({ success: true, cms });
     } catch (e) {
         res.status(500).json({ success: false });
     }
 });
 
-// 8E. Admin Support Desk ('manageSupport' Permission)
-app.get('/api/admin/support', authenticateAdmin, requireAdminPermission('manageSupport'), async (req, res) => {
+app.put('/api/admin/cms', authenticateAdmin, requireAdminPermission('canEditCMS'), async (req, res) => {
     try {
-        const tickets = await SupportTicket.find({ tenantId: TENANT_ID }).sort({ updatedAt: -1 }).limit(100).lean();
-        res.json({ success: true, tickets });
+        const update = {
+            broadcast: sanitizeInput(req.body.broadcastBanner, 250),
+            about: sanitizeInput(req.body.aboutUs, 2000),
+            privacy: sanitizeInput(req.body.privacy, 4000),
+            terms: sanitizeInput(req.body.terms, 4000),
+            faqs: Array.isArray(req.body.faqs) ? req.body.faqs.slice(0, 30).map(f => ({
+                q: sanitizeInput(f.q, 200),
+                a: sanitizeInput(f.a, 600)
+            })) : []
+        };
+        await CmsConfig.findOneAndUpdate({ key: 'global_cms' }, update, { upsert: true });
+        res.json({ success: true });
+    } catch (e) {
+        await logBackendError('CMS Update Route', e, req);
+        res.status(500).json({ success: false });
+    }
+});
+
+// Two-Way User Support Chat Routes (Row-Level Security Enforced)
+app.get('/api/user/support', authenticateUser, async (req, res) => {
+    try {
+        const messages = await SupportMessage.find({ consumerId: req.user.consumerId }).sort({ timestamp: 1 }).limit(100);
+        res.json({ success: true, messages });
     } catch (e) {
         res.status(500).json({ success: false });
     }
 });
 
-app.post('/api/admin/support/:consumerId/reply', authenticateAdmin, requireAdminPermission('manageSupport'), async (req, res) => {
+app.post('/api/user/support', authenticateUser, chatLimiter, async (req, res) => {
     try {
-        const { text, resolveTicket } = req.body;
-        const ticket = await SupportTicket.findOne({ tenantId: TENANT_ID, consumerId: req.params.consumerId });
-        if (!ticket) return res.status(404).json({ success: false });
-
-        if (text && String(text).trim()) {
-            ticket.messages.push({
-                sender: 'admin',
-                text: `[${req.admin.username}]: ${String(text).trim()}`
-            });
-        }
-        if (resolveTicket) {
-            ticket.status = 'resolved';
-        }
-        await ticket.save();
-        res.json({ success: true, ticket });
+        const text = sanitizeInput(req.body.text, 500);
+        if (!text) return res.status(400).json({ success: false });
+        const msg = await new SupportMessage({ consumerId: req.user.consumerId, sender: 'user', text }).save();
+        res.json({ success: true, messages: [msg] });
     } catch (e) {
         res.status(500).json({ success: false });
     }
 });
 
-// 8F. Granular Staff Management (Strictly SUPER_ADMIN Only)
-app.get('/api/admin/staff', authenticateAdmin, async (req, res) => {
-    if (req.admin.role !== 'SUPER_ADMIN') {
-        return res.status(403).json({ success: false, message: 'Only Super Admin can manage staff.' });
-    }
-    const staffList = await Staff.find({ tenantId: TENANT_ID }).sort({ createdAt: -1 }).lean();
-    res.json({ success: true, staffList });
-});
-
-app.post('/api/admin/staff', authenticateAdmin, async (req, res) => {
+app.get('/api/admin/support', authenticateAdmin, async (req, res) => {
     try {
-        if (req.admin.role !== 'SUPER_ADMIN') {
-            return res.status(403).json({ success: false, message: 'Only Super Admin can create staff.' });
+        if (req.admin.role !== 'owner' && !req.admin.permissions?.canChatSupport && !req.admin.permissions?.canManageUsers) {
+            return res.status(403).json({ success: false, message: 'Forbidden: Insufficient permissions.' });
         }
-        const { username, password, roleTitle, permissions } = req.body;
-        if (!username || !password || String(password).length < 6) {
-            return res.status(400).json({ success: false, message: 'Username and 6+ char password required.' });
-        }
-
-        const credentialHash = await bcrypt.hash(String(password), 12);
-        const newStaff = await new Staff({
-            tenantId: TENANT_ID,
-            username: String(username).trim().toLowerCase(),
-            roleTitle: String(roleTitle || 'Operator').trim(),
-            credentialHash,
-            permissions: {
-                manageUsers: Boolean(permissions?.manageUsers),
-                manageCms: Boolean(permissions?.manageCms),
-                manageSupport: Boolean(permissions?.manageSupport),
-                viewLogs: Boolean(permissions?.viewLogs)
-            }
-        }).save();
-
-        await new SystemError({
-            tenantId: TENANT_ID,
-            source: 'Admin Audit Trail',
-            message: `SUPER_ADMIN created staff operator '${newStaff.username}'.`,
-            location: '/api/admin/staff',
-            userOrIp: req.ip
-        }).save();
-
-        res.json({ success: true, staff: newStaff });
-    } catch (e) {
-        res.status(500).json({ success: false, message: 'Failed to create staff (Username may exist).' });
-    }
-});
-
-app.delete('/api/admin/staff/:id', authenticateAdmin, async (req, res) => {
-    if (req.admin.role !== 'SUPER_ADMIN') return res.status(403).json({ success: false });
-    await Staff.deleteOne({ _id: req.params.id, tenantId: TENANT_ID });
-    res.json({ success: true });
-});
-
-// 8G. Security Threats & Audit Logs ('viewLogs' Permission)
-app.get('/api/admin/logs', authenticateAdmin, requireAdminPermission('viewLogs'), async (req, res) => {
-    try {
-        const logs = await SystemError.find({ tenantId: TENANT_ID }).sort({ createdAt: -1 }).limit(150).lean();
-        res.json({ success: true, logs });
+        res.json({ success: true, tickets: [] }); // placeholder for threading
     } catch (e) {
         res.status(500).json({ success: false });
     }
 });
 
-app.delete('/api/admin/logs', authenticateAdmin, requireAdminPermission('viewLogs'), async (req, res) => {
+app.get('/api/support/admin/messages/:cid', authenticateAdmin, requireAdminPermission('canChatSupport'), async (req, res) => {
     try {
-        await SystemError.deleteMany({ tenantId: TENANT_ID });
+        const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
+        const messages = await SupportMessage.find({ consumerId: cid }).sort({ timestamp: 1 });
+        res.json({ success: true, messages });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+
+app.post('/api/support/admin/reply', authenticateAdmin, requireAdminPermission('canChatSupport'), async (req, res) => {
+    try {
+        const consumerId = sanitizeInput(req.body.consumerId, 12).toUpperCase();
+        const text = sanitizeInput(req.body.text, 500);
+        if (!text) return res.status(400).json({ success: false });
+        const msg = await new SupportMessage({ consumerId, sender: 'admin', text }).save();
+        res.json({ success: true, message: msg });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+
+app.delete('/api/support/chat/clear/:cid', authenticateAdmin, requireAdminPermission('canDeleteChat'), async (req, res) => {
+    try {
+        const cid = sanitizeInput(req.params.cid, 12).toUpperCase();
+        await SupportMessage.deleteMany({ consumerId: cid });
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false });
     }
 });
 
-// ============================================================================
-// 🔍 9. STATIC FILES & SERVER-SIDE SEO ROUTER (WhatsApp/Telegram/Google Bots)
-// ============================================================================
-
-app.use(express.static(path.join(__dirname)));
-
-const SERVER_SEO_MAP = {
-    '/home': { title: 'Dashboard | EMCS', desc: 'Track your home appliances, control smart switches, and reduce your monthly electricity bill.' },
-    '/appliances': { title: 'My Appliances | EMCS', desc: 'Manage your connected home appliances and track their daily power consumption and monthly costs.' },
-    '/calculators': { title: 'Instant Electrical Calculators | EMCS', desc: 'Use our generic power estimator and Ohm\'s Law helper for instant electrical calculations.' },
-    '/standby-saver': { title: 'Standby Power Saver | EMCS', desc: 'Discover how much money you are losing to vampire power from appliances left plugged in.' },
-    '/inverter-backup': { title: 'Inverter Backup Calculator | EMCS', desc: 'Calculate your inverter runtime and battery backup based on your live connected load.' },
-    '/solar-calculator': { title: 'Solar Calculator | EMCS', desc: 'Estimate the ROI, total cost, and benefits of installing a solar panel system for your home.' },
-    '/smart-hardware': { title: 'Smart Hardware Control | EMCS', desc: 'Remotely control your WiFi smart switches and IoT devices directly from your EMCS dashboard.' },
-    '/voltage-safety': { title: 'Voltage & Grid Safety | EMCS', desc: 'Monitor live grid voltage and protect your valuable appliances from electrical faults.' },
-    '/best-time-to-use': { title: 'Time of Day Optimizer | EMCS', desc: 'Optimize your heavy appliance usage based on Time-of-Day (ToD) electricity rates to save money.' },
-    '/reports': { title: 'Energy Reports & Graphs | EMCS', desc: 'Visualize your daily power consumption trends with dynamic 2D and Flowgraph charts.' },
-    '/savings-calculator': { title: 'Savings Simulator | EMCS', desc: 'Simulate different appliance usage scenarios to see how much money you can save.' },
-    '/pay-bill': { title: 'Pay Electricity Bill | EMCS', desc: 'Securely pay your monthly electricity and EMCS bills online.' },
-    '/support': { title: 'Customer Support | EMCS', desc: 'Get help and chat with EMCS AI Advisor or our support team for your electrical queries.' },
-    '/profile': { title: 'My Account & Security | EMCS', desc: 'Manage your EMCS account security, linked devices, and personal profile details.' }
-};
-
-app.get('*', (req, res) => {
+app.delete('/api/support/chat/purge-all', authenticateAdmin, async (req, res) => {
     try {
-        let html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-        const routeSeo = SERVER_SEO_MAP[req.path];
-        if (routeSeo) {
-            html = html
-                .replace(/<title id="seoTitle">.*?<\/title>/, `<title id="seoTitle">${routeSeo.title}</title>`)
-                .replace(/id="seoDescription" name="description" content=".*?"/, `id="seoDescription" name="description" content="${routeSeo.desc}"`)
-                .replace(/id="seoOgTitle" property="og:title" content=".*?"/, `id="seoOgTitle" property="og:title" content="${routeSeo.title}"`)
-                .replace(/id="seoOgDesc" property="og:description" content=".*?"/, `id="seoOgDesc" property="og:description" content="${routeSeo.desc}"`);
-        }
-        res.send(html);
+        if (req.admin.role !== 'owner') return res.status(403).json({ success: false });
+        await SupportMessage.deleteMany({});
+        res.json({ success: true });
     } catch (e) {
-        res.sendFile(path.join(__dirname, 'index.html'));
+        res.status(500).json({ success: false });
     }
 });
 
-// Global Express Website Error Catcher (Auto-Notifies Telegram with Masked Data)
-app.use(async (err, req, res, next) => {
-    const safeErrorMessage = err.message || 'Unknown Internal Server Error';
-    const alertDetails = `Error on ${req.method} ${req.originalUrl}\nReason: ${safeErrorMessage}\nStack: ${String(err.stack).substring(0, 150)}`;
-    await dispatchEmergencyAlert('Website Error (500)', alertDetails, req);
+app.get('/api/admin/master-database-dump', authenticateAdmin, async (req, res) => {
+    try {
+        if (req.admin.role !== 'owner') return res.status(403).json({ success: false });
+        const users = await User.find({}, '-pinHash');
+        const messages = await SupportMessage.find({});
+        const errors = await SystemError.find({});
+        res.json({
+            exportDate: new Date(),
+            project: 'EMCS - Energy Management Control System',
+            totalUsers: users.length,
+            database: { users, supportMessages: messages, systemErrors: errors }
+        });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
 
-    res.status(500).json({
-        success: false,
-        message: 'System encountered an unexpected error. Our engineering team has been alerted.'
-    });
+// ===================================================================
+// SOURCE FILE EXPOSURE PROTECTION (NO .ENV / SERVER.JS / .MAP LEAK)
+// ===================================================================
+app.use((req, res, next) => {
+    const blockedPattern = /\.(env|map|log|md|git|sh)$|^\/(server\.js|package\.json|package-lock\.json)/i;
+    if (blockedPattern.test(req.path)) {
+        return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+    next();
+});
+
+app.use(express.static(path.join(__dirname), { index: false, dotfiles: 'ignore' }));
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+
+// SAFE GLOBAL ERROR HANDLER (NO STACK TRACE LEAKAGE)
+app.use(async (err, req, res, next) => {
+    await logBackendError('Express Unhandled Error', err, req);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
 });
 
 // ============================================================================
-// 🤖 10. TELEGRAM GHOST-MODE REMOTE CONTROL BOT
+// 🤖 TELEGRAM GHOST-MODE REMOTE CONTROL BOT
 // ============================================================================
 let tgLastUpdateId = 0;
 
@@ -1318,14 +1156,13 @@ async function sendTelegramControlPanel(chatId) {
             [
                 { text: "🧹 Clean RAM", callback_data: "clean_ram" },
                 { text: "⚠️ Last 3 Errors", callback_data: "last_errors" }
-            ],
-            [
-                { text: "🔄 Reboot Server", callback_data: "reboot_server" }
             ]
         ]
     };
 
-    const text = "🎛️ *EMCS MASTER CONTROL PANEL*\n\nSelect an operation below. _Strictly authenticated via Render Environment Variables (Ghost-Mode Active)._";
+    const text = "🎛️ *EMCS MASTER CONTROL PANEL*
+
+Select an operation below. _Strictly authenticated via Render Environment Variables (Ghost-Mode Active)._";
 
     await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
         method: 'POST',
@@ -1358,12 +1195,9 @@ async function listenTelegramCommands() {
                     incomingUserId = String(update.callback_query.from.id);
                 }
 
-                // 👻 GHOST MODE (BLACK HOLE SHIELD)
-                if (incomingUserId !== String(ADMIN_ID)) {
-                    continue; // Unauthorized users get ignored completely
-                }
+                // 👻 GHOST MODE
+                if (incomingUserId !== String(ADMIN_ID)) continue;
 
-                // 1. Authorized Text Command
                 if (update.message && update.message.text) {
                     const txt = update.message.text.trim().toLowerCase();
                     if (txt === '/start' || txt === '/menu' || txt === 'menu') {
@@ -1371,7 +1205,6 @@ async function listenTelegramCommands() {
                     }
                 }
 
-                // 2. Authorized Button Clicks
                 if (update.callback_query) {
                     const cb = update.callback_query;
                     const action = cb.data;
@@ -1379,21 +1212,11 @@ async function listenTelegramCommands() {
 
                     if (action === 'maint_on') {
                         global.MAINTENANCE_MODE = true;
-                        await CmsConfig.findOneAndUpdate(
-                            { tenantId: TENANT_ID, key: 'global_cms' },
-                            { $set: { maintenanceMode: true } },
-                            { upsert: true }
-                        );
                         popupMessage = "🔴 Maintenance Mode ON";
                         await sendTelegramAlert('SYSTEM CONTROL', '🔴 Website is now *UNDER MAINTENANCE*. All public traffic is paused.');
                     }
                     else if (action === 'maint_off') {
                         global.MAINTENANCE_MODE = false;
-                        await CmsConfig.findOneAndUpdate(
-                            { tenantId: TENANT_ID, key: 'global_cms' },
-                            { $set: { maintenanceMode: false } },
-                            { upsert: true }
-                        );
                         popupMessage = "🟢 Maintenance Mode OFF";
                         await sendTelegramAlert('SYSTEM CONTROL', '🟢 Website is now *LIVE*. Normal operations resumed.');
                     }
@@ -1402,47 +1225,48 @@ async function listenTelegramCommands() {
                         const dbState = mongoose.connection.readyState === 1 ? '🟢 Connected' : '🔴 Disconnected';
                         const memMb = Math.round(process.memoryUsage().rss / 1024 / 1024);
                         popupMessage = `Status: ${status}`;
-                        await sendTelegramAlert('SERVER TELEMETRY', `*Web Status:* ${status}\n*Database:* ${dbState}\n*RAM Usage:* ${memMb} MB\n*Uptime:* ${Math.floor(process.uptime() / 60)} mins`);
+                        await sendTelegramAlert('SERVER TELEMETRY', `*Web Status:* ${status}
+*Database:* ${dbState}
+*RAM Usage:* ${memMb} MB
+*Uptime:* ${Math.floor(process.uptime() / 60)} mins`);
                     }
                     else if (action === 'total_users') {
-                        const total = await User.countDocuments({ tenantId: TENANT_ID });
-                        const active = await User.countDocuments({ tenantId: TENANT_ID, accountStatus: 'active' });
+                        const total = await User.countDocuments({});
+                        const active = await User.countDocuments({ accountStatus: 'active' });
                         popupMessage = `Total Users: ${total}`;
-                        await sendTelegramAlert('USER DIRECTORY STATS', `👥 *Live Consumer Count*\n\n*Total Registered:* ${total}\n*Active Accounts:* ${active}`);
+                        await sendTelegramAlert('USER DIRECTORY STATS', `👥 *Live Consumer Count*
+
+*Total Registered:* ${total}
+*Active Accounts:* ${active}`);
                     }
                     else if (action === 'clean_ram') {
-                        await SystemError.deleteMany({ tenantId: TENANT_ID });
-                        if (typeof global.gc === 'function') {
-                            global.gc(); // Force V8 garbage collection if enabled
-                        }
+                        await SystemError.deleteMany({});
+                        if (typeof global.gc === 'function') global.gc();
                         popupMessage = "🧹 RAM & System Logs Cleared!";
-                        await sendTelegramAlert('SYSTEM CONTROL', '🧹 *Memory Cleared*\nPurged old system logs from database and freed Node.js memory successfully.');
+                        await sendTelegramAlert('SYSTEM CONTROL', '🧹 *Memory Cleared*
+Purged old system logs from database and freed Node.js memory successfully.');
                     }
                     else if (action === 'last_errors') {
-                        const errors = await SystemError.find({ tenantId: TENANT_ID }).sort({ createdAt: -1 }).limit(3).lean();
+                        const errors = await SystemError.find({}).sort({ timestamp: -1 }).limit(3).lean();
                         if (errors.length === 0) {
                             popupMessage = "Log is clean!";
                             await sendTelegramAlert('DIAGNOSTICS', '✅ No recent errors or security threats in database.');
                         } else {
-                            let errText = `⚠️ *LAST 3 LOGS / ERRORS*\n\n`;
+                            let errText = `⚠️ *LAST 3 LOGS / ERRORS*
+
+`;
                             errors.forEach((e, idx) => {
-                                const t = new Date(e.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-                                errText += `*${idx + 1}. [${e.source}]*\n⏱️ ${t}\n📍 ${e.location}\n💬 ${maskSensitiveData(e.message)}\n\n`;
+                                const t = new Date(e.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+                                errText += `*${idx + 1}. [${e.source}]*
+⏱️ ${t}
+📍 ${e.location}
+💬 ${maskSensitiveData(e.message)}
+
+`;
                             });
                             popupMessage = "Fetched last 3 logs.";
                             await sendTelegramAlert('DIAGNOSTICS', errText);
                         }
-                    }
-                    else if (action === 'reboot_server') {
-                        popupMessage = "🔄 Rebooting Server...";
-                        await sendTelegramAlert('SYSTEM CONTROL', '🔄 *Emergency Reboot Initiated.*\nProcess exiting so Render can spin up a fresh instance in ~10s.');
-                        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ callback_query_id: cb.id, text: popupMessage, show_alert: true })
-                        });
-                        setTimeout(() => { process.exit(1); }, 1500);
-                        return;
                     }
 
                     await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
@@ -1453,40 +1277,14 @@ async function listenTelegramCommands() {
                 }
             }
         }
-    } catch (e) {
-        // Ignore polling network timeouts silently
-    }
-
+    } catch (e) {}
     setTimeout(listenTelegramCommands, 2500);
 }
 
-// ============================================================================
-// 🚨 11. GLOBAL PROCESS CRASH GUARDS & SERVER STARTUP
-// ============================================================================
-
-process.on('unhandledRejection', async (reason) => {
-    console.error('[EMCS] Unhandled Rejection:', reason);
-    await sendTelegramAlert('FATAL: Unhandled Rejection', `Reason: ${String(reason).substring(0, 250)}`);
-});
-
-process.on('uncaughtException', async (err) => {
-    console.error('[EMCS] Uncaught Exception:', err);
-    await sendTelegramAlert('🚨 SERVER CRASH (Uncaught Exception)', `Error: ${err.message}\nStack: ${String(err.stack).substring(0, 250)}`);
-    setTimeout(() => { process.exit(1); }, 1200);
-});
-
-app.listen(PORT, async () => {
-    console.log(`[EMCS] 🚀 Enterprise Server running on port ${PORT}`);
-    setTimeout(async () => {
-        try {
-            if (mongoose.connection.readyState === 1) {
-                const cms = await CmsConfig.findOne({ tenantId: TENANT_ID, key: 'global_cms' }).lean();
-                if (cms && cms.maintenanceMode) {
-                    global.MAINTENANCE_MODE = true;
-                }
-            }
-            listenTelegramCommands();
-            console.log('[EMCS] 🤖 Telegram Ghost-Mode Control Bot Active.');
-        } catch (e) {}
+app.listen(PORT, () => {
+    console.log(`[EMCS SERVER] Live on port ${PORT}`);
+    setTimeout(() => {
+        listenTelegramCommands();
+        console.log('[EMCS] 🤖 Telegram Ghost-Mode Control Bot Active.');
     }, 3000);
 });
