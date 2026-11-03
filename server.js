@@ -26,11 +26,6 @@ const JWT_SECRET = process.env.JWT_SECRET || (
         : crypto.randomBytes(32).toString('hex')
 );
 
-// Telegram Bot Credentials (Strictly Verified Against Render Env)
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
-const TELEGRAM_ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || '';
-global.MAINTENANCE_MODE = false;
-
 if (!MASTER_OWNER_KEY) {
     console.warn('[SECURITY WARNING] MASTER_OWNER_KEY is not set in Environment Variables! Master Owner login will remain disabled until configured.');
 }
@@ -55,57 +50,6 @@ app.use(cors({
     credentials: true
 }));
 
-// ============================================================================
-// 🤖 TELEGRAM ALERT ENGINE & SENSITIVE DATA MASKING
-// ============================================================================
-
-function maskSensitiveData(text) {
-    if (!text) return 'No details provided.';
-    let safeText = String(text);
-    safeText = safeText.replace(/(password|secret|apikey|api_key|credential|token|pin|auth)\s*[:=]\s*["']?[^"'\s,}&]*/gi, '$1: [HIDDEN_FOR_SECURITY]');
-    safeText = safeText.replace(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/g, '[JWT_HIDDEN]');
-    safeText = safeText.replace(/\$2[abxy]\$\d+\$[./A-Za-z0-9]{53}/g, '[HASH_HIDDEN]');
-    safeText = safeText.replace(/mongodb(\+srv)?:\/\/([^:]+):([^@]+)@/gi, 'mongodb$1://$2:[DB_PASS_HIDDEN]@');
-    return safeText;
-}
-
-async function sendTelegramAlert(type, message, req = null) {
-    const ADMIN_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || TELEGRAM_ADMIN_CHAT_ID;
-    if (!TELEGRAM_BOT_TOKEN || !ADMIN_ID) return;
-
-    let ipInfo = 'System / Internal';
-    if (req) {
-        ipInfo = req.headers['x-forwarded-for'] || req.ip || 'Unknown IP';
-    }
-
-    const safeMessage = maskSensitiveData(message);
-    const typeStr = String(type).toLowerCase();
-    const msgStr = String(safeMessage).toLowerCase();
-
-    const isDatabaseIssue =
-        typeStr.includes('database') || typeStr.includes('mongo') || typeStr.includes('nosql') ||
-        typeStr.includes('injection') || typeStr.includes('pollution') || msgStr.includes('database') ||
-        msgStr.includes('mongo') || msgStr.includes('unauthorized');
-
-    const alertCount = isDatabaseIssue ? 2 : 1;
-    let text = `🚨 *EMCS SYSTEM ALERT* 🚨\n\n*Type:* ${type}\n*Time:* ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n*Source IP:* \`${ipInfo}\`\n\n*Details:*\n${safeMessage}`;
-
-    if (isDatabaseIssue) text = `‼️ *URGENT DATABASE SECURITY / HEALTH ALERT* ‼️\n\n` + text;
-
-    for (let i = 0; i < alertCount; i++) {
-        try {
-            await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: ADMIN_ID, text: text, parse_mode: 'Markdown' })
-            });
-            if (i < alertCount - 1) await new Promise(resolve => setTimeout(resolve, 1000));
-        } catch (e) {
-            console.error('[EMCS] Telegram Dispatch Error:', e.message);
-        }
-    }
-}
-
 // Security Headers & Anti-CSRF Verification
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -121,7 +65,7 @@ app.use((req, res, next) => {
         req.isSuspiciousProxy = true;
     }
 
-    if (['POST', 'DELETE', 'PUT', 'PATCH'].includes(req.method) && req.path.startsWith('/api/')) {
+    if (['POST', 'DELETE', 'PUT'].includes(req.method) && req.path.startsWith('/api/')) {
         const csrf = req.headers['x-emcs-csrf'];
         if (csrf !== 'emcs-verified-client') {
             return res.status(403).json({ success: false, message: 'Forbidden: Invalid request signature.' });
@@ -129,45 +73,6 @@ app.use((req, res, next) => {
     }
     next();
 });
-
-// Global Under-Maintenance Traffic Blocker
-app.use((req, res, next) => {
-    if (global.MAINTENANCE_MODE) {
-        if (req.path.startsWith('/api/')) {
-            return res.status(503).json({ success: false, message: 'System Under Maintenance ⚠️' });
-        }
-        return res.status(503).send(`
-            <!DOCTYPE html>
-            <html lang="en">
-            <head><meta charset="UTF-8"><title>Under Maintenance | EMCS</title></head>
-            <body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;background:#0b0f19;color:#f9fafb;text-align:center;">
-                <div><h1 style="font-size:3.5rem;">⚠️</h1><h2 style="color:#ef4444;">Under Maintenance ⚠️</h2><p>We are currently upgrading the EMCS Smart Grid servers.</p></div>
-            </body>
-            </html>
-        `);
-    }
-    next();
-});
-
-// Ultimate NoSQL Injection & Prototype Pollution Shield
-app.use(async (req, res, next) => {
-    const forbiddenKeys = ['__proto__', 'constructor', 'prototype'];
-    const hasMaliciousKeys = (obj) => {
-        if (!obj || typeof obj !== 'object') return false;
-        for (const key of Object.keys(obj)) {
-            if (key.includes('$') || key.includes('.') || forbiddenKeys.includes(key.toLowerCase())) return true;
-            if (typeof obj[key] === 'object' && hasMaliciousKeys(obj[key])) return true;
-        }
-        return false;
-    };
-
-    if (hasMaliciousKeys(req.body) || hasMaliciousKeys(req.query) || hasMaliciousKeys(req.params)) {
-        await sendTelegramAlert('NoSQL / Prototype Pollution Blocked', `Malicious payload keys blocked on ${req.method} ${req.originalUrl}`, req);
-        return res.status(403).json({ success: false, message: 'Security Block: Malicious payload structure detected.' });
-    }
-    next();
-});
-
 
 // ===================================================================
 // STRICT INPUT VALIDATION & SANITIZATION HELPERS
@@ -244,58 +149,10 @@ const errorReportLimiter = createLimiter(15, 60 * 1000, 'Telemetry limit reached
 
 app.use('/api', globalApiLimiter);
 
-// ===================================================================
-// FORT-KNOX MONGODB SETUP, SCHEMAS & GLOBAL DATA-LEAK SHIELD
-// ===================================================================
-
-mongoose.set('sanitizeFilter', true);
-mongoose.set('strictQuery', true);
-
-mongoose.plugin((schema) => {
-    schema.set('toJSON', {
-        transform: (doc, ret) => {
-            delete ret.pinHash;
-            delete ret.passwordHash;
-            delete ret.__v;
-            return ret;
-        }
-    });
-    schema.set('toObject', {
-        transform: (doc, ret) => {
-            delete ret.pinHash;
-            delete ret.passwordHash;
-            delete ret.__v;
-            return ret;
-        }
-    });
-});
-
-mongoose.connection.on('error', async (err) => {
-    console.error('[EMCS] MongoDB Runtime Error:', err.message);
-    await sendTelegramAlert('Database Runtime Error', `MongoDB error: ${err.message}`);
-});
-
-mongoose.connection.on('disconnected', async () => {
-    console.warn('[EMCS] MongoDB Disconnected!');
-    await sendTelegramAlert('Database Disconnected', 'Critical: MongoDB connection was lost or dropped.');
-});
-
 if (MONGO_URI) {
-    const dbSecurityOptions = {
-        maxPoolSize: 50,
-        serverSelectionTimeoutMS: 5000,
-        socketTimeoutMS: 45000,
-        autoIndex: !IS_PROD,
-        family: 4
-    };
-    mongoose.connect(MONGO_URI, dbSecurityOptions)
+    mongoose.connect(MONGO_URI)
         .then(() => console.log('[EMCS VAULT] Connected to database successfully.'))
-        .catch(err => {
-            console.error('[EMCS VAULT] Connection failed:', err.message);
-            sendTelegramAlert('FATAL: Database Connection Failed', `MongoDB Refused Connection: ${err.message}`);
-        });
-} else {
-    console.warn('[EMCS] ⚠️ MONGO_URI not set in environment variables!');
+        .catch(err => console.error('[EMCS VAULT] Connection failed:', err.message));
 }
 
 // ===================================================================
@@ -328,10 +185,11 @@ const UserSchema = new mongoose.Schema({
         dutyPct: { type: Number, default: 0.05 },
         slabs: [{ limit: mongoose.Schema.Types.Mixed, rate: Number }]
     },
-    accountStatus: { type: String, default: 'active', enum: ['active', 'deleted', 'suspended'] },
+    accountStatus: { type: String, default: 'active', enum: ['active', 'deleted'] },
     deletionScheduledAt: { type: Date, default: null }
 }, { timestamps: true });
 
+// Automatically erase soft-deleted user records after 2 years (63,072,000 seconds)
 UserSchema.index({ deletionScheduledAt: 1 }, { expireAfterSeconds: 63072000 });
 
 const StaffSchema = new mongoose.Schema({
@@ -396,45 +254,29 @@ const SystemError = mongoose.model('SystemError', SystemErrorSchema);
 // Internal server-side error logger (Never leaks stack traces to client)
 async function logBackendError(source, err, req = null) {
     try {
-        const safeMsg = sanitizeInput(err?.message || String(err), 300);
         await new SystemError({
             source: sanitizeInput(source || 'Secure Storage Layer', 50),
-            message: safeMsg,
+            message: sanitizeInput(err?.message || String(err), 300),
             location: sanitizeInput(req ? `${req.method}${req.originalUrl}` : 'Internal', 150),
             userOrIp: sanitizeInput(req ? (req.user?.consumerId || req.ip) : 'System', 60)
         }).save();
-        await sendTelegramAlert(source, safeMsg, req);
     } catch (ignore) {}
 }
 
 // ===================================================================
 // AUTHENTICATION & AUTHORIZATION (RBAC & OWNERSHIP)
 // ===================================================================
-
-function getUaHash(req) {
-    const ua = String(req.headers['user-agent'] || 'unknown_device');
-    return crypto.createHash('sha256').update(ua).digest('hex');
-}
-
 async function authenticateUser(req, res, next) {
     const token = req.cookies.emcs_auth_token;
     if (!token) return res.status(401).json({ success: false, message: 'Authentication required. Please log in.' });
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
-        const currentUaHash = getUaHash(req);
-
-        if (decoded.uaHash && decoded.uaHash !== currentUaHash) {
-            res.clearCookie('emcs_auth_token');
-            await logBackendError('Consumer Session Hijack Blocked', `Token for ${decoded.userId} used from mismatched device!`, req);
-            return res.status(403).json({ success: false, message: 'Security Alert: Device mismatch. Session terminated.' });
-        }
-
         const user = await User.findById(decoded.userId);
 
-        if (!user || user.accountStatus === 'deleted' || user.accountStatus === 'suspended' || !user.activeSessions.some(s => s.sessionId === decoded.sessionId)) {
+        if (!user || user.accountStatus === 'deleted' || !user.activeSessions.some(s => s.sessionId === decoded.sessionId)) {
             res.clearCookie('emcs_auth_token');
-            return res.status(401).json({ success: false, message: 'Session expired, invalid, or account suspended.' });
+            return res.status(401).json({ success: false, message: 'Session expired or invalid.' });
         }
 
         req.user = user;
@@ -450,16 +292,7 @@ async function authenticateAdmin(req, res, next) {
     if (!token) return res.status(401).json({ success: false, message: 'Admin authentication required.' });
 
     try {
-        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
-        const currentUaHash = getUaHash(req);
-        
-        if (decoded.uaHash && decoded.uaHash !== currentUaHash) {
-            res.clearCookie('emcs_admin_token');
-            await logBackendError('Admin Session Hijack Blocked', `Admin token used from mismatched device!`, req);
-            return res.status(403).json({ success: false, message: 'Security Alert: Device mismatch. Session terminated.' });
-        }
-        
-        req.admin = decoded;
+        req.admin = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
         next();
     } catch (e) {
         return res.status(403).json({ success: false, message: 'Invalid admin session.' });
@@ -526,7 +359,6 @@ app.delete('/api/admin/errors/clear', authenticateAdmin, requireAdminPermission(
 app.post('/api/auth/register', strictRegisterLimiter, async (req, res) => {
     try {
         if (req.body._bot_honeypot && String(req.body._bot_honeypot).length > 0) {
-            await logBackendError('Bot Registration Blocked', `Honeypot triggered on register`, req);
             return res.status(403).json({ success: false, message: 'Automated registration blocked.' });
         }
 
@@ -549,7 +381,7 @@ app.post('/api/auth/register', strictRegisterLimiter, async (req, res) => {
         }
 
         const pinHash = await bcrypt.hash(pin, 12);
-        const newUser = await new User({
+        await new User({
             mobile,
             consumerId,
             name,
@@ -558,7 +390,7 @@ app.post('/api/auth/register', strictRegisterLimiter, async (req, res) => {
             termsAcceptedAt: new Date()
         }).save();
 
-        res.json({ success: true, message: 'Account created successfully.', user: { name: newUser.name, consumerId: newUser.consumerId }});
+        res.json({ success: true, message: 'Account created successfully.' });
     } catch (e) {
         await logBackendError('Register Route', e, req);
         res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
@@ -567,11 +399,6 @@ app.post('/api/auth/register', strictRegisterLimiter, async (req, res) => {
 
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
     try {
-        if (req.body._bot_honeypot && String(req.body._bot_honeypot).length > 0) {
-            await logBackendError('Bot Login Blocked', `Honeypot triggered on login`, req);
-            return res.status(403).json({ success: false, message: 'Access denied.' });
-        }
-        
         const mobile = sanitizeInput(req.body.mobile, 10);
         const pin = sanitizeInput(req.body.pin, 4);
 
@@ -584,9 +411,6 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
         if (user.accountStatus === 'deleted') {
             return res.status(403).json({ success: false, message: 'This account has been deactivated.' });
-        }
-        if (user.accountStatus === 'suspended') {
-            return res.status(403).json({ success: false, message: 'Account suspended by administration.' });
         }
 
         if (user.lockUntil && user.lockUntil > Date.now()) {
@@ -611,10 +435,8 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
                     { _id: user._id },
                     { $set: { lockUntil: new Date(Date.now() + 15 * 60000), failedLoginAttempts: 0 } }
                 );
-                await logBackendError('Brute-Force Lockout Triggered', `Consumer ${user.consumerId} locked for 15m after 5 failed attempts.`, req);
-                return res.status(429).json({ success: false, message: '5 failed attempts! Account locked for 15 minutes.' });
             }
-            return res.status(401).json({ success: false, message: `Invalid PIN. (${5 - updatedUser.failedLoginAttempts} attempts remaining)` });
+            return res.status(401).json({ success: false, message: 'Invalid mobile number or PIN.' });
         }
 
         await User.updateOne(
@@ -623,8 +445,6 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         );
 
         const sessionId = crypto.randomBytes(24).toString('hex');
-        const uaHash = getUaHash(req);
-        
         user.activeSessions.push({
             sessionId,
             deviceInfo: sanitizeInput(req.headers['user-agent'], 70),
@@ -636,8 +456,9 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         }
         await user.save();
 
-        const token = jwt.sign({ userId: user._id, sessionId, uaHash }, JWT_SECRET, { expiresIn: '7d', algorithm: 'HS256' });
+        const token = jwt.sign({ userId: user._id, sessionId }, JWT_SECRET, { expiresIn: '7d', algorithm: 'HS256' });
 
+        // SameSite 'lax' ensures first-party compatibility across Safari, Brave, and Chrome
         res.cookie('emcs_auth_token', token, {
             httpOnly: true,
             secure: IS_PROD,
@@ -666,18 +487,9 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     }
 });
 
-app.get('/api/auth/me', authenticateUser, async (req, res) => {
-    res.json({ success: true, user: { name: req.user.name, consumerId: req.user.consumerId, appliances: req.user.appliances } });
-});
-
 app.post('/api/auth/logout', authenticateUser, async (req, res) => {
     try {
-        const { allDevices } = req.body;
-        if(allDevices) {
-            req.user.activeSessions = [];
-        } else {
-            req.user.activeSessions = req.user.activeSessions.filter(s => s.sessionId !== req.sessionId);
-        }
+        req.user.activeSessions = req.user.activeSessions.filter(s => s.sessionId !== req.sessionId);
         await req.user.save();
         res.clearCookie('emcs_auth_token');
         res.json({ success: true });
@@ -773,28 +585,6 @@ app.get('/api/user/get-cloud-data', authenticateUser, (req, res) => {
     });
 });
 
-app.put('/api/user/appliances', authenticateUser, async (req, res) => {
-    try {
-        const { appliances } = req.body;
-        if (!Array.isArray(appliances) || appliances.length > 60) {
-            return res.status(400).json({ success: false, message: 'Invalid appliances list.' });
-        }
-
-        const sanitized = appliances.map(a => ({
-            name: String(a.name || 'Appliance').trim().substring(0, 50),
-            power: Math.max(0, Math.min(50000, Number(a.power) || 0)),
-            hours: Math.max(0, Math.min(24, Number(a.hours) || 0)),
-            mode: String(a.mode || 'manual').trim().substring(0, 20)
-        }));
-
-        req.user.appliances = sanitized;
-        await req.user.save();
-        res.json({ success: true, appliances: req.user.appliances });
-    } catch (e) {
-        res.status(500).json({ success: false, message: 'Failed to sync appliances.' });
-    }
-});
-
 app.post('/api/user/sync-cloud', authenticateUser, async (req, res) => {
     try {
         const {
@@ -823,8 +613,7 @@ app.post('/api/user/sync-cloud', authenticateUser, async (req, res) => {
                     power: pwr,
                     hours: hrs,
                     monthlyKwh: Number(((pwr * hrs * 30) / 1000).toFixed(2)),
-                    state: Boolean(a.state),
-                    mode: String(a.mode || 'manual').trim().substring(0,20)
+                    state: Boolean(a.state)
                 };
             });
         }
@@ -897,18 +686,16 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
             }
             if (safeCompareStrings(password, MASTER_OWNER_KEY)) {
                 const perms = { canManageUsers: true, canChatSupport: true, canEditCMS: true, canDeleteChat: true };
-                const uaHash = getUaHash(req);
-                const token = jwt.sign({ role: 'owner', name: 'Master Owner', permissions: perms, uaHash }, JWT_SECRET, { expiresIn: '8h', algorithm: 'HS256' });
+                const token = jwt.sign({ role: 'owner', name: 'Master Owner', permissions: perms }, JWT_SECRET, { expiresIn: '8h', algorithm: 'HS256' });
                 res.cookie('emcs_admin_token', token, { httpOnly: true, secure: IS_PROD, sameSite: 'lax', maxAge: 28800000 });
-                return res.json({ success: true, admin: { role: 'owner', username: 'Master Owner', permissions: perms } });
+                return res.json({ success: true, role: 'owner', name: 'Master Owner', permissions: perms });
             }
         } else {
             const staff = await Staff.findOne({ username });
             if (staff && await bcrypt.compare(password, staff.passwordHash)) {
-                const uaHash = getUaHash(req);
-                const token = jwt.sign({ role: 'staff', name: staff.name, permissions: staff.permissions, uaHash }, JWT_SECRET, { expiresIn: '8h', algorithm: 'HS256' });
+                const token = jwt.sign({ role: 'staff', name: staff.name, permissions: staff.permissions }, JWT_SECRET, { expiresIn: '8h', algorithm: 'HS256' });
                 res.cookie('emcs_admin_token', token, { httpOnly: true, secure: IS_PROD, sameSite: 'lax', maxAge: 28800000 });
-                return res.json({ success: true, admin: { role: 'staff', username: staff.username, permissions: staff.permissions } });
+                return res.json({ success: true, role: 'staff', name: staff.name, permissions: staff.permissions });
             }
         }
 
@@ -924,22 +711,11 @@ app.post('/api/admin/logout', (req, res) => {
     res.json({ success: true });
 });
 
-app.get('/api/admin/overview', authenticateAdmin, async (req, res) => {
-    try {
-        const totalUsers = await User.countDocuments({});
-        const activeUsers = await User.countDocuments({ accountStatus: 'active' });
-        res.json({ success: true, stats: { totalUsers, activeUsers, pendingTickets: 0, totalErrors: 0 }, adminProfile: req.admin });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
-
-
 // Staff RBAC Management (Owner Only)
 app.get('/api/admin/staff', authenticateAdmin, async (req, res) => {
     if (req.admin.role !== 'owner') return res.status(403).json({ success: false });
     const staffList = await Staff.find({}, '-passwordHash');
-    res.json({ success: true, staffList });
+    res.json({ success: true, staff: staffList });
 });
 
 app.post('/api/admin/staff', authenticateAdmin, async (req, res) => {
@@ -948,23 +724,21 @@ app.post('/api/admin/staff', authenticateAdmin, async (req, res) => {
         const name = sanitizeInput(req.body.name, 50);
         const username = sanitizeInput(req.body.username, 30).toLowerCase();
         const password = sanitizeInput(req.body.password, 64);
-        const roleTitle = sanitizeInput(req.body.roleTitle, 50) || 'Operator';
 
-        if (!username || password.length < 6) {
-            return res.status(400).json({ success: false, message: 'Valid username, and password (min 6 chars) required.' });
+        if (!name || !username || password.length < 6) {
+            return res.status(400).json({ success: false, message: 'Valid name, username, and password (min 6 chars) required.' });
         }
 
         const passwordHash = await bcrypt.hash(password, 12);
         await new Staff({
-            name: name || username,
+            name,
             username,
             passwordHash,
-            role: roleTitle,
             permissions: {
-                canManageUsers: Boolean(req.body.permissions?.manageUsers),
-                canChatSupport: Boolean(req.body.permissions?.manageSupport),
-                canEditCMS: Boolean(req.body.permissions?.manageCms),
-                canDeleteChat: Boolean(req.body.permissions?.viewLogs)
+                canManageUsers: Boolean(req.body.permissions?.canManageUsers),
+                canChatSupport: Boolean(req.body.permissions?.canChatSupport),
+                canEditCMS: Boolean(req.body.permissions?.canEditCMS),
+                canDeleteChat: Boolean(req.body.permissions?.canDeleteChat)
             }
         }).save();
 
@@ -980,15 +754,6 @@ app.delete('/api/admin/staff/:id', authenticateAdmin, async (req, res) => {
     res.json({ success: true });
 });
 
-app.get('/api/admin/users', authenticateAdmin, requireAdminPermission('canManageUsers'), async (req, res) => {
-    try {
-        const users = await User.find({}, '-pinHash');
-        res.json({ success: true, users });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
-
 app.get('/api/cms', async (req, res) => {
     try {
         const cms = await CmsConfig.findOne({ key: 'global_cms' }) || await new CmsConfig().save();
@@ -997,20 +762,12 @@ app.get('/api/cms', async (req, res) => {
         res.status(500).json({ success: false });
     }
 });
-app.get('/api/admin/cms-full', authenticateAdmin, requireAdminPermission('canEditCMS'), async (req, res) => {
-    try {
-        const cms = await CmsConfig.findOne({ key: 'global_cms' }) || await new CmsConfig().save();
-        res.json({ success: true, cms });
-    } catch (e) {
-        res.status(500).json({ success: false });
-    }
-});
 
-app.put('/api/admin/cms', authenticateAdmin, requireAdminPermission('canEditCMS'), async (req, res) => {
+app.post('/api/admin/cms', authenticateAdmin, requireAdminPermission('canEditCMS'), async (req, res) => {
     try {
         const update = {
-            broadcast: sanitizeInput(req.body.broadcastBanner, 250),
-            about: sanitizeInput(req.body.aboutUs, 2000),
+            broadcast: sanitizeInput(req.body.broadcast, 250),
+            about: sanitizeInput(req.body.about, 2000),
             privacy: sanitizeInput(req.body.privacy, 4000),
             terms: sanitizeInput(req.body.terms, 4000),
             faqs: Array.isArray(req.body.faqs) ? req.body.faqs.slice(0, 30).map(f => ({
@@ -1027,7 +784,7 @@ app.put('/api/admin/cms', authenticateAdmin, requireAdminPermission('canEditCMS'
 });
 
 // Two-Way User Support Chat Routes (Row-Level Security Enforced)
-app.get('/api/user/support', authenticateUser, async (req, res) => {
+app.get('/api/support/user/messages', authenticateUser, async (req, res) => {
     try {
         const messages = await SupportMessage.find({ consumerId: req.user.consumerId }).sort({ timestamp: 1 }).limit(100);
         res.json({ success: true, messages });
@@ -1036,23 +793,24 @@ app.get('/api/user/support', authenticateUser, async (req, res) => {
     }
 });
 
-app.post('/api/user/support', authenticateUser, chatLimiter, async (req, res) => {
+app.post('/api/support/user/send', authenticateUser, chatLimiter, async (req, res) => {
     try {
         const text = sanitizeInput(req.body.text, 500);
         if (!text) return res.status(400).json({ success: false });
         const msg = await new SupportMessage({ consumerId: req.user.consumerId, sender: 'user', text }).save();
-        res.json({ success: true, messages: [msg] });
+        res.json({ success: true, message: msg });
     } catch (e) {
         res.status(500).json({ success: false });
     }
 });
 
-app.get('/api/admin/support', authenticateAdmin, async (req, res) => {
+app.get('/api/support/admin/threads', authenticateAdmin, async (req, res) => {
     try {
         if (req.admin.role !== 'owner' && !req.admin.permissions?.canChatSupport && !req.admin.permissions?.canManageUsers) {
             return res.status(403).json({ success: false, message: 'Forbidden: Insufficient permissions.' });
         }
-        res.json({ success: true, tickets: [] }); // placeholder for threading
+        const users = await User.find({}, 'name consumerId mobile sanctionedLoadKw accountStatus createdAt');
+        res.json({ success: true, threads: users });
     } catch (e) {
         res.status(500).json({ success: false });
     }
@@ -1137,138 +895,4 @@ app.use(async (err, req, res, next) => {
     res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });
 });
 
-// ============================================================================
-// 🤖 TELEGRAM GHOST-MODE REMOTE CONTROL BOT
-// ============================================================================
-let tgLastUpdateId = 0;
-
-async function sendTelegramControlPanel(chatId) {
-    const keyboard = {
-        inline_keyboard: [
-            [
-                { text: "🔴 Maint ON", callback_data: "maint_on" },
-                { text: "🟢 Maint OFF", callback_data: "maint_off" }
-            ],
-            [
-                { text: "📊 Status", callback_data: "sys_status" },
-                { text: "👥 Users", callback_data: "total_users" }
-            ],
-            [
-                { text: "🧹 Clean RAM", callback_data: "clean_ram" },
-                { text: "⚠️ Last 3 Errors", callback_data: "last_errors" }
-            ]
-        ]
-    };
-
-    const text = `🎛️ *EMCS MASTER CONTROL PANEL*\n\nSelect an operation below. _Strictly authenticated via Render Environment Variables (Ghost-Mode Active)._`;
-
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            chat_id: chatId,
-            text: text,
-            parse_mode: 'Markdown',
-            reply_markup: keyboard
-        })
-    });
-}
-
-async function listenTelegramCommands() {
-    const ADMIN_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || TELEGRAM_ADMIN_CHAT_ID;
-    if (!TELEGRAM_BOT_TOKEN || !ADMIN_ID) return;
-
-    try {
-        const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?offset=${tgLastUpdateId + 1}&timeout=25`);
-        const data = await res.json();
-
-        if (data.ok && data.result.length > 0) {
-            for (const update of data.result) {
-                tgLastUpdateId = update.update_id;
-
-                let incomingUserId = null;
-                if (update.message && update.message.from) {
-                    incomingUserId = String(update.message.from.id);
-                } else if (update.callback_query && update.callback_query.from) {
-                    incomingUserId = String(update.callback_query.from.id);
-                }
-
-                // 👻 GHOST MODE
-                if (incomingUserId !== String(ADMIN_ID)) continue;
-
-                if (update.message && update.message.text) {
-                    const txt = update.message.text.trim().toLowerCase();
-                    if (txt === '/start' || txt === '/menu' || txt === 'menu') {
-                        await sendTelegramControlPanel(ADMIN_ID);
-                    }
-                }
-
-                if (update.callback_query) {
-                    const cb = update.callback_query;
-                    const action = cb.data;
-                    let popupMessage = "Command Executed";
-
-                    if (action === 'maint_on') {
-                        global.MAINTENANCE_MODE = true;
-                        popupMessage = "🔴 Maintenance Mode ON";
-                        await sendTelegramAlert('SYSTEM CONTROL', '🔴 Website is now *UNDER MAINTENANCE*. All public traffic is paused.');
-                    }
-                    else if (action === 'maint_off') {
-                        global.MAINTENANCE_MODE = false;
-                        popupMessage = "🟢 Maintenance Mode OFF";
-                        await sendTelegramAlert('SYSTEM CONTROL', '🟢 Website is now *LIVE*. Normal operations resumed.');
-                    }
-                    else if (action === 'sys_status') {
-                        const status = global.MAINTENANCE_MODE ? '🔴 UNDER MAINTENANCE' : '🟢 LIVE & HEALTHY';
-                        const dbState = mongoose.connection.readyState === 1 ? '🟢 Connected' : '🔴 Disconnected';
-                        const memMb = Math.round(process.memoryUsage().rss / 1024 / 1024);
-                        popupMessage = `Status: ${status}`;
-                        await sendTelegramAlert('SERVER TELEMETRY', `*Web Status:* ${status}\n*Database:* ${dbState}\n*RAM Usage:* ${memMb} MB\n*Uptime:* ${Math.floor(process.uptime() / 60)} mins`);
-                    }
-                    else if (action === 'total_users') {
-                        const total = await User.countDocuments({});
-                        const active = await User.countDocuments({ accountStatus: 'active' });
-                        popupMessage = `Total Users: ${total}`;
-                        await sendTelegramAlert('USER DIRECTORY STATS', `👥 *Live Consumer Count*\n\n*Total Registered:* ${total}\n*Active Accounts:* ${active}`);
-                    }
-                    else if (action === 'clean_ram') {
-                        await SystemError.deleteMany({});
-                        if (typeof global.gc === 'function') global.gc();
-                        popupMessage = "🧹 RAM & System Logs Cleared!";
-                        await sendTelegramAlert('SYSTEM CONTROL', '🧹 *Memory Cleared*\nPurged old system logs from database and freed Node.js memory successfully.');
-                    }
-                    else if (action === 'last_errors') {
-                        const errors = await SystemError.find({}).sort({ timestamp: -1 }).limit(3).lean();
-                        if (errors.length === 0) {
-                            popupMessage = "Log is clean!";
-                            await sendTelegramAlert('DIAGNOSTICS', '✅ No recent errors or security threats in database.');
-                        } else {
-                            let errText = `⚠️ *LAST 3 LOGS / ERRORS*\n\n`;
-                            errors.forEach((e, idx) => {
-                                const t = new Date(e.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-                                errText += `*${idx + 1}. [${e.source}]*\n⏱️ ${t}\n📍 ${e.location}\n💬 ${maskSensitiveData(e.message)}\n\n`;
-                            });
-                            popupMessage = "Fetched last 3 logs.";
-                            await sendTelegramAlert('DIAGNOSTICS', errText);
-                        }
-                    }
-
-                    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ callback_query_id: cb.id, text: popupMessage, show_alert: false })
-                    });
-                }
-            }
-        }
-    } catch (e) {}
-    setTimeout(listenTelegramCommands, 2500);
-}
-
-app.listen(PORT, () => {
-    console.log(`[EMCS SERVER] Live on port ${PORT}`);
-    setTimeout(() => {
-        listenTelegramCommands();
-        console.log('[EMCS] 🤖 Telegram Ghost-Mode Control Bot Active.');
-    }, 3000);
-});
+app.listen(PORT, () => console.log(`[EMCS SERVER] Live on port ${PORT}`));
