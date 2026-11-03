@@ -1160,9 +1160,7 @@ async function sendTelegramControlPanel(chatId) {
         ]
     };
 
-    const text = "🎛️ *EMCS MASTER CONTROL PANEL*
-
-Select an operation below. _Strictly authenticated via Render Environment Variables (Ghost-Mode Active)._";
+    const text = `🎛️ *EMCS MASTER CONTROL PANEL*\n\nSelect an operation below. _Strictly authenticated via Render Environment Variables (Ghost-Mode Active)._`;
 
     await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
         method: 'POST',
@@ -1225,26 +1223,19 @@ async function listenTelegramCommands() {
                         const dbState = mongoose.connection.readyState === 1 ? '🟢 Connected' : '🔴 Disconnected';
                         const memMb = Math.round(process.memoryUsage().rss / 1024 / 1024);
                         popupMessage = `Status: ${status}`;
-                        await sendTelegramAlert('SERVER TELEMETRY', `*Web Status:* ${status}
-*Database:* ${dbState}
-*RAM Usage:* ${memMb} MB
-*Uptime:* ${Math.floor(process.uptime() / 60)} mins`);
+                        await sendTelegramAlert('SERVER TELEMETRY', `*Web Status:* ${status}\n*Database:* ${dbState}\n*RAM Usage:* ${memMb} MB\n*Uptime:* ${Math.floor(process.uptime() / 60)} mins`);
                     }
                     else if (action === 'total_users') {
                         const total = await User.countDocuments({});
                         const active = await User.countDocuments({ accountStatus: 'active' });
                         popupMessage = `Total Users: ${total}`;
-                        await sendTelegramAlert('USER DIRECTORY STATS', `👥 *Live Consumer Count*
-
-*Total Registered:* ${total}
-*Active Accounts:* ${active}`);
+                        await sendTelegramAlert('USER DIRECTORY STATS', `👥 *Live Consumer Count*\n\n*Total Registered:* ${total}\n*Active Accounts:* ${active}`);
                     }
                     else if (action === 'clean_ram') {
                         await SystemError.deleteMany({});
                         if (typeof global.gc === 'function') global.gc();
                         popupMessage = "🧹 RAM & System Logs Cleared!";
-                        await sendTelegramAlert('SYSTEM CONTROL', '🧹 *Memory Cleared*
-Purged old system logs from database and freed Node.js memory successfully.');
+                        await sendTelegramAlert('SYSTEM CONTROL', '🧹 *Memory Cleared*\nPurged old system logs from database and freed Node.js memory successfully.');
                     }
                     else if (action === 'last_errors') {
                         const errors = await SystemError.find({}).sort({ timestamp: -1 }).limit(3).lean();
@@ -1252,17 +1243,10 @@ Purged old system logs from database and freed Node.js memory successfully.');
                             popupMessage = "Log is clean!";
                             await sendTelegramAlert('DIAGNOSTICS', '✅ No recent errors or security threats in database.');
                         } else {
-                            let errText = `⚠️ *LAST 3 LOGS / ERRORS*
-
-`;
+                            let errText = `⚠️ *LAST 3 LOGS / ERRORS*\n\n`;
                             errors.forEach((e, idx) => {
                                 const t = new Date(e.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-                                errText += `*${idx + 1}. [${e.source}]*
-⏱️ ${t}
-📍 ${e.location}
-💬 ${maskSensitiveData(e.message)}
-
-`;
+                                errText += `*${idx + 1}. [${e.source}]*\n⏱️ ${t}\n📍 ${e.location}\n💬 ${maskSensitiveData(e.message)}\n\n`;
                             });
                             popupMessage = "Fetched last 3 logs.";
                             await sendTelegramAlert('DIAGNOSTICS', errText);
